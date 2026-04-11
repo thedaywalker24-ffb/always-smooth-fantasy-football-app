@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>League Dashboard</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            surface: '#0c1017',
+            card: '#141b26',
+            neon: '#39ff14',
+            'neon-dim': '#2bc70f'
+          },
+          fontFamily: {
+            sans: ['system-ui', '-apple-system', 'Segoe UI', 'Roboto', 'sans-serif']
+          }
+        }
+      }
+    };
+  </script>
+  <style>
+    body { background: radial-gradient(ellipse 120% 80% at 50% -20%, #1a2436 0%, #0c1017 45%, #080b10 100%); }
+    .glow-text { text-shadow: 0 0 24px rgba(57, 255, 20, 0.35); }
+    .card-ring { box-shadow: 0 0 0 1px rgba(57, 255, 20, 0.12), 0 8px 32px rgba(0, 0, 0, 0.45); }
+  </style>
+</head>
+<body class="min-h-screen text-slate-200 antialiased pb-10">
+  <header class="px-4 pt-6 pb-4 max-w-lg mx-auto">
+    <p class="text-xs uppercase tracking-[0.2em] text-neon/80 font-medium mb-1">Sleeper Dynasty</p>
+    <h1 class="text-2xl sm:text-3xl font-bold text-white tracking-tight glow-text">League standings</h1>
+    <p id="status" class="mt-2 text-sm text-slate-500">Loading…</p>
+  </header>
+
+  <main id="grid" class="px-4 max-w-lg mx-auto grid gap-3 sm:grid-cols-2 sm:max-w-3xl" aria-live="polite"></main>
+
+  <template id="card-tpl">
+    <article class="card-ring rounded-2xl bg-card/90 backdrop-blur-sm border border-white/5 p-4 flex flex-col gap-3 min-h-[120px]">
+      <h2 class="team-name text-lg sm:text-xl font-semibold text-white leading-snug break-words pr-1"></h2>
+      <div class="mt-auto flex items-end justify-between gap-3 pt-1 border-t border-white/10">
+        <div>
+          <p class="text-[10px] uppercase tracking-wider text-slate-500 mb-0.5">Record</p>
+          <p class="record text-2xl font-bold text-neon tabular-nums tracking-tight"></p>
+        </div>
+        <div class="text-right">
+          <p class="text-[10px] uppercase tracking-wider text-slate-500 mb-0.5">PF</p>
+          <p class="points text-xl font-semibold text-slate-100 tabular-nums"></p>
+        </div>
+      </div>
+    </article>
+  </template>
+
+  <script>
+    (function () {
+      var grid = document.getElementById('grid');
+      var statusEl = document.getElementById('status');
+      var tpl = document.getElementById('card-tpl');
+
+      function setStatus(msg, isError) {
+        statusEl.textContent = msg;
+        statusEl.className = 'mt-2 text-sm ' + (isError ? 'text-red-400' : 'text-slate-500');
+      }
+
+      function formatPoints(n) {
+        if (typeof n !== 'number' || isNaN(n)) return '0';
+        return n.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+      }
+
+      function render(payload) {
+        grid.innerHTML = '';
+        if (payload.error) {
+          setStatus(payload.error, true);
+          return;
+        }
+        var teams = payload.teams || [];
+        if (teams.length === 0) {
+          setStatus('No teams found. Run Fetch Teams in the sheet, then Refresh Team Records.');
+          return;
+        }
+        var updated = payload.updatedAt ? new Date(payload.updatedAt) : null;
+        setStatus(
+          updated
+            ? 'Updated ' + updated.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })
+            : 'Loaded ' + teams.length + ' teams',
+          false
+        );
+
+        teams.forEach(function (t) {
+          var node = tpl.content.cloneNode(true);
+          var article = node.querySelector('article');
+          article.querySelector('.team-name').textContent = t.teamName || 'Unknown';
+          article.querySelector('.record').textContent = t.record || '—';
+          article.querySelector('.points').textContent = formatPoints(t.fantasyPoints);
+          grid.appendChild(node);
+        });
+      }
+
+      function onFail(err) {
+        setStatus(err && err.message ? err.message : String(err), true);
+      }
+
+      function load() {
+        setStatus('Loading…', false);
+        google.script.run
+          .withSuccessHandler(render)
+          .withFailureHandler(onFail)
+          .getLeagueData();
+      }
+
+      if (typeof google === 'undefined' || !google.script || !google.script.run) {
+        setStatus('Open this page via the deployed Web App URL (not as a local file).', true);
+        return;
+      }
+      load();
+    })();
+  </script>
+</body>
+</html>

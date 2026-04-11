@@ -1,0 +1,843 @@
+/** @OnlyCurrentDoc */
+'use strict';
+
+/**
+* Simple trigger that runs each time the user opens the
+* spreadsheet.
+*
+* Adds a menu item to update the records.
+*
+* @param {Object} e The onOpen() event object.
+*/
+function onOpen(e) {
+  SpreadsheetApp.getUi()
+    .createMenu('Update Records')
+    .addItem('Fetch Teams', 'fetchLeagueMembersData')
+    .addItem('Refresh Team Records', 'updateRostersAndRecordsData')
+    // .addItem('Click to refresh Team Records', 'getSleeperStandings')
+    .addItem('Refresh Team Rosters', 'fetchAndPopulateRosters')
+    .addItem('Refresh Matchups', 'fetchMatchupData')
+    .addItem('Retrieve Draft Data', 'fetchDraftPicksData')
+    .addItem('Fetch Player Data', 'fetchSleeperPlayers')
+    .addItem('Clear Betting Sheet', 'clearRanges')
+    .addItem('Clear App Data Sheet', 'clearAppDataRange')
+    .addToUi();
+  if (!e) console.log(`New "Update Records" menu was added in the spreadsheet's menu bar.`);
+}
+
+const GLOBAL_LEAGUE_ID = '1256670617722163200'; // 2025 Season
+// const GLOBAL_LEAGUE_ID = '1121938386224357376'; // 2024 Season
+// const GLOBAL_LEAGUE_ID = '992182986533294080'; // 2023 Season
+
+/** Sheet tab written by fetchLeagueMembersData / updateRostersAndRecordsData */
+const ROSTERS_RECORDS_SHEET = 'Rosters & Records';
+
+/**
+ * Serves the league dashboard HTML as a Web App.
+ * @param {Object} e Request parameters (unused; present for Web App signature).
+ * @return {GoogleAppsScript.HTML.HtmlOutput}
+ */
+function doGet(e) {
+  return HtmlService.createHtmlOutputFromFile('index')
+    .setTitle('League Dashboard')
+    .addMetaTag('viewport', 'width=device-width, initial-scale=1');
+}
+
+/**
+ * Returns team standings from the "Rosters & Records" sheet for the client UI.
+ * Column positions are resolved from the header row so minor layout changes stay safe.
+ * @return {{ teams: Array<{teamName: string, record: string, fantasyPoints: number}>, updatedAt: string, error?: string }>}
+ */
+function getLeagueData() {
+  const emptyPayload = function (err) {
+    return {
+      teams: [],
+      updatedAt: new Date().toISOString(),
+      error: err || undefined
+    };
+  };
+
+  try {
+    const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+    if (!spreadsheet) {
+      return emptyPayload(
+        'No spreadsheet in this session. Deploy the Web App from the spreadsheet-bound script project.'
+      );
+    }
+
+    const sheet = spreadsheet.getSheetByName(ROSTERS_RECORDS_SHEET);
+    if (!sheet) {
+      return emptyPayload('Sheet "' + ROSTERS_RECORDS_SHEET + '" was not found.');
+    }
+
+    const lastRow = sheet.getLastRow();
+    const lastCol = sheet.getLastColumn();
+    if (lastRow < 2 || lastCol < 1) {
+      return { teams: [], updatedAt: new Date().toISOString() };
+    }
+
+    const headerRange = sheet.getRange(1, 1, 1, lastCol);
+    const headers = headerRange.getValues()[0];
+    const teamNameCol = headers.indexOf('Team Name');
+    const wlCol = headers.indexOf('W-L Record');
+    const fptsCol = headers.indexOf('Fpts (Total)');
+
+    if (teamNameCol === -1 || wlCol === -1 || fptsCol === -1) {
+      return emptyPayload(
+        'Missing expected headers (Team Name, W-L Record, Fpts (Total)) in row 1.'
+      );
+    }
+
+    const data = sheet.getRange(2, 1, lastRow, lastCol).getValues();
+    const teams = [];
+
+    for (let r = 0; r < data.length; r++) {
+      const row = data[r];
+      const teamName = row[teamNameCol];
+      if (teamName === '' || teamName === null || teamName === undefined) {
+        continue;
+      }
+
+      const recordRaw = row[wlCol];
+      const record =
+        recordRaw !== '' && recordRaw !== null && recordRaw !== undefined
+          ? String(recordRaw)
+          : '—';
+
+      let fantasyPoints = row[fptsCol];
+      if (fantasyPoints === '' || fantasyPoints === null || fantasyPoints === undefined) {
+        fantasyPoints = 0;
+      } else if (typeof fantasyPoints !== 'number') {
+        const n = Number(fantasyPoints);
+        fantasyPoints = isNaN(n) ? 0 : n;
+      }
+
+      teams.push({
+        teamName: String(teamName),
+        record: record,
+        fantasyPoints: Math.round(fantasyPoints * 100) / 100
+      });
+    }
+
+    return {
+      teams: teams,
+      updatedAt: new Date().toISOString()
+    };
+  } catch (err) {
+    return emptyPayload(err.message || String(err));
+  }
+}
+
+function getSleeperStandings() {
+  const leagueId = GLOBAL_LEAGUE_ID;
+
+  // Sleeper API endpoint for league standings
+  const url = `https://api.sleeper.app/v1/league/${leagueId}/rosters`;
+
+  // Authorization token (replace with your actual token)
+  const authorization = 'Token YOUR_API_TOKEN';
+
+  const options = {
+    'method' : 'get',
+    'headers' : {
+      'Authorization': authorization
+    }
+  };
+
+  const response = UrlFetchApp.fetch(url, options);
+  const standingsData = JSON.parse(response.getContentText());
+
+  // Sheet object and starting row for populating data
+  // const sheet = SpreadsheetApp.getActiveSheet();
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Teams');
+  let startingRow = 1;  // Adjust starting row as needed
+
+  // Loop through each team in standings
+  for (const team of standingsData) {
+    const record = `${team.settings.wins}-${team.settings.losses}`;  // Customize record format
+    const teamName = team.roster_id;  // GET return only shows a roster ID and no team name
+    const teamStreak = team.metadata.streak;  // 
+    const cell = sheet.getRange(startingRow, 1);  // Column 1 (adjust if needed)
+	
+    // Write team name and record to separate columns (adjust columns as needed)
+    const nameCell = sheet.getRange(startingRow, 2);
+    nameCell.setValue(teamName);
+    const recordCell = sheet.getRange(startingRow, 3);  // Change column number for record
+    recordCell.setValue(record);
+	  const streakCell = sheet.getRange(startingRow, 4);  // Change column number for record
+    streakCell.setValue(teamStreak);
+
+    startingRow++;
+  }
+}
+
+function matchUserIdsToTeamNames() {
+  const leagueId = GLOBAL_LEAGUE_ID;
+
+  const sheet = SpreadsheetApp.getActiveSheet();
+  const userIdsRange = sheet.getRange('F1:F10');
+  const userIds = userIdsRange.getValues().flat();
+
+  const url = `https://api.sleeper.app/v1/league/${leagueId}/users`;
+  const options = {
+    'method': 'get'
+  };
+
+  try {
+    const response = UrlFetchApp.fetch(url, options);
+    const userData = JSON.parse(response.getContentText());
+
+    Logger.log('First 3 users:', JSON.stringify(userData.slice(0, 3))); // Stringify for better readability
+
+    const userIdToTeamName = {};
+    for (const user of userData) {
+      userIdToTeamName[user.user_id] = user.metadata?.team_name || '';
+    }
+
+    Logger.log('First 5 entries in userIdToTeamName:', JSON.stringify(Object.entries(userIdToTeamName).slice(0, 5)));
+
+    for (let i = 0; i < userIds.length; i++) {
+      const userId = userIds[i];
+      const teamName = userIdToTeamName[userId];
+      const teamNameCell = sheet.getRange(i + 1, 7);
+      teamNameCell.setValue(teamName);
+    }
+  } catch (error) {
+    Logger.log('Error:', error);
+  }
+}
+
+function fetchMatchupData() {
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('API Data');
+  var leagueId = GLOBAL_LEAGUE_ID; // Replace with your actual league_id
+  var week_no = sheet.getRange('A19').getValue(); // Get week_no from cell A19
+  // var week_no = (sheet.getRange('A19').getValue()) - 1; // Use this when var startRow = 265 is active
+  var url = `https://api.sleeper.app/v1/league/${leagueId}/matchups/${week_no}`;
+  
+  var response = UrlFetchApp.fetch(url);
+  var data = JSON.parse(response.getContentText());
+  
+  // var startRow = 265; // switch to this temporarily when transitioning weeks
+  var startRow = 278;
+  var startCol = 2; // Column B
+
+  data.forEach(function(item, index) {
+    var row = startRow + index;
+    sheet.getRange(row, startCol).setValue(item.roster_id);
+    sheet.getRange(row, startCol + 1).setValue(item.matchup_id);
+    sheet.getRange(row, startCol + 2).setValue(item.points);
+    
+    for (var i = 0; i < 10; i++) {
+      sheet.getRange(row, startCol + 3 + i).setValue(item.starters[i] !== undefined ? item.starters[i] : 0);
+      sheet.getRange(row, startCol + 13 + i).setValue(item.starters_points[i] !== undefined ? item.starters_points[i] : 0);
+    }
+  });
+}
+
+/**
+ * Fetches player data from the Sleeper API and posts some of it
+ * into the Google Sheet named "Sleeper Players".
+ * * Optimization: The sheet clearing operation now only targets the data rows
+ * (Row 2 onwards) using a dynamic range based on current content and headers.
+ */
+function fetchSleeperPlayers() {
+  // --- Configuration ---
+  const playerSheet = "Sleeper Players"; // Name of your Google Sheet tab
+  const sleeperUrl = "https://api.sleeper.app/v1/players/nfl"; 
+  
+  // Define the allowed positions
+  const ALLOWED_POSITIONS = ["QB", "RB", "WR", "TE", "K", "DEF"];
+
+  // --- Get the Spreadsheet and Sheet ---
+  const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = spreadsheet.getSheetByName(playerSheet);
+
+  if (!sheet) {
+    Logger.log(`Error: Sheet named "${playerSheet}" not found. Creating it.`);
+    sheet = spreadsheet.insertSheet(playerSheet);
+  }
+
+  // Define your desired headers based on the fields you want to extract
+  const headers = [
+    "Player ID",
+    "Full Name",
+    "First Name",
+    "Last Name",
+    "Team",
+    "Position",
+    "Age",
+    "Injury Status"
+  ];
+
+  // --- Fetch Data from API ---
+  try {
+    const response = UrlFetchApp.fetch(sleeperUrl);
+    const jsonResponse = response.getContentText();
+    const data = JSON.parse(jsonResponse);
+
+    Logger.log("Sleeper Players API Response fetched successfully.");
+
+    // --- Prepare data for writing to sheet ---
+    let playerData = []; // Start with data only
+    let filteredCount = 0;
+
+    // Iterate through each player object in the 'data' (where keys are player IDs)
+    for (const playerId in data) {
+      // Ensure the property belongs to the object itself, not its prototype chain
+      if (data.hasOwnProperty(playerId)) {
+        const player = data[playerId];
+        const playerPosition = player.position ? player.position.toUpperCase() : ''; 
+        const playerTeam = player.team; // Explicitly get the team field
+
+        // --- Filtering Logic ---
+        // 1. Must be in ALLOWED_POSITIONS
+        // 2. MUST have a value in player.team (must be truthy/not blank)
+        if (ALLOWED_POSITIONS.includes(playerPosition) && playerTeam) {
+          const row = [
+            player.player_id || '',
+            player.full_name || `${player.first_name || ''} ${player.last_name || ''}`.trim(),
+            player.first_name || '',
+            player.last_name || '',
+            playerTeam, // Use the extracted and validated team
+            player.position || '',
+            player.age || '',
+            player.injury_status || ''
+          ];
+          playerData.push(row);
+          filteredCount++;
+        }
+      }
+    }
+
+    // --- Write Data to Sheet ---
+    
+    // 1. Ensure headers are set (only once, or overwrite if sheet was cleared)
+    sheet.getRange(1, 1, 1, headers.length).setValues([headers]).setFontWeight('bold');
+    
+    // 2. Clear existing content (Optimized: only clears data rows 2 to max, columns 1 to headers.length)
+    const lastRow = sheet.getLastRow();
+    if (lastRow > 1) {
+      const numRowsToClear = lastRow - 1;
+      // Clear content starting from Row 2, Column 1, across the number of rows that contain data, and across the required number of columns.
+      sheet.getRange(2, 1, numRowsToClear, headers.length).clearContent(); 
+    }
+
+    // 3. Write all the new data to the sheet at once for maximum efficiency
+    if (playerData.length > 0) {
+      const numRows = playerData.length;
+      const numColumns = headers.length;
+      sheet.getRange(2, 1, numRows, numColumns).setValues(playerData);
+      Logger.log(`${numRows} player records posted to "${playerSheet}".`);
+      Browser.msgBox(`Successfully posted ${numRows} player records to "${playerSheet}".`);
+    } else {
+      Logger.log("No player data found to post after filtering.");
+      Browser.msgBox("No player data found to post from the API response after filtering.");
+    }
+
+  } catch (e) {
+    Logger.log("Error fetching or parsing API data: " + e.toString());
+    Browser.msgBox("An error occurred: " + e.toString());
+  }
+}
+
+/**
+ * Fetches detailed roster data (players, starters, taxi, reserve) for each team
+ * and populates a new sheet named "Team Rosters".
+ * Prioritizes player roles (Starter > Reserve > Taxi > Active) to avoid duplicates.
+ * This script should be run after "fetchLeagueMembersData" to ensure team names are available.
+ */
+function fetchAndPopulateRosters() {
+  // --- Configuration ---
+  const LEAGUE_ID = GLOBAL_LEAGUE_ID; // <<< IMPORTANT: REPLACE WITH YOUR ACTUAL LEAGUE ID
+  const ROSTERS_SHEET_NAME = "Team Rosters";
+  const RECORDS_SHEET_NAME = "Rosters & Records"; // To get team names
+  const PLAYERS_SHEET_NAME = "Sleeper Players"; // Your existing sheet with NFL player data
+  const LEAGUE_ROSTERS_API_URL = `https://api.sleeper.app/v1/league/${LEAGUE_ID}/rosters`;
+
+  // --- Get Spreadsheets and Sheets ---
+  const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+  
+  let rostersSheet = spreadsheet.getSheetByName(ROSTERS_SHEET_NAME);
+  if (!rostersSheet) {
+    rostersSheet = spreadsheet.insertSheet(ROSTERS_SHEET_NAME);
+    Logger.log(`Created new sheet: "${ROSTERS_SHEET_NAME}"`);
+  }
+
+  const recordsSheet = spreadsheet.getSheetByName(RECORDS_SHEET_NAME);
+  if (!recordsSheet) {
+    Logger.log(`Error: Sheet named "${RECORDS_SHEET_NAME}" not found. Cannot retrieve team names.`);
+    Browser.msgBox(`Error: Sheet named "${RECORDS_SHEET_NAME}" not found. Please run "fetchLeagueMembersData" first.`);
+    return;
+  }
+
+  const playersSheet = spreadsheet.getSheetByName(PLAYERS_SHEET_NAME);
+  if (!playersSheet) {
+    Logger.log(`Error: Sheet named "${PLAYERS_SHEET_NAME}" not found. Cannot retrieve player names.`);
+    Browser.msgBox(`Error: Sheet named "${PLAYERS_SHEET_NAME}" not found. Please ensure that sheet exists and is populated.`);
+    return;
+  }
+
+  // --- 1. Build Player ID to Name Map from "Sleeper Players" sheet ---
+  let playerIdToNameMap = {};
+  try {
+    const playersData = playersSheet.getDataRange().getValues(); // Get all data from the players sheet
+    
+    if (playersData.length > 1) { // Assuming first row is headers
+      // Find the Player ID and Full Name columns dynamically
+      const headers = playersData[0];
+      const playerIdColIndex = headers.indexOf("Player ID"); // Assuming a "Player ID" header
+      const fullNameColIndex = headers.indexOf("Full Name"); // Assuming a "Full Name" header
+
+      if (playerIdColIndex === -1 || fullNameColIndex === -1) {
+        Logger.log(`Error: "${PLAYERS_SHEET_NAME}" sheet missing "Player ID" or "Full Name" headers.`);
+        Browser.msgBox(`Error: "${PLAYERS_SHEET_NAME}" sheet missing "Player ID" or "Full Name" headers. Please check your player data sheet.`);
+        return;
+      }
+
+      for (let i = 1; i < playersData.length; i++) { // Start from 1 to skip headers
+        const playerId = playersData[i][playerIdColIndex];
+        const playerName = playersData[i][fullNameColIndex];
+        if (playerId && playerName) {
+          playerIdToNameMap[playerId] = playerName;
+        }
+      }
+      Logger.log(`Built map for ${Object.keys(playerIdToNameMap).length} players from "${PLAYERS_SHEET_NAME}".`);
+    } else {
+      Logger.log(`"${PLAYERS_SHEET_NAME}" sheet is empty or has no player data.`);
+      Browser.msgBox(`"${PLAYERS_SHEET_NAME}" sheet is empty or has no player data. Please ensure it's populated.`);
+      // Continue execution, but player names will be empty
+    }
+  } catch (e) {
+    Logger.log("Error reading player data from 'Sleeper Players' sheet: " + e.toString());
+    Browser.msgBox("An error occurred while reading player data from 'Sleeper Players' sheet. Roster names might be missing.");
+    // Continue execution, but player names will be empty
+  }
+
+  // --- 2. Build User ID to Team Name Map from "Rosters & Records" sheet ---
+  // Assuming "User ID" is in Column B (index 1) and "Team Name" is in Column D (index 3)
+  const recordsSheetData = recordsSheet.getDataRange().getValues();
+  const userIdToTeamNameMap = {};
+  const USER_ID_COL_IN_RECORDS = 1; // Column B (0-indexed is 1)
+  const TEAM_NAME_COL_IN_RECORDS = 3; // Column D (0-indexed is 3)
+
+  if (recordsSheetData.length > 1) { // Skip headers
+    for (let i = 1; i < recordsSheetData.length; i++) {
+      const userId = recordsSheetData[i][USER_ID_COL_IN_RECORDS];
+      const teamName = recordsSheetData[i][TEAM_NAME_COL_IN_RECORDS];
+      if (userId && teamName) {
+        userIdToTeamNameMap[userId] = teamName;
+      }
+    }
+    Logger.log(`Built map for ${Object.keys(userIdToTeamNameMap).length} teams from "${RECORDS_SHEET_NAME}".`);
+  } else {
+    Logger.log(`"${RECORDS_SHEET_NAME}" is empty or has no team data. Team names will be missing.`);
+  }
+
+  // --- 3. Fetch League Rosters Data ---
+  let allRosterData = [];
+  try {
+    const rostersResponse = UrlFetchApp.fetch(LEAGUE_ROSTERS_API_URL);
+    const rostersJson = rostersResponse.getContentText();
+    const rosters = JSON.parse(rostersJson);
+
+    Logger.log("League Rosters API Response fetched successfully.");
+    // Logger.log(JSON.stringify(rosters, null, 2)); // Uncomment to log full response for debugging
+
+    // Define headers for the "Team Rosters" sheet
+    const rosterHeaders = ["User ID", "Team Name", "Player ID", "Roster Type", "Player Name"];
+    allRosterData.push(rosterHeaders);
+
+    rosters.forEach(roster => {
+      const ownerId = roster.owner_id || '';
+      const teamName = userIdToTeamNameMap[ownerId] || 'Unknown Team'; // Get team name from map
+
+      // Use a Set to track players already added for THIS specific team's roster
+      // This prevents duplicates if a player is in multiple categories (e.g., Starter and Active)
+      const addedPlayerIdsForTeam = new Set();
+
+      // Helper function to add players from a list, avoiding duplicates
+      const addPlayersToRosterSheet = (playerIds, rosterType) => {
+        if (playerIds && Array.isArray(playerIds)) {
+          playerIds.forEach(playerId => {
+            // Only add if not already added for this team
+            if (!addedPlayerIdsForTeam.has(playerId)) {
+              const playerName = playerIdToNameMap[playerId] || `ID: ${playerId}`; // Fallback if name not found
+              allRosterData.push([ownerId, teamName, playerId, rosterType, playerName]);
+              addedPlayerIdsForTeam.add(playerId); // Mark as added
+            }
+          });
+        }
+      };
+
+      // Process in order of priority: Starters > Reserve > Taxi > Active
+      // This ensures a player is listed under their highest priority role.
+      addPlayersToRosterSheet(roster.starters, "Starter");
+      addPlayersToRosterSheet(roster.reserve, "Reserve");
+      addPlayersToRosterSheet(roster.taxi, "Taxi");
+      addPlayersToRosterSheet(roster.players, "Active"); // 'players' usually refers to the full active roster
+											
+												  
+    });
+
+    // --- 4. Write Data to "Team Rosters" Sheet ---
+    // rostersSheet.clearContents(); // Clear existing content
+    const lastRow = rostersSheet.getLastRow();
+    rostersSheet.getRange(1, 1, lastRow, 5).clearContent();
+    if (allRosterData.length > 1) { // Check if there's more than just headers
+      const numRows = allRosterData.length;
+      const numColumns = allRosterData[0].length;
+      rostersSheet.getRange(1, 1, numRows, numColumns).setValues(allRosterData);
+      Logger.log(`${numRows - 1} player roster entries posted to "${ROSTERS_SHEET_NAME}".`);
+      Browser.msgBox(`Successfully posted ${numRows - 1} player roster entries to "${ROSTERS_SHEET_NAME}".`);
+    } else {
+      Logger.log("No roster data found to post.");
+      Browser.msgBox("No roster data found to post to the 'Team Rosters' sheet.");
+    }
+
+  } catch (e) {
+    Logger.log("Error fetching or parsing League Rosters API data: " + e.toString());
+    Browser.msgBox("An error occurred during League Rosters fetch: " + e.toString());
+  }
+}
+
+// --- Existing Functions (Ensure these are also in your .gs file) ---
+
+/**
+ * Fetches basic league member data (user_id, avatar, team_name) from Sleeper API
+ * and populates the "Rosters & Records" sheet, starting from Column B (column 2).
+ * Column A is reserved for manual input.
+ * This script is intended to be run once or infrequently as this data is static.
+ */
+function fetchLeagueMembersData() {
+  // --- Configuration ---
+  const LEAGUE_ID = GLOBAL_LEAGUE_ID; // <<< IMPORTANT: REPLACE WITH YOUR ACTUAL LEAGUE ID
+  const SHEET_NAME = "Rosters & Records"; // Name of your Google Sheet tab
+  const USERS_API_URL = `https://api.sleeper.app/v1/league/${LEAGUE_ID}/users`;
+
+  // --- Get the Spreadsheet and Sheet ---
+  const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+  let sheet = spreadsheet.getSheetByName(SHEET_NAME);
+  if (!sheet) {
+    sheet = spreadsheet.insertSheet(SHEET_NAME);
+  }
+
+  // Clear existing content to ensure a fresh start and consistent structure
+  sheet.clear();
+
+  // Define headers for all expected columns
+  const headers = [
+    "Row ID",
+    "User ID",
+    "User Avatar URL", // Renamed for clarity
+    "Team Name",
+    "Team Avatar URL", // New column for team-specific avatar
+    "W-L Record",
+    "Streak",
+    "Roster ID",
+    "Fpts (Total)"
+  ];
+  sheet.getRange(1, 1, 1, headers.length).setValues([headers]).setFontWeight('bold');
+
+  // --- Fetch Data from API ---
+  try {
+    const response = UrlFetchApp.fetch(USERS_API_URL);
+    const jsonResponse = response.getContentText();
+    const users = JSON.parse(jsonResponse);
+
+    Logger.log("Users API Response fetched successfully.");
+
+    // --- Prepare data for writing to sheet ---
+    const dataToWrite = [];
+    users.forEach((user, index) => {
+      // User's personal avatar (from user object)
+      const userAvatarUrl = user.avatar ? `https://sleepercdn.com/avatars/thumbs/${user.avatar}` : '';
+      const teamName = user.metadata?.team_name || user.display_name || `Team ${index + 1}`;
+      
+      // --- UPDATED: Extract Team Avatar URL from user.metadata ---
+      const teamAvatarUrl = user.metadata?.avatar || ''; // Directly use if it's already a URL, or leave blank
+
+      // Push initial data. W-L, Streak, Roster ID, Fpts are initially blank.
+      dataToWrite.push([
+        index + 1,        // Row ID
+        user.user_id,     // User ID (Col B)
+        userAvatarUrl,    // User Avatar URL (Col C)
+        teamName,         // Team Name (Col D)
+        teamAvatarUrl,    // Team Avatar URL (Col E - now populated here)
+        '',               // Placeholder for W-L Record (Col F)
+        '',               // Placeholder for Streak (Col G)
+        '',               // Placeholder for Roster ID (Col H)
+        ''                // Placeholder for Fpts (Total) (Col I)
+      ]);
+    });
+
+    if (dataToWrite.length > 0) {
+      sheet.getRange(2, 1, dataToWrite.length, headers.length).setValues(dataToWrite);
+      Logger.log(`Successfully fetched ${dataToWrite.length} league members.`);
+      Browser.msgBox(`Successfully fetched ${dataToWrite.length} league members into the "${SHEET_NAME}" sheet. Please run "Update Rosters & Records" next.`);
+    } else {
+      Logger.log("No users found in the league.");
+      Browser.msgBox("No users found in the league. Please check your LEAGUE_ID.");
+    }
+  } catch (e) {
+    Logger.log("Error fetching or parsing Users API data: " + e.toString());
+    Browser.msgBox("An error occurred during Users fetch: " + e.toString());
+  }
+}
+
+/**
+ * Fetches roster and record data from Sleeper API and updates the
+ * "Rosters & Records" sheet by matching user_id.
+ * This script can be run daily or weekly to keep records up-to-date.
+ */
+function updateRostersAndRecordsData() {
+  // --- Configuration ---
+  const LEAGUE_ID = GLOBAL_LEAGUE_ID; // <<< IMPORTANT: REPLACE WITH YOUR ACTUAL LEAGUE ID
+  const SHEET_NAME = "Rosters & Records";
+  const ROSTERS_API_URL = `https://api.sleeper.app/v1/league/${LEAGUE_ID}/rosters`;
+
+  // Define column indices for easy access (0-indexed)
+  // These indices are consistent with the headers defined in fetchLeagueMembersData
+  const USER_ID_COL = 1;         // Column B
+  const USER_AVATAR_URL_COL = 2; // Column C (User's personal avatar)
+  const TEAM_NAME_COL = 3;       // Column D
+  const TEAM_AVATAR_URL_COL = 4; // Column E (Team's custom avatar - populated by fetchLeagueMembersData)
+  const WL_RECORD_COL = 5;       // Column F
+  const STREAK_COL = 6;          // Column G
+  const ROSTER_ID_COL = 7;       // Column H
+  const FPTS_COL = 8;            // Column I
+
+  // --- Get the Spreadsheet and Sheet ---
+  const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = spreadsheet.getSheetByName(SHEET_NAME);
+
+  if (!sheet) {
+    Logger.log(`Error: Sheet named "${SHEET_NAME}" not found.`);
+    Browser.msgBox(`Error: Sheet named "${SHEET_NAME}" not found. Please ensure the sheet exists.`);
+    return;
+  }
+
+  const lastRow = sheet.getLastRow();
+  // Check if we have at least headers and some user data starting from row 2 (Col B)
+  if (lastRow < 2 || sheet.getRange(2, USER_ID_COL + 1).isBlank()) {
+    Logger.log("Sheet 'Rosters & Records' is empty or initial member data is missing. Please run 'fetchLeagueMembersData' first.");
+    Browser.msgBox("Sheet 'Rosters & Records' is empty or initial member data is missing. Please run 'fetchLeagueMembersData' first to populate initial member data.");
+    return;
+  }
+
+  // Read existing data from the sheet. We need all columns to preserve data.
+  const existingData = sheet.getRange(1, 1, lastRow, sheet.getLastColumn()).getValues();
+  const userIdToRowMap = {};
+  for (let i = 1; i < existingData.length; i++) {
+    const userId = existingData[i][USER_ID_COL];
+    if (userId) {
+      userIdToRowMap[userId] = i;
+    }
+  }
+
+  try {
+    const response = UrlFetchApp.fetch(ROSTERS_API_URL);
+    const jsonResponse = response.getContentText();
+    const rosters = JSON.parse(jsonResponse);
+    Logger.log("Rosters API Response fetched successfully.");
+
+    let updatedSheetData = existingData.map(row => [...row]);
+
+    // Define all headers that should be present and their target column indices
+    const allExpectedHeaders = [
+      { name: "Row ID", colIndex: 0 },
+      { name: "User ID", colIndex: USER_ID_COL },
+      { name: "User Avatar URL", colIndex: USER_AVATAR_URL_COL },
+      { name: "Team Name", colIndex: TEAM_NAME_COL },
+      { name: "Team Avatar URL", colIndex: TEAM_AVATAR_URL_COL }, 
+      { name: "W-L Record", colIndex: WL_RECORD_COL },
+      { name: "Streak", colIndex: STREAK_COL },
+      { name: "Roster ID", colIndex: ROSTER_ID_COL },
+      { name: "Fpts (Total)", colIndex: FPTS_COL }
+    ];
+
+    // Ensure all necessary columns exist and add new ones if needed
+    let currentLastColumn = updatedSheetData[0].length;
+    let maxRequiredColumnIndex = allExpectedHeaders.reduce((max, h) => Math.max(max, h.colIndex), -1);
+    
+    // If we need more columns than currently exist, extend all rows
+    if (maxRequiredColumnIndex + 1 > currentLastColumn) {
+        currentLastColumn = maxRequiredColumnIndex + 1; // Update currentLastColumn
+        for (let r = 0; r < updatedSheetData.length; r++) {
+            while (updatedSheetData[r].length < currentLastColumn) {
+                updatedSheetData[r].push(''); // Add empty cells
+            }
+        }
+    }
+
+    // Set header names for all expected columns (if they're not already there or are wrong)
+    allExpectedHeaders.forEach(h => {
+        if (updatedSheetData[0][h.colIndex] !== h.name) {
+            updatedSheetData[0][h.colIndex] = h.name;
+        }
+    });
+
+    let recordsUpdatedCount = 0;
+    rosters.forEach(roster => {
+      const ownerId = roster.owner_id;
+      const rowIndex = userIdToRowMap[ownerId];
+
+      if (rowIndex !== undefined) {
+        const fptsTotal = (roster.settings.fpts || 0) + ((roster.settings.fpts_decimal || 0) / 100);
+
+        let wins = 0;
+        let losses = 0;
+
+        // Safely access metadata.record
+        if (roster.metadata && typeof roster.metadata.record === 'string') {
+          const recordString = roster.metadata.record.toUpperCase();
+          for (let i = 0; i < recordString.length; i++) {
+            const char = recordString.charAt(i);
+            if (char === 'W') {
+              wins++;
+            } else if (char === 'L') {
+              losses++;
+            }
+          }
+        }
+        const wlRecord = `${wins}-${losses}`;
+
+        // --- REMOVED: Team Avatar URL is no longer populated here ---
+        // const teamAvatarUrl = roster.metadata?.avatar || ''; 
+        // if (!teamAvatarUrl && roster.metadata) {
+        //   Logger.log(`Team Avatar URL is blank for Roster ID ${roster.roster_id}. Raw metadata: ${JSON.stringify(roster.metadata)}`);
+        // }
+        // updatedSheetData[rowIndex][TEAM_AVATAR_URL_COL] = teamAvatarUrl; 
+        // Team Avatar URL is now populated by fetchLeagueMembersData
+
+        updatedSheetData[rowIndex][WL_RECORD_COL] = wlRecord;
+        updatedSheetData[rowIndex][STREAK_COL] = roster.metadata?.streak || 'n/a'; 
+        updatedSheetData[rowIndex][ROSTER_ID_COL] = roster.roster_id || '';
+        updatedSheetData[rowIndex][FPTS_COL] = fptsTotal;
+
+        recordsUpdatedCount++;
+      } else {
+        Logger.log(`User ID ${ownerId} found in Rosters API but not in the spreadsheet. Skipping.`);
+      }
+    });
+
+    if (recordsUpdatedCount > 0 || maxRequiredColumnIndex + 1 > existingData[0].length) {
+      sheet.getRange(1, 1, updatedSheetData.length, updatedSheetData[0].length).setValues(updatedSheetData);
+      Logger.log(`${recordsUpdatedCount} team records updated in "${SHEET_NAME}".`);
+      Browser.msgBox(`Successfully updated ${recordsUpdatedCount} team records in "${SHEET_NAME}".`);
+    } else {
+      Logger.log("No team records updated. Ensure user IDs match and data exists.");
+      Browser.msgBox("No team records updated. Ensure initial data is populated and User IDs match.");
+    }
+
+  } catch (e) {
+    Logger.log("Error fetching or parsing Rosters API data: " + e.toString());
+    Browser.msgBox("An error occurred during Rosters fetch: " + e.toString());
+  }
+}
+
+/**
+ * Fetches draft picks from the Sleeper API for multiple seasons and
+ * populates a new "Draft Picks" sheet.
+ */
+function fetchDraftPicksData() {
+  // --- Configuration ---
+  // <<< IMPORTANT: REPLACE THESE WITH YOUR ACTUAL DRAFT IDS AND SEASONS >>>
+  const DRAFT_IDS_BY_SEASON = {
+    "2025": "1256670617734754304",
+	  "2024": "1121938386224357377",
+    "2023": "992182986533294081",
+  };
+  const SHEET_NAME = "Draft Results"; // Updated sheet name
+  const BASE_API_URL = "https://api.sleeper.app/v1/draft";
+
+  // --- Get the Spreadsheet and Sheet ---
+  const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+  let sheet = spreadsheet.getSheetByName(SHEET_NAME);
+  const isNewSheet = !sheet;
+  if (isNewSheet) {
+    sheet = spreadsheet.insertSheet(SHEET_NAME);
+  }
+
+										   
+				
+  const headers = ["Season", "Round", "Pick #", "Picked By (Roster ID)", "Player ID"];
+  // Set headers only if the sheet is newly created
+  if (isNewSheet) {
+    sheet.getRange(1, 1, 1, headers.length).setValues([headers]).setFontWeight('bold');
+  }
+
+  let allDraftPicks = [];
+  const seasons = Object.keys(DRAFT_IDS_BY_SEASON);
+
+  // Loop through each season and its associated draft ID
+  for (const season of seasons) {
+    const draftId = DRAFT_IDS_BY_SEASON[season];
+    const API_URL = `${BASE_API_URL}/${draftId}/picks`;
+
+    try {
+      const response = UrlFetchApp.fetch(API_URL);
+      const jsonResponse = response.getContentText();
+      const picks = JSON.parse(jsonResponse);
+      
+      Logger.log(`Successfully fetched ${picks.length} picks for the ${season} season.`);
+
+      // Process each pick and add to our main array
+      picks.forEach(pick => {
+													   
+																   
+															
+        const pickRow = [
+          season,
+          pick.round,
+          pick.pick_no,
+          pick.picked_by,
+          pick.player_id
+        ];
+        allDraftPicks.push(pickRow);
+      });
+
+    } catch (e) {
+      Logger.log(`Error fetching or parsing draft picks for season ${season} (Draft ID: ${draftId}): ` + e.toString());
+      // Continue to the next draft ID even if one fails
+    }
+  }
+
+  // Write all collected draft picks to the sheet
+  if (allDraftPicks.length > 0) {
+    // Determine the range to clear (from row 2, first 5 columns)
+    const lastRow = sheet.getLastRow();
+    if (lastRow > 1) {
+      sheet.getRange(2, 1, lastRow - 1, headers.length).clearContent();
+    }
+    
+    // Write new data to the first 5 columns
+    sheet.getRange(2, 1, allDraftPicks.length, headers.length).setValues(allDraftPicks);
+    
+    Logger.log(`Total of ${allDraftPicks.length} draft picks written to the sheet.`);
+    Browser.msgBox(`Successfully fetched a total of ${allDraftPicks.length} draft picks from ${seasons.join(", ")} into the "${SHEET_NAME}" sheet.`);
+  } else {
+    Logger.log("No draft picks were fetched. Please check the DRAFT_IDS_BY_SEASON configuration.");
+    Browser.msgBox("No draft picks were fetched. Please check the DRAFT_IDS_BY_SEASON configuration in the script.");
+  }
+}
+
+function clearRanges() {
+  const sheet = SpreadsheetApp.getActiveSheet();
+  sheet.getRange('B2:K15').clearContent();
+  sheet.getRange('B18:D23').clearContent();
+}
+
+function clearAppDataRange() {
+  // Open the active spreadsheet
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  
+  // Get the sheet named "App Data Collection"
+  var sheet = ss.getSheetByName("App Data Collection");
+  
+  // Define the range you want to clear
+  // Example: clear A2:D100
+  var range = sheet.getRange("B2:G11");
+  
+  // Clear the contents (values only, not formatting)
+  range.clearContent();
+}
