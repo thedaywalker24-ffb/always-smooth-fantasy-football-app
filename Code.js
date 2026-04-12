@@ -26,6 +26,13 @@ function onOpen(e) {
 }
 
 const GLOBAL_LEAGUE_ID = '1256670617722163200'; // 2025 Season
+
+/**
+ * Banner image: any https URL, or a Google Drive share / file link. Drive file ids
+ * are rewritten to lh3.googleusercontent.com (same CDN shape Glide uses) so <img> works.
+ */
+const HEADER_IMAGE_URL =
+  'https://drive.google.com/file/d/1fqOjVGeeG2OR821xZEccYQ5Ii_YZD5uD/view?usp=drivesdk';
 // const GLOBAL_LEAGUE_ID = '1121938386224357376'; // 2024 Season
 // const GLOBAL_LEAGUE_ID = '992182986533294080'; // 2023 Season
 
@@ -33,12 +40,54 @@ const GLOBAL_LEAGUE_ID = '1256670617722163200'; // 2025 Season
 const ROSTERS_RECORDS_SHEET = 'Rosters & Records';
 
 /**
+ * Pulls a Google Drive file id from share links, uc URLs, or lh3.googleusercontent.com/d/…
+ * (Glide-style CDN URLs).
+ * @param {string} url
+ * @return {string}
+ */
+function extractDriveFileId_(url) {
+  if (!url || typeof url !== 'string') return '';
+  var m = url.match(/googleusercontent\.com\/d\/([a-zA-Z0-9_-]+)/);
+  if (m) return m[1];
+  m = url.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
+  if (m) return m[1];
+  m = url.match(/[?&]id=([a-zA-Z0-9_-]+)/);
+  return m ? m[1] : '';
+}
+
+/**
+ * Embeddable image URL for Drive-hosted files (matches Glide / Chrome resolved src).
+ * @param {string} fileId
+ * @return {string}
+ */
+function driveFileIdToLh3Src_(fileId) {
+  if (!fileId) return '';
+  return 'https://lh3.googleusercontent.com/d/' + fileId + '=w1920';
+}
+
+/**
+ * @param {string} raw HEADER_IMAGE_URL value
+ * @return {string} value for <img src>
+ */
+function resolveHeaderImageSrc_(raw) {
+  if (!raw) return '';
+  var fid = extractDriveFileId_(raw);
+  if (fid) return driveFileIdToLh3Src_(fid);
+  return raw;
+}
+
+/**
  * Serves the league dashboard HTML as a Web App.
  * @param {Object} e Request parameters (unused; present for Web App signature).
  * @return {GoogleAppsScript.HTML.HtmlOutput}
  */
 function doGet(e) {
-  return HtmlService.createHtmlOutputFromFile('index')
+  var raw = HEADER_IMAGE_URL || '';
+  var t = HtmlService.createTemplateFromFile('index');
+  t.headerImageUrl = raw;
+  t.headerImageSrc = resolveHeaderImageSrc_(raw);
+  return t
+    .evaluate()
     .setTitle('League Dashboard')
     .addMetaTag('viewport', 'width=device-width, initial-scale=1');
 }
