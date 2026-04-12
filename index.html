@@ -1,222 +1,292 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>League Dashboard</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script>
-    tailwind.config = {
-      theme: {
-        extend: {
-          colors: {
-            surface: '#0c1017',
-            card: '#141b26',
-            neon: '#39ff14',
-            'neon-dim': '#2bc70f'
-          },
-          fontFamily: {
-            sans: ['system-ui', '-apple-system', 'Segoe UI', 'Roboto', 'sans-serif']
-          }
-        }
-      }
-    };
-  </script>
-  <style>
-    body { background: radial-gradient(ellipse 120% 80% at 50% -20%, #1a2436 0%, #0c1017 45%, #080b10 100%); }
-    .glow-text { text-shadow: 0 0 24px rgba(57, 255, 20, 0.35); }
-    .card-ring { box-shadow: 0 0 0 1px rgba(57, 255, 20, 0.12), 0 8px 32px rgba(0, 0, 0, 0.45); }
-    .header-banner {
-      box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35), 0 0 0 1px rgba(255, 255, 255, 0.08);
-    }
-  </style>
-  <script>
-    window.__FF_DIAG__ = <?!= clientDiagnosticsEnabled ?>;
-  </script>
-</head>
-<body class="min-h-screen text-slate-200 antialiased pb-10">
-  <? if (headerImageUrl) { ?>
-  <div class="px-3 pt-3 sm:px-4 sm:pt-4">
-    <div class="header-banner w-full max-h-[min(40vh,280px)] overflow-hidden rounded-2xl sm:rounded-3xl">
-      <img
-        src="<?!= headerImageSrc ?>"
-        alt=""
-        class="block w-full h-[min(40vh,280px)] object-cover object-center"
-        width="1200"
-        height="400"
-        decoding="async"
-        fetchpriority="high"
-      />
-    </div>
-  </div>
-  <? } ?>
-  <header class="px-4 pt-6 pb-4 max-w-lg mx-auto">
-    <p class="text-xs uppercase tracking-[0.2em] text-neon/80 font-medium mb-1">Always Smooth Dynasty League</p>
-    <h1 class="text-2xl sm:text-3xl font-bold text-white tracking-tight glow-text">League standings</h1>
-    <p id="status" class="mt-2 text-sm text-slate-500">Loading…</p>
-  </header>
-
-  <main id="grid" class="px-4 max-w-lg mx-auto grid gap-3 sm:grid-cols-2 sm:max-w-3xl" aria-live="polite"></main>
-
-  <div id="diag-wrap" class="hidden px-4 max-w-lg mx-auto sm:max-w-3xl mt-8 mb-10" aria-label="Diagnostics">
-    <p class="text-xs text-neon/90 font-medium uppercase tracking-wider mb-2">Diagnostics (opened with ?debug=1)</p>
-    <pre id="diag-panel" class="text-xs leading-relaxed text-slate-400 bg-black/40 border border-white/10 rounded-xl p-3 overflow-x-auto whitespace-pre-wrap break-words max-h-[55vh] overflow-y-auto"></pre>
-  </div>
-
-  <template id="card-tpl">
-    <article class="card-ring rounded-2xl bg-card/90 backdrop-blur-sm border border-white/5 p-4 flex flex-col gap-3 min-h-[120px]">
-      <div class="flex items-start gap-3 min-w-0">
-        <img
-          class="manager-photo hidden aspect-square w-12 h-12 sm:w-14 sm:h-14 shrink-0 rounded-lg object-cover border border-white/10 bg-white/5 shadow-inner"
-          alt=""
-          width="56"
-          height="56"
-          decoding="async"
-          loading="lazy"
-        />
-        <div class="flex-1 min-w-0">
-          <h2 class="team-name text-lg sm:text-xl font-semibold text-white leading-snug break-words pr-1 pt-0.5"></h2>
-          <p class="manager-display-name hidden text-xs sm:text-sm font-medium text-pink-400 leading-snug mt-1 break-words pr-1"></p>
-        </div>
-      </div>
-      <div class="mt-auto flex items-end justify-between gap-3 pt-1 border-t border-white/10">
-        <div>
-          <p class="text-[10px] uppercase tracking-wider text-slate-500 mb-0.5">Record</p>
-          <p class="record text-2xl font-bold text-neon tabular-nums tracking-tight"></p>
-        </div>
-        <div class="text-right">
-          <p class="text-[10px] uppercase tracking-wider text-slate-500 mb-0.5">PF</p>
-          <p class="points text-xl font-semibold text-slate-100 tabular-nums"></p>
-        </div>
-      </div>
-    </article>
-  </template>
-
-  <script>
-    (function () {
-      var grid = document.getElementById('grid');
-      var statusEl = document.getElementById('status');
-      var tpl = document.getElementById('card-tpl');
-      var diagWrap = document.getElementById('diag-wrap');
-      var diagPanel = document.getElementById('diag-panel');
-
-      function diagnosticsRequested() {
-        if (typeof window.__FF_DIAG__ !== 'undefined' && window.__FF_DIAG__) return true;
-        try {
-          return /[?&]debug=1(?:&|$)/.test(window.location.search || '');
-        } catch (e) {
-          return false;
-        }
-      }
-
-      function setStatus(msg, isError) {
-        statusEl.textContent = msg;
-        statusEl.className = 'mt-2 text-sm ' + (isError ? 'text-red-400' : 'text-slate-500');
-      }
-
-      function formatPoints(n) {
-        if (typeof n !== 'number' || isNaN(n)) return '0';
-        return n.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 });
-      }
-
-      function render(payload) {
-        grid.innerHTML = '';
-        if (payload.error) {
-          setStatus(payload.error, true);
-          return;
-        }
-        var teams = payload.teams || [];
-        if (teams.length === 0) {
-          setStatus('No teams found. Run Fetch Teams in the sheet, then Refresh Team Records.');
-          return;
-        }
-        var updated = payload.updatedAt ? new Date(payload.updatedAt) : null;
-        var wantDiag = diagnosticsRequested();
-        var hasDiag = !!payload.diagnostics;
-        setStatus(
-          updated
-            ? 'Updated ' + updated.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }) +
-                (wantDiag && hasDiag ? ' · diagnostics below' : '') +
-                (wantDiag && !hasDiag ? ' · redeploy Apps Script for diagnostics' : '')
-            : 'Loaded ' + teams.length + ' teams' +
-                (wantDiag && hasDiag ? ' · diagnostics below' : '') +
-                (wantDiag && !hasDiag ? ' · redeploy Apps Script for diagnostics' : ''),
-          false
-        );
-
-        var diagJson = payload.diagnostics ? JSON.stringify(payload.diagnostics, null, 2) : '';
-        var imgLoadErrors = [];
-
-        teams.forEach(function (t) {
-          var node = tpl.content.cloneNode(true);
-          var article = node.querySelector('article');
-          var photoEl = article.querySelector('.manager-photo');
-          var src = t.managerPhotoSrc;
-          if (src) {
-            photoEl.src = src;
-            photoEl.classList.remove('hidden');
-            photoEl.setAttribute('aria-hidden', 'true');
-            if (payload.diagnostics) {
-              photoEl.setAttribute('data-team', t.teamName || '');
-              photoEl.addEventListener(
-                'error',
-                function () {
-                  imgLoadErrors.push(t.teamName || '(team)');
-                  if (diagPanel) {
-                    diagPanel.textContent =
-                      diagJson +
-                      '\n\nBrowser reported <img> load failure for:\n' +
-                      imgLoadErrors.join('\n') +
-                      '\n\nTip: DevTools → Network → filter "Img" (or check blocked/mixed content).';
-                  }
-                },
-                { once: true }
-              );
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Always Smooth 2026</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        // Configure Tailwind to use the 'class' strategy for dark mode
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        pink: {
+                            500: '#ec4899',
+                        }
+                    }
+                }
             }
-          } else {
-            photoEl.removeAttribute('src');
-            photoEl.classList.add('hidden');
-          }
-          article.querySelector('.team-name').textContent = t.teamName || 'Unknown';
-          var nameSub = article.querySelector('.manager-display-name');
-          if (t.managerDisplayName) {
-            nameSub.textContent = t.managerDisplayName;
-            nameSub.classList.remove('hidden');
-          } else {
-            nameSub.textContent = '';
-            nameSub.classList.add('hidden');
-          }
-          article.querySelector('.record').textContent = t.record || '—';
-          article.querySelector('.points').textContent = formatPoints(t.fantasyPoints);
-          grid.appendChild(node);
+        }
+
+        /**
+         * Theme Logic: Runs immediately to prevent Flash of Unstyled Content (FOUC)
+         */
+        const applyTheme = (theme) => {
+            const html = document.documentElement;
+            const systemDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+            
+            html.classList.remove('dark');
+            
+            if (theme === 'dark' || (theme === 'system' && systemDark)) {
+                html.classList.add('dark');
+            }
+        };
+
+        // Initialize theme before body renders
+        (function() {
+            const savedTheme = localStorage.getItem('theme') || 'system';
+            applyTheme(savedTheme);
+        })();
+    </script>
+    <style>
+        .banner-container {
+            position: relative;
+            width: 100%;
+            aspect-ratio: 16 / 9;
+            overflow: hidden;
+            background-color: #111827;
+        }
+
+        @media (min-width: 768px) {
+            .banner-container {
+                aspect-ratio: 21 / 7;
+                max-height: 380px;
+            }
+        }
+
+        .banner-image {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            object-position: center 25%;
+        }
+
+        .banner-overlay {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: linear-gradient(transparent, rgba(17, 24, 39, 0.95));
+            padding: 2.5rem 1.5rem 1.5rem 1.5rem;
+        }
+
+        .glass-panel {
+            backdrop-filter: blur(10px);
+            transition: all 0.3s ease;
+        }
+        
+        .debug-panel {
+            font-family: monospace;
+            font-size: 10px;
+            background: #000;
+            color: #0f0;
+            padding: 1rem;
+            margin-top: 2rem;
+            border-top: 2px solid #333;
+        }
+
+        .pink-glow {
+            text-shadow: 0 0 20px rgba(236, 72, 153, 0.4);
+        }
+
+        /* Responsive toggle hiding logic */
+        #theme-toggle-container {
+            transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s ease;
+        }
+        
+        #theme-toggle-container.nav-hidden {
+            transform: translateY(-120%);
+            opacity: 0;
+        }
+
+        /* Custom scrollbar */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        .dark ::-webkit-scrollbar-thumb { background: #374151; border-radius: 10px; }
+        ::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 10px; }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-900 dark:bg-gray-950 dark:text-white font-sans selection:bg-pink-500 selection:text-white transition-colors duration-300">
+
+    <!-- Theme Toggle Floating UI (Reflexive Hiding Added) -->
+    <div id="theme-toggle-container" class="fixed top-4 right-4 z-50 flex bg-white/80 dark:bg-gray-900/80 backdrop-blur-md p-1.5 rounded-full shadow-2xl border border-slate-200 dark:border-gray-800 transition-all">
+        <button onclick="setTheme('light')" id="btn-light" class="p-2 rounded-full transition-all focus:outline-none group" title="Light Mode">
+            <svg class="w-5 h-5 text-slate-400 group-hover:text-pink-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364-6.364l-.707.707M6.343 17.657l-.707.707m12.728 0l-.707-.707M6.343 6.343l-.707-.707M12 8a4 4 0 100 8 4 4 0 000-8z"></path></svg>
+        </button>
+        <button onclick="setTheme('system')" id="btn-system" class="p-2 rounded-full transition-all focus:outline-none group" title="System Theme">
+            <svg class="w-5 h-5 text-slate-400 group-hover:text-pink-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path></svg>
+        </button>
+        <button onclick="setTheme('dark')" id="btn-dark" class="p-2 rounded-full transition-all focus:outline-none group" title="Dark Mode">
+            <svg class="w-5 h-5 text-slate-400 group-hover:text-pink-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"></path></svg>
+        </button>
+    </div>
+
+    <!-- Responsive Banner Section -->
+    <header class="banner-container shadow-2xl">
+        <img 
+            id="leagueBanner"
+            src="<?= headerImageSrc ?>" 
+            alt="Always Smooth League Banner" 
+            class="banner-image"
+            onerror="handleImageError(this)"
+        >
+        <div class="banner-overlay flex flex-col justify-end">
+            <h1 class="text-3xl md:text-6xl font-black italic tracking-tighter uppercase text-pink-500 pink-glow">
+                Always Smooth <span class="text-white">2026</span>
+            </h1>
+            <p class="text-sm md:text-xl font-bold text-pink-300/60 uppercase tracking-widest">The Dynasty Refresh</p>
+        </div>
+    </header>
+
+    <!-- Main Content Area -->
+    <main class="max-w-7xl mx-auto p-4 md:p-8 space-y-8">
+        <!-- League Standings -->
+        <section class="glass-panel rounded-3xl overflow-hidden shadow-xl bg-white/80 dark:bg-gray-900/60 border border-slate-200 dark:border-pink-500/20">
+            <div class="bg-slate-50/50 dark:bg-gray-800/40 p-6 border-b border-slate-200 dark:border-gray-800 flex justify-between items-center">
+                <h2 class="text-2xl font-black uppercase italic tracking-tight">League Standings</h2>
+                <span class="bg-pink-500 text-white text-xs font-bold px-3 py-1 rounded-full uppercase shadow-lg shadow-pink-500/20">Week 1 Live</span>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="w-full text-left">
+                    <thead class="text-xs text-slate-500 dark:text-gray-400 uppercase bg-slate-100/50 dark:bg-gray-950/50">
+                        <tr>
+                            <th class="px-6 py-4 font-bold">Rank</th>
+                            <th class="px-6 py-4 font-bold">Team</th>
+                            <th class="px-6 py-4 font-bold">W-L-T</th>
+                            <th class="px-6 py-4 font-bold">Points For</th>
+                            <th class="px-6 py-4 font-bold text-right">Streak</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-200 dark:divide-gray-800">
+                        <tr class="hover:bg-pink-500/5 transition-colors group">
+                            <td class="px-6 py-4 font-bold text-pink-500">1</td>
+                            <td class="px-6 py-4 font-bold group-hover:text-pink-500 transition-colors">The Commish</td>
+                            <td class="px-6 py-4">12-2-0</td>
+                            <td class="px-6 py-4 font-mono text-sm opacity-80">1845.2</td>
+                            <td class="px-6 py-4 text-right text-green-500 font-bold">W5</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- Secondary Grid -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+            <div class="bg-white dark:bg-gray-900 p-8 rounded-3xl border border-slate-200 dark:border-gray-800 hover:border-pink-500 transition-all group shadow-sm">
+                <div class="flex items-center mb-4">
+                    <div class="p-3 bg-pink-500/10 rounded-2xl mr-4 group-hover:bg-pink-500/20 transition-colors">
+                        <svg class="w-6 h-6 text-pink-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+                    </div>
+                    <h3 class="text-xl font-black uppercase italic">Weekly Matchups</h3>
+                </div>
+                <p class="text-slate-600 dark:text-gray-400 text-sm mb-6 leading-relaxed">Live scoring feeds and win probability tracked directly via Sleeper API.</p>
+                <div class="h-2 w-full bg-slate-100 dark:bg-gray-800 rounded-full overflow-hidden">
+                    <div class="bg-pink-500 h-full w-4/5 shadow-lg shadow-pink-500/20"></div>
+                </div>
+            </div>
+
+            <div class="bg-white dark:bg-gray-900 p-8 rounded-3xl border border-slate-200 dark:border-gray-800 hover:border-pink-500 transition-all group shadow-sm">
+                <div class="flex items-center mb-4">
+                    <div class="p-3 bg-pink-500/10 rounded-2xl mr-4 group-hover:bg-pink-500/20 transition-colors">
+                        <svg class="w-6 h-6 text-pink-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"></path></svg>
+                    </div>
+                    <h3 class="text-xl font-black uppercase italic">Draft Capital</h3>
+                </div>
+                <p class="text-slate-600 dark:text-gray-400 text-sm mb-6 leading-relaxed">Track traded picks and the 2026 Rookie Draft order in real-time.</p>
+                <button class="w-full py-3 bg-slate-50 dark:bg-gray-950 border border-slate-200 dark:border-gray-800 rounded-xl text-xs font-bold uppercase tracking-widest hover:bg-pink-500 hover:text-white dark:hover:bg-pink-500 transition-all hover:border-pink-500 shadow-sm">View Asset Tracker</button>
+            </div>
+        </div>
+    </main>
+
+    <!-- Debug Panel -->
+    <? if (clientDiagnosticsEnabled) { ?>
+        <div class="debug-panel">
+            <h4 style="color: #fff; margin-bottom: 5px;">--- DIAGNOSTICS ENABLED ---</h4>
+            <p><strong>headerImageUrl (Raw):</strong> <?= headerImageUrl ?></p>
+            <p><strong>headerImageSrc (Resolved):</strong> <?= headerImageSrc ?></p>
+            <p id="debug-error-log" style="color: #f00;"></p>
+        </div>
+    <? } ?>
+
+    <footer class="mt-12 p-12 text-center border-t border-slate-200 dark:border-gray-900">
+        <p class="text-slate-400 dark:text-gray-600 text-xs font-bold uppercase tracking-widest">&copy; 2026 Always Smooth League // Theme Support Active</p>
+    </footer>
+
+    <script>
+        /**
+         * Reflexive UI Logic
+         * Hides theme toggle when scrolling down, shows when scrolling up
+         */
+        let lastScrollTop = 0;
+        const toggleContainer = document.getElementById('theme-toggle-container');
+
+        window.addEventListener('scroll', () => {
+            let scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+            
+            // Re-show if at the very top
+            if (scrollTop <= 50) {
+                toggleContainer.classList.remove('nav-hidden');
+            } 
+            // Hide on scroll down
+            else if (scrollTop > lastScrollTop) {
+                toggleContainer.classList.add('nav-hidden');
+            } 
+            // Show on scroll up
+            else {
+                toggleContainer.classList.remove('nav-hidden');
+            }
+            
+            lastScrollTop = scrollTop <= 0 ? 0 : scrollTop;
+        }, { passive: true });
+
+        /**
+         * Theme Management System
+         */
+        function setTheme(theme) {
+            applyTheme(theme);
+            localStorage.setItem('theme', theme);
+            updateToggleUI(theme);
+        }
+
+        function updateToggleUI(activeTheme) {
+            const themes = ['light', 'dark', 'system'];
+            themes.forEach(t => {
+                const btn = document.getElementById(`btn-${t}`);
+                if (!btn) return;
+                
+                if (t === activeTheme) {
+                    btn.classList.add('bg-pink-50', 'dark:bg-pink-500/10', 'ring-1', 'ring-pink-500/50', 'scale-110');
+                    btn.querySelector('svg').classList.add('text-pink-500');
+                    btn.querySelector('svg').classList.remove('text-slate-400');
+                } else {
+                    btn.classList.remove('bg-pink-50', 'dark:bg-pink-500/10', 'ring-1', 'ring-pink-500/50', 'scale-110');
+                    btn.querySelector('svg').classList.remove('text-pink-500');
+                    btn.querySelector('svg').classList.add('text-slate-400');
+                }
+            });
+        }
+
+        window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', e => {
+            if (localStorage.getItem('theme') === 'system' || !localStorage.getItem('theme')) {
+                applyTheme('system');
+            }
         });
 
-        if (payload.diagnostics && diagWrap && diagPanel) {
-          diagWrap.classList.remove('hidden');
-          diagPanel.textContent = diagJson;
-        } else if (diagWrap) {
-          diagWrap.classList.add('hidden');
+        function handleImageError(img) {
+            console.error('Banner failed to load:', img.src);
+            const errorLog = document.getElementById('debug-error-log');
+            if (errorLog) {
+                errorLog.innerHTML = 'ERROR: Failed to load image from URL: ' + img.src;
+            }
+            img.src = 'https://images.unsplash.com/photo-1540747913346-19e32dc3e97e?q=80&w=2000&auto=format&fit=crop';
+            img.onerror = null;
         }
-      }
 
-      function onFail(err) {
-        setStatus(err && err.message ? err.message : String(err), true);
-      }
-
-      function load() {
-        setStatus('Loading…', false);
-        google.script.run
-          .withSuccessHandler(render)
-          .withFailureHandler(onFail)
-          .getLeagueData(diagnosticsRequested());
-      }
-
-      if (typeof google === 'undefined' || !google.script || !google.script.run) {
-        setStatus('Open this page via the deployed Web App URL (not as a local file).', true);
-        return;
-      }
-      load();
-    })();
-  </script>
+        window.onload = () => {
+            updateToggleUI(localStorage.getItem('theme') || 'system');
+        };
+    </script>
 </body>
 </html>
