@@ -12,6 +12,7 @@
 function onOpen(e) {
   SpreadsheetApp.getUi()
     .createMenu('Update Records')
+    .addItem('Initialize Settings', 'ensureSettingsSheet')
     .addItem('Fetch Teams', 'fetchLeagueMembersData')
     .addItem('Refresh Team Records', 'updateRostersAndRecordsData')
     // .addItem('Click to refresh Team Records', 'getSleeperStandings')
@@ -35,6 +36,20 @@ const HEADER_IMAGE_URL =
   'https://drive.google.com/file/d/1fqOjVGeeG2OR821xZEccYQ5Ii_YZD5uD/view?usp=drivesdk';
 // const GLOBAL_LEAGUE_ID = '1121938386224357376'; // 2024 Season
 // const GLOBAL_LEAGUE_ID = '992182986533294080'; // 2023 Season
+
+const SETTINGS_SHEET = 'Settings';
+const SETTINGS_SEASON_CELL = 'B2';
+const SETTINGS_WEEK_CELL = 'B3';
+const SETTINGS_LEAGUE_ID_CELL = 'B4';
+const SETTINGS_APP_ICON_CELL = 'B5';
+const DEFAULT_LEAGUE_SEASON = '2026';
+const DEFAULT_LEAGUE_WEEK = '1';
+const DEFAULT_LEAGUE_ID = GLOBAL_LEAGUE_ID;
+const DEFAULT_APP_ICON_URL = 'https://drive.google.com/file/d/1M-Q8iesdrChF0Nf4U7_d0doV2esUaov2/view?usp=drive_link';
+const APP_NAME = 'Always Smooth League';
+const APP_SHORT_NAME = 'Always Smooth';
+const APP_THEME_COLOR = '#ec4899';
+const APP_BACKGROUND_COLOR = '#020617';
 
 /** Sheet tab written by fetchLeagueMembersData / updateRostersAndRecordsData */
 const ROSTERS_RECORDS_SHEET = 'Rosters & Records';
@@ -86,6 +101,132 @@ function resolveHeaderImageSrc_(raw) {
   var fid = extractDriveFileId_(raw);
   if (fid) return driveFileIdToLh3Src_(fid);
   return raw;
+}
+
+/**
+ * Reads the current league season from the Settings sheet.
+ * Defaults safely so the UI still renders if the sheet or cell is missing.
+ * @param {GoogleAppsScript.Spreadsheet.Spreadsheet} spreadsheet
+ * @return {string}
+ */
+function getLeagueSeason_(spreadsheet) {
+  if (!spreadsheet) return DEFAULT_LEAGUE_SEASON;
+  var sheet = spreadsheet.getSheetByName(SETTINGS_SHEET);
+  if (!sheet) return DEFAULT_LEAGUE_SEASON;
+  var raw = sheet.getRange(SETTINGS_SEASON_CELL).getDisplayValue();
+  var season = String(raw || '').trim();
+  return season || DEFAULT_LEAGUE_SEASON;
+}
+
+/**
+ * Reads a Settings-sheet value with a safe fallback.
+ * @param {GoogleAppsScript.Spreadsheet.Spreadsheet} spreadsheet
+ * @param {string} a1Notation
+ * @param {string} fallback
+ * @return {string}
+ */
+function getSettingsValue_(spreadsheet, a1Notation, fallback) {
+  if (!spreadsheet) return fallback;
+  var sheet = spreadsheet.getSheetByName(SETTINGS_SHEET);
+  if (!sheet) return fallback;
+  var raw = sheet.getRange(a1Notation).getDisplayValue();
+  var value = String(raw || '').trim();
+  return value || fallback;
+}
+
+/**
+ * Reads the current league week from the Settings sheet.
+ * @param {GoogleAppsScript.Spreadsheet.Spreadsheet} spreadsheet
+ * @return {string}
+ */
+function getLeagueWeek_(spreadsheet) {
+  return getSettingsValue_(spreadsheet, SETTINGS_WEEK_CELL, DEFAULT_LEAGUE_WEEK);
+}
+
+/**
+ * Reads the current league id from the Settings sheet.
+ * @param {GoogleAppsScript.Spreadsheet.Spreadsheet} spreadsheet
+ * @return {string}
+ */
+function getLeagueId_(spreadsheet) {
+  return getSettingsValue_(spreadsheet, SETTINGS_LEAGUE_ID_CELL, DEFAULT_LEAGUE_ID);
+}
+
+/**
+ * Reads the current app icon URL from the Settings sheet.
+ * @param {GoogleAppsScript.Spreadsheet.Spreadsheet} spreadsheet
+ * @return {string}
+ */
+function getAppIconUrl_(spreadsheet) {
+  return getSettingsValue_(spreadsheet, SETTINGS_APP_ICON_CELL, DEFAULT_APP_ICON_URL);
+}
+
+/**
+ * Creates the Settings sheet with default values if it does not exist yet.
+ */
+function ensureSettingsSheet() {
+  var spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+  if (!spreadsheet) return;
+
+  var sheet = spreadsheet.getSheetByName(SETTINGS_SHEET);
+  if (!sheet) {
+    sheet = spreadsheet.insertSheet(SETTINGS_SHEET);
+  }
+
+  sheet.getRange('A1:B5').setValues([
+    ['Setting', 'Value'],
+    ['Season', getLeagueSeason_(spreadsheet)],
+    ['Week', getLeagueWeek_(spreadsheet)],
+    ['League ID', getLeagueId_(spreadsheet)],
+    ['App Icon URL', getAppIconUrl_(spreadsheet)]
+  ]);
+  sheet.getRange('A1:B1').setFontWeight('bold');
+  sheet.autoResizeColumns(1, 2);
+}
+
+/**
+ * Formats direct image URLs and Google Drive share links into embeddable image sources.
+ * @param {string} raw
+ * @return {string}
+ */
+function formatDriveUrl(raw) {
+  return resolveHeaderImageSrc_(raw);
+}
+
+/**
+ * Manifest payload for browser install flows.
+ * @param {GoogleAppsScript.Spreadsheet.Spreadsheet} spreadsheet
+ * @return {Object}
+ */
+function buildWebAppManifest_(spreadsheet) {
+  var webAppUrl = ScriptApp.getService().getUrl() || '';
+  var iconSrc = formatDriveUrl(getAppIconUrl_(spreadsheet));
+
+  return {
+    name: APP_NAME,
+    short_name: APP_SHORT_NAME,
+    description: 'Fantasy football league dashboard for standings, matchups, and draft data.',
+    start_url: webAppUrl || '.',
+    scope: webAppUrl || '.',
+    display: 'standalone',
+    orientation: 'portrait',
+    background_color: APP_BACKGROUND_COLOR,
+    theme_color: APP_THEME_COLOR,
+    icons: iconSrc
+      ? [
+          {
+            src: iconSrc,
+            sizes: '192x192',
+            type: 'image/png'
+          },
+          {
+            src: iconSrc,
+            sizes: '512x512',
+            type: 'image/png'
+          }
+        ]
+      : []
+  };
 }
 
 /**
@@ -389,10 +530,27 @@ function buildManagerPhotoUrlMapFromTeamsSheet_(spreadsheet) {
  * @return {GoogleAppsScript.HTML.HtmlOutput}
  */
 function doGet(e) {
+  var spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+  var path = e && e.pathInfo ? String(e.pathInfo).replace(/^\/+/, '') : '';
+
+  if (path === 'manifest.json') {
+    return ContentService
+      .createTextOutput(JSON.stringify(buildWebAppManifest_(spreadsheet)))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+
   var raw = HEADER_IMAGE_URL || '';
+  var webAppUrl = ScriptApp.getService().getUrl() || '';
   var t = HtmlService.createTemplateFromFile('index');
   t.headerImageUrl = raw;
   t.headerImageSrc = resolveHeaderImageSrc_(raw);
+  t.appIconHref = formatDriveUrl(getAppIconUrl_(spreadsheet));
+  t.manifestHref = webAppUrl ? webAppUrl.replace(/\/$/, '') + '/manifest.json' : 'manifest.json';
+  t.appName = APP_NAME;
+  t.appShortName = APP_SHORT_NAME;
+  t.appThemeColor = APP_THEME_COLOR;
+  t.leagueSeason = getLeagueSeason_(spreadsheet);
+  t.leagueWeek = getLeagueWeek_(spreadsheet);
   var debug = e && e.parameter && String(e.parameter.debug) === '1';
   t.clientDiagnosticsEnabled = debug;
   return t
@@ -405,20 +563,24 @@ function doGet(e) {
  * Returns team standings from the "Rosters & Records" sheet for the client UI.
  * Column positions are resolved from the header row so minor layout changes stay safe.
  * @param {boolean} [includeDiagnostics] When true, payload includes `diagnostics` for photo/sheet troubleshooting (use ?debug=1 on the web app URL).
- * @return {{ teams: Array<{teamName: string, record: string, fantasyPoints: number, managerPhotoSrc?: string, managerDisplayName?: string}>, updatedAt: string, error?: string, diagnostics?: Object }>}
+ * @return {{ teams: Array<{teamName: string, realName: string, record: string, streak: string, pointsFor: number, photoUrl: string}>, updatedAt: string, error?: string, diagnostics?: Object }}
  */
 function getLeagueData(includeDiagnostics) {
   const wantDiag = includeDiagnostics === true;
   const emptyPayload = function (err) {
-    var o = {
+    var payload = {
       teams: [],
       updatedAt: new Date().toISOString(),
       error: err || undefined
     };
     if (wantDiag) {
-      o.diagnostics = { photo: { note: err || 'error' }, rosterTeamCount: 0, teamsWithManagerPhotoSrc: 0 };
+      payload.diagnostics = {
+        rosterTeamCount: 0,
+        teamsWithPhotoUrl: 0,
+        note: err || 'error'
+      };
     }
-    return o;
+    return payload;
   };
 
   try {
@@ -429,129 +591,134 @@ function getLeagueData(includeDiagnostics) {
       );
     }
 
-    const sheet = spreadsheet.getSheetByName(ROSTERS_RECORDS_SHEET);
-    if (!sheet) {
+    const rosterSheet = spreadsheet.getSheetByName(ROSTERS_RECORDS_SHEET);
+    if (!rosterSheet) {
       return emptyPayload('Sheet "' + ROSTERS_RECORDS_SHEET + '" was not found.');
     }
 
-    const lastRow = sheet.getLastRow();
-    const lastCol = sheet.getLastColumn();
+    const lastRow = rosterSheet.getLastRow();
+    const lastCol = rosterSheet.getLastColumn();
     if (lastRow < 2 || lastCol < 1) {
-      const emptyRoster = { teams: [], updatedAt: new Date().toISOString() };
+      const emptyRoster = {
+        teams: [],
+        updatedAt: new Date().toISOString()
+      };
       if (wantDiag) {
-        const b = buildManagerPhotoUrlMapFromTeamsSheet_(spreadsheet);
+        const photoBuild = buildManagerPhotoUrlMapFromTeamsSheet_(spreadsheet);
         emptyRoster.diagnostics = {
-          photoSheet: b.diagnostics,
+          photoSheet: photoBuild.diagnostics,
           rosterTeamCount: 0,
-          teamsWithManagerPhotoSrc: 0,
+          teamsWithPhotoUrl: 0,
           note: 'Rosters & Records has no data rows.'
         };
       }
       return emptyRoster;
     }
 
-    const headerRange = sheet.getRange(1, 1, 1, lastCol);
-    const headers = headerRange.getValues()[0];
+    const headers = rosterSheet.getRange(1, 1, 1, lastCol).getValues()[0];
     const teamNameCol = headers.indexOf('Team Name');
-    const wlCol = headers.indexOf('W-L Record');
+    const realNameCol = findRostersDisplayNameColumn_(headers);
+    const recordCol = headers.indexOf('W-L Record');
     const streakCol =
       headers.indexOf('Streak') !== -1 ? headers.indexOf('Streak') : ROSTERS_STREAK_COL_FALLBACK;
-    const fptsCol = headers.indexOf('Fpts (Total)');
-    const displayNameCol = findRostersDisplayNameColumn_(headers);
+    const pointsForCol = headers.indexOf('Fpts (Total)');
 
-    if (teamNameCol === -1 || wlCol === -1 || fptsCol === -1) {
+    if (teamNameCol === -1 || recordCol === -1 || pointsForCol === -1) {
       return emptyPayload(
         'Missing expected headers (Team Name, W-L Record, Fpts (Total)) in row 1.'
       );
     }
 
-    const data = sheet.getRange(2, 1, lastRow, lastCol).getValues();
+    const rows = rosterSheet.getRange(2, 1, lastRow - 1, lastCol).getValues();
+    const photoBuild = buildManagerPhotoUrlMapFromTeamsSheet_(spreadsheet);
+    const managerPhotoByTeamKey = photoBuild.map;
     const teams = [];
-    const built = buildManagerPhotoUrlMapFromTeamsSheet_(spreadsheet);
-    const managerPhotoByTeamKey = built.map;
-    const photoSheetDiag = built.diagnostics;
-
     const rosterKeysForDiag = [];
-    let teamsWithPhotoCount = 0;
+    let teamsWithPhotoUrl = 0;
 
-    for (let r = 0; r < data.length; r++) {
-      const row = data[r];
-      const teamName = row[teamNameCol];
-      if (teamName === '' || teamName === null || teamName === undefined) {
-        continue;
-      }
+    for (let r = 0; r < rows.length; r++) {
+      const row = rows[r];
+      const rawTeamName = row[teamNameCol];
+      if (rawTeamName === '' || rawTeamName === null || rawTeamName === undefined) continue;
 
-      const recordRaw = row[wlCol];
-      let record =
-        recordRaw !== '' && recordRaw !== null && recordRaw !== undefined
-          ? String(recordRaw)
-          : '—';
-
-      const streakRaw = streakCol < row.length ? row[streakCol] : '';
-      record += formatStreakSuffixForRecord_(streakRaw);
-
-      let fantasyPoints = row[fptsCol];
-      if (fantasyPoints === '' || fantasyPoints === null || fantasyPoints === undefined) {
-        fantasyPoints = 0;
-      } else if (typeof fantasyPoints !== 'number') {
-        const n = Number(fantasyPoints);
-        fantasyPoints = isNaN(n) ? 0 : n;
-      }
-
+      const teamName = String(rawTeamName).trim();
       const teamKey = normalizeTeamNameKey_(teamName);
-      const rawPhoto = teamKey ? managerPhotoByTeamKey[teamKey] : '';
-      const managerPhotoSrc = rawPhoto ? resolveHeaderImageSrc_(rawPhoto) : '';
+      const rawRealName = realNameCol >= 0 && realNameCol < row.length ? row[realNameCol] : '';
+      const rawRecord = row[recordCol];
+      const rawStreak = streakCol >= 0 && streakCol < row.length ? row[streakCol] : '';
+      const rawPointsFor = row[pointsForCol];
+      const rawPhotoUrl = teamKey ? managerPhotoByTeamKey[teamKey] : '';
 
-      const displayRaw =
-        displayNameCol >= 0 && displayNameCol < row.length ? row[displayNameCol] : '';
-      const managerDisplayName =
-        displayRaw !== '' && displayRaw !== null && displayRaw !== undefined
-          ? String(displayRaw).trim()
-          : '';
+      const record =
+        rawRecord === '' || rawRecord === null || rawRecord === undefined
+          ? '0-0'
+          : String(rawRecord).trim();
+      const streakSuffix = formatStreakSuffixForRecord_(rawStreak);
+      const streak = streakSuffix ? streakSuffix.replace(/[()]/g, '').trim() : '';
+      const realName =
+        rawRealName === '' || rawRealName === null || rawRealName === undefined
+          ? ''
+          : String(rawRealName).trim();
 
-      if (wantDiag && rosterKeysForDiag.length < 12) rosterKeysForDiag.push(teamKey || '(blank key)');
-      if (managerPhotoSrc) teamsWithPhotoCount++;
+      let pointsFor = rawPointsFor;
+      if (pointsFor === '' || pointsFor === null || pointsFor === undefined) {
+        pointsFor = 0;
+      } else if (typeof pointsFor !== 'number') {
+        const num = Number(pointsFor);
+        pointsFor = isNaN(num) ? 0 : num;
+      }
+
+      const photoUrl = rawPhotoUrl ? formatDriveUrl(rawPhotoUrl) : '';
+
+      if (wantDiag && rosterKeysForDiag.length < 12) {
+        rosterKeysForDiag.push(teamKey || '(blank key)');
+      }
+      if (photoUrl) teamsWithPhotoUrl++;
 
       teams.push({
-        teamName: String(teamName),
+        teamName: teamName,
+        realName: realName,
         record: record,
-        fantasyPoints: Math.round(fantasyPoints * 100) / 100,
-        managerPhotoSrc: managerPhotoSrc || undefined,
-        managerDisplayName: managerDisplayName || undefined
+        streak: streak,
+        pointsFor: Math.round(pointsFor * 100) / 100,
+        photoUrl: photoUrl
       });
     }
 
-    const out = {
+    teams.sort(function (a, b) {
+      const aWins = parseInt(String(a.record).split('-')[0], 10) || 0;
+      const bWins = parseInt(String(b.record).split('-')[0], 10) || 0;
+      if (bWins !== aWins) return bWins - aWins;
+      return b.pointsFor - a.pointsFor;
+    });
+
+    const payload = {
       teams: teams,
       updatedAt: new Date().toISOString()
     };
+
     if (wantDiag) {
-      const unmatched = [];
+      const missingPhotos = [];
       for (let i = 0; i < teams.length; i++) {
-        if (!teams[i].managerPhotoSrc) unmatched.push(teams[i].teamName);
+        if (!teams[i].photoUrl) missingPhotos.push(teams[i].teamName);
       }
-      out.diagnostics = {
-        photoSheet: photoSheetDiag,
+      payload.diagnostics = {
+        photoSheet: photoBuild.diagnostics,
         rosterTeamCount: teams.length,
-        teamsWithManagerPhotoSrc: teamsWithPhotoCount,
+        teamsWithPhotoUrl: teamsWithPhotoUrl,
         rosterNormalizedKeysSample: rosterKeysForDiag,
-        rosterNamesMissingPhoto: unmatched.slice(0, 16),
-        hint:
-          teamsWithPhotoCount === 0 && photoSheetDiag.mapEntryCount > 0
-            ? 'Teams sheet has URLs but none matched roster names — compare spelling vs rosterNormalizedKeysSample vs sampleMapKeys.'
-            : teamsWithPhotoCount === 0 && photoSheetDiag.rowsWithUrlInH === 0
-              ? 'Column H appears empty for all scanned rows — confirm URLs are in column H.'
-              : ''
+        rosterNamesMissingPhoto: missingPhotos.slice(0, 16)
       };
     }
-    return out;
+
+    return payload;
   } catch (err) {
     return emptyPayload(err.message || String(err));
   }
 }
 
 function getSleeperStandings() {
-  const leagueId = GLOBAL_LEAGUE_ID;
+  const leagueId = getLeagueId_(SpreadsheetApp.getActiveSpreadsheet());
 
   // Sleeper API endpoint for league standings
   const url = `https://api.sleeper.app/v1/league/${leagueId}/rosters`;
@@ -594,7 +761,7 @@ function getSleeperStandings() {
 }
 
 function matchUserIdsToTeamNames() {
-  const leagueId = GLOBAL_LEAGUE_ID;
+  const leagueId = getLeagueId_(SpreadsheetApp.getActiveSpreadsheet());
 
   const sheet = SpreadsheetApp.getActiveSheet();
   const userIdsRange = sheet.getRange('F1:F10');
@@ -631,7 +798,7 @@ function matchUserIdsToTeamNames() {
 
 function fetchMatchupData() {
   var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('API Data');
-  var leagueId = GLOBAL_LEAGUE_ID; // Replace with your actual league_id
+  var leagueId = getLeagueId_(SpreadsheetApp.getActiveSpreadsheet());
   var week_no = sheet.getRange('A19').getValue(); // Get week_no from cell A19
   // var week_no = (sheet.getRange('A19').getValue()) - 1; // Use this when var startRow = 265 is active
   var url = `https://api.sleeper.app/v1/league/${leagueId}/matchups/${week_no}`;
@@ -770,7 +937,7 @@ function fetchSleeperPlayers() {
  */
 function fetchAndPopulateRosters() {
   // --- Configuration ---
-  const LEAGUE_ID = GLOBAL_LEAGUE_ID; // <<< IMPORTANT: REPLACE WITH YOUR ACTUAL LEAGUE ID
+  const LEAGUE_ID = getLeagueId_(SpreadsheetApp.getActiveSpreadsheet());
   const ROSTERS_SHEET_NAME = "Team Rosters";
   const RECORDS_SHEET_NAME = "Rosters & Records"; // To get team names
   const PLAYERS_SHEET_NAME = "Sleeper Players"; // Your existing sheet with NFL player data
@@ -932,7 +1099,7 @@ function fetchAndPopulateRosters() {
  */
 function fetchLeagueMembersData() {
   // --- Configuration ---
-  const LEAGUE_ID = GLOBAL_LEAGUE_ID; // <<< IMPORTANT: REPLACE WITH YOUR ACTUAL LEAGUE ID
+  const LEAGUE_ID = getLeagueId_(SpreadsheetApp.getActiveSpreadsheet());
   const SHEET_NAME = "Rosters & Records"; // Name of your Google Sheet tab
   const USERS_API_URL = `https://api.sleeper.app/v1/league/${LEAGUE_ID}/users`;
 
@@ -1015,7 +1182,7 @@ function fetchLeagueMembersData() {
  */
 function updateRostersAndRecordsData() {
   // --- Configuration ---
-  const LEAGUE_ID = GLOBAL_LEAGUE_ID; // <<< IMPORTANT: REPLACE WITH YOUR ACTUAL LEAGUE ID
+  const LEAGUE_ID = getLeagueId_(SpreadsheetApp.getActiveSpreadsheet());
   const SHEET_NAME = "Rosters & Records";
   const ROSTERS_API_URL = `https://api.sleeper.app/v1/league/${LEAGUE_ID}/rosters`;
 
@@ -1267,3 +1434,11 @@ function clearAppDataRange() {
   // Clear the contents (values only, not formatting)
   range.clearContent();
 }
+
+
+
+
+
+
+
+
