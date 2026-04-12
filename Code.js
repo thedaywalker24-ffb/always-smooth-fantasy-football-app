@@ -525,6 +525,51 @@ function buildManagerPhotoUrlMapFromTeamsSheet_(spreadsheet) {
 }
 
 /**
+ * Frontend config payload for the static GitHub Pages app.
+ * @param {GoogleAppsScript.Spreadsheet.Spreadsheet} spreadsheet
+ * @return {Object}
+ */
+function buildClientConfig_(spreadsheet) {
+  return {
+    appName: APP_NAME,
+    appShortName: APP_SHORT_NAME,
+    appThemeColor: APP_THEME_COLOR,
+    appBackgroundColor: APP_BACKGROUND_COLOR,
+    leagueSeason: getLeagueSeason_(spreadsheet),
+    leagueWeek: getLeagueWeek_(spreadsheet),
+    headerImageSrc: resolveHeaderImageSrc_(HEADER_IMAGE_URL || ''),
+    appIconHref: formatDriveUrl(getAppIconUrl_(spreadsheet)),
+    updatedAt: new Date().toISOString()
+  };
+}
+
+/**
+ * @param {string} callbackName
+ * @return {boolean}
+ */
+function isValidJsonpCallback_(callbackName) {
+  return /^[A-Za-z_$][0-9A-Za-z_$]*(?:\.[A-Za-z_$][0-9A-Za-z_$]*)*$/.test(callbackName);
+}
+
+/**
+ * Emits JSON by default, or JSONP when a safe callback is provided.
+ * @param {Object} payload
+ * @param {string} callbackName
+ * @return {GoogleAppsScript.Content.TextOutput}
+ */
+function createApiOutput_(payload, callbackName) {
+  var body = JSON.stringify(payload);
+  if (callbackName && isValidJsonpCallback_(callbackName)) {
+    return ContentService
+      .createTextOutput(callbackName + '(' + body + ');')
+      .setMimeType(ContentService.MimeType.JAVASCRIPT);
+  }
+  return ContentService
+    .createTextOutput(body)
+    .setMimeType(ContentService.MimeType.JSON);
+}
+
+/**
  * Serves the league dashboard HTML as a Web App.
  * @param {Object} e Request parameters (unused; present for Web App signature).
  * @return {GoogleAppsScript.HTML.HtmlOutput}
@@ -532,11 +577,22 @@ function buildManagerPhotoUrlMapFromTeamsSheet_(spreadsheet) {
 function doGet(e) {
   var spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
   var path = e && e.pathInfo ? String(e.pathInfo).replace(/^\/+/, '') : '';
+  var params = e && e.parameter ? e.parameter : {};
+  var callbackName = params.callback ? String(params.callback) : '';
+  var debug = String(params.debug || '') === '1';
 
   if (path === 'manifest.json') {
     return ContentService
       .createTextOutput(JSON.stringify(buildWebAppManifest_(spreadsheet)))
       .setMimeType(ContentService.MimeType.JSON);
+  }
+
+  if (path === 'api/config') {
+    return createApiOutput_(buildClientConfig_(spreadsheet), callbackName);
+  }
+
+  if (path === 'api/league-data') {
+    return createApiOutput_(getLeagueData(debug), callbackName);
   }
 
   var raw = HEADER_IMAGE_URL || '';
@@ -551,12 +607,13 @@ function doGet(e) {
   t.appThemeColor = APP_THEME_COLOR;
   t.leagueSeason = getLeagueSeason_(spreadsheet);
   t.leagueWeek = getLeagueWeek_(spreadsheet);
-  var debug = e && e.parameter && String(e.parameter.debug) === '1';
   t.clientDiagnosticsEnabled = debug;
   return t
     .evaluate()
     .setTitle('League Dashboard')
-    .addMetaTag('viewport', 'width=device-width, initial-scale=1');
+    .addMetaTag('viewport', 'width=device-width, initial-scale=1')
+    .addMetaTag('mobile-web-app-capable', 'yes')
+    .addMetaTag('apple-mobile-web-app-capable', 'yes');
 }
 
 /**

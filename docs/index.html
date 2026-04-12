@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Always Smooth</title>
+    <meta name="theme-color" content="#ec4899">
+    <meta name="description" content="Fantasy football league dashboard for standings, matchups, and draft data.">
+    <link rel="manifest" href="./manifest.webmanifest">
+    <link rel="icon" type="image/png" sizes="192x192" href="./icons/icon-192.png">
+    <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        pink: {
+                            500: '#ec4899'
+                        }
+                    }
+                }
+            }
+        };
+
+        const storedTheme = localStorage.getItem('theme') || 'system';
+        const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        if (storedTheme === 'dark' || (storedTheme === 'system' && prefersDark)) {
+            document.documentElement.classList.add('dark');
+        }
+    </script>
+    <style>
+        :root {
+            --app-theme: #ec4899;
+            --app-bg: #020617;
+        }
+
+        body {
+            min-height: 100%;
+            background:
+                radial-gradient(circle at top, rgba(236, 72, 153, 0.16), transparent 32%),
+                linear-gradient(180deg, #f8fafc 0%, #e2e8f0 100%);
+        }
+
+        .dark body {
+            background:
+                radial-gradient(circle at top, rgba(236, 72, 153, 0.18), transparent 28%),
+                linear-gradient(180deg, #020617 0%, #0f172a 100%);
+        }
+
+        .glass-panel {
+            backdrop-filter: blur(14px);
+            transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
+        }
+
+        .glass-panel:hover {
+            transform: translateY(-2px);
+        }
+
+        .banner-shell {
+            position: relative;
+            overflow: hidden;
+            min-height: 22rem;
+            background: #111827;
+        }
+
+        .banner-image {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            object-position: center 25%;
+        }
+
+        .banner-overlay {
+            position: relative;
+            z-index: 1;
+            min-height: 22rem;
+            display: flex;
+            align-items: end;
+            background: linear-gradient(180deg, rgba(2, 6, 23, 0.18), rgba(2, 6, 23, 0.92));
+        }
+
+        .pink-glow {
+            text-shadow: 0 0 20px rgba(236, 72, 153, 0.38);
+        }
+
+        .manager-photo {
+            width: 64px;
+            height: 64px;
+            border-radius: 9999px;
+            object-fit: cover;
+            border: 2px solid rgba(236, 72, 153, 0.85);
+            box-shadow: 0 0 20px rgba(236, 72, 153, 0.18);
+        }
+
+        #install-panel[hidden],
+        #ios-install-tip[hidden],
+        #status-banner[hidden] {
+            display: none;
+        }
+
+        ::-webkit-scrollbar { width: 10px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: rgba(148, 163, 184, 0.6); border-radius: 9999px; }
+        .dark ::-webkit-scrollbar-thumb { background: rgba(71, 85, 105, 0.8); }
+    </style>
+</head>
+<body class="text-slate-900 dark:text-white font-sans selection:bg-pink-500 selection:text-white transition-colors duration-300">
+    <div class="min-h-screen">
+        <div id="status-banner" hidden class="mx-auto max-w-7xl px-4 pt-4 md:px-8">
+            <div class="rounded-2xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-900 shadow-sm dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-100"></div>
+        </div>
+
+        <div class="fixed right-4 top-4 z-50 flex items-center gap-2">
+            <div id="install-panel" hidden class="glass-panel flex items-center gap-2 rounded-full border border-pink-500/30 bg-white/85 px-2 py-2 shadow-2xl shadow-pink-500/10 dark:bg-slate-900/80">
+                <button id="install-button" class="rounded-full bg-pink-500 px-4 py-2 text-xs font-black uppercase tracking-[0.22em] text-white transition hover:bg-pink-400">Install App</button>
+            </div>
+            <div id="theme-toggle-container" class="glass-panel flex rounded-full border border-slate-200 bg-white/80 p-1.5 shadow-2xl dark:border-slate-800 dark:bg-slate-900/80">
+                <button type="button" data-theme="light" class="theme-btn rounded-full p-2 transition" title="Light Mode">
+                    <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364-6.364l-.707.707M6.343 17.657l-.707.707m12.728 0l-.707-.707M6.343 6.343l-.707-.707M12 8a4 4 0 100 8 4 4 0 000-8z"></path></svg>
+                </button>
+                <button type="button" data-theme="system" class="theme-btn rounded-full p-2 transition" title="System Theme">
+                    <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path></svg>
+                </button>
+                <button type="button" data-theme="dark" class="theme-btn rounded-full p-2 transition" title="Dark Mode">
+                    <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"></path></svg>
+                </button>
+            </div>
+        </div>
+
+        <section class="banner-shell shadow-2xl">
+            <img id="league-banner" class="banner-image" alt="Always Smooth banner">
+            <div class="banner-overlay">
+                <div class="mx-auto w-full max-w-7xl px-4 py-10 md:px-8 md:py-12">
+                    <p class="mb-3 inline-flex rounded-full border border-pink-400/30 bg-black/25 px-3 py-1 text-[11px] font-black uppercase tracking-[0.24em] text-pink-100">Installable League Dashboard</p>
+                    <h1 id="page-title" class="pink-glow text-4xl font-black italic uppercase tracking-tight text-pink-500 md:text-6xl">Always Smooth</h1>
+                    <p class="mt-3 text-sm font-bold uppercase tracking-[0.28em] text-pink-100/75 md:text-base">Dynasty Football League</p>
+                    <div class="mt-6 flex flex-wrap gap-3 text-xs font-black uppercase tracking-[0.22em]">
+                        <span id="season-pill" class="rounded-full bg-white/10 px-4 py-2 text-white backdrop-blur">Season</span>
+                        <span id="week-pill" class="rounded-full bg-pink-500 px-4 py-2 text-white shadow-lg shadow-pink-500/20">Week</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <main class="mx-auto max-w-7xl space-y-8 px-4 py-8 md:px-8">
+            <div id="ios-install-tip" hidden class="glass-panel rounded-3xl border border-sky-300/40 bg-sky-50/80 p-5 text-sm text-sky-950 shadow-sm dark:border-sky-500/20 dark:bg-sky-500/10 dark:text-sky-50">
+                <p class="font-black uppercase tracking-[0.22em]">Install Tip</p>
+                <p class="mt-2 leading-relaxed">On iPhone or iPad, tap Share and then Add to Home Screen to save this as an app-style shortcut.</p>
+            </div>
+
+            <section class="space-y-6">
+                <div class="flex flex-col gap-4 px-1 md:flex-row md:items-center md:justify-between">
+                    <div>
+                        <h2 class="text-3xl font-black uppercase italic tracking-tight">League Standings</h2>
+                        <p id="standings-subtitle" class="text-sm font-bold uppercase tracking-[0.22em] text-slate-500 dark:text-slate-400">Current season</p>
+                    </div>
+                    <div class="flex items-center gap-3">
+                        <span id="updated-at" class="rounded-full border border-slate-200 bg-white px-4 py-2 text-[11px] font-black uppercase tracking-[0.22em] text-slate-500 shadow-sm dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300">Syncing</span>
+                        <button id="refresh-button" type="button" class="rounded-full border border-slate-200 bg-white p-3 shadow-sm transition hover:border-pink-500 dark:border-slate-800 dark:bg-slate-900" aria-label="Refresh standings">
+                            <svg class="h-4 w-4 text-pink-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+                        </button>
+                    </div>
+                </div>
+                <div id="standings-grid" class="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3"></div>
+            </section>
+
+            <section class="grid grid-cols-1 gap-8 md:grid-cols-2">
+                <article class="glass-panel rounded-3xl border border-slate-200 bg-white/85 p-8 shadow-sm dark:border-slate-800 dark:bg-slate-900/70">
+                    <div class="mb-4 flex items-center">
+                        <div class="mr-4 rounded-2xl bg-pink-500/10 p-3">
+                            <svg class="h-6 w-6 text-pink-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+                        </div>
+                        <h3 class="text-xl font-black uppercase italic">Install Friendly</h3>
+                    </div>
+                    <p class="text-sm leading-relaxed text-slate-600 dark:text-slate-400">This GitHub Pages version supports a real manifest, service worker, and standalone launch behavior on compatible mobile browsers.</p>
+                </article>
+                <article class="glass-panel rounded-3xl border border-slate-200 bg-white/85 p-8 shadow-sm dark:border-slate-800 dark:bg-slate-900/70">
+                    <div class="mb-4 flex items-center">
+                        <div class="mr-4 rounded-2xl bg-pink-500/10 p-3">
+                            <svg class="h-6 w-6 text-pink-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"></path></svg>
+                        </div>
+                        <h3 class="text-xl font-black uppercase italic">Live Sheet Data</h3>
+                    </div>
+                    <p class="text-sm leading-relaxed text-slate-600 dark:text-slate-400">Standings still come from your Apps Script project, so you keep the spreadsheet-driven workflow while the frontend lives on a proper app-capable host.</p>
+                </article>
+            </section>
+        </main>
+    </div>
+
+    <script src="./app.js"></script>
+</body>
+</html>
