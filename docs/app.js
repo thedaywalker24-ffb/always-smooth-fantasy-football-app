@@ -25,8 +25,8 @@ function setCachedJson(key, value) {
   }
 }
 
-function buildApiUrl(path) {
-  return `${API_BASE_URL.replace(/\/$/, '')}/${path.replace(/^\//, '')}`;
+function buildApiUrl() {
+  return API_BASE_URL.replace(/\/$/, '');
 }
 
 function fetchJsonp(path, params = {}) {
@@ -39,7 +39,8 @@ function fetchJsonp(path, params = {}) {
       clearTimeout(timeoutId);
     };
 
-    const url = new URL(buildApiUrl(path));
+    const url = new URL(buildApiUrl());
+    url.searchParams.set('api', path.replace(/^\//, ''));
     Object.entries(params).forEach(([key, value]) => {
       if (value !== undefined && value !== null && value !== '') {
         url.searchParams.set(key, String(value));

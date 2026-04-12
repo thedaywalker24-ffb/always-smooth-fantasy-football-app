@@ -580,6 +580,7 @@ function doGet(e) {
   var params = e && e.parameter ? e.parameter : {};
   var callbackName = params.callback ? String(params.callback) : '';
   var debug = String(params.debug || '') === '1';
+  var apiName = params.api ? String(params.api) : '';
 
   if (path === 'manifest.json') {
     return ContentService
@@ -587,11 +588,11 @@ function doGet(e) {
       .setMimeType(ContentService.MimeType.JSON);
   }
 
-  if (path === 'api/config') {
+  if (path === 'api/config' || apiName === 'config') {
     return createApiOutput_(buildClientConfig_(spreadsheet), callbackName);
   }
 
-  if (path === 'api/league-data') {
+  if (path === 'api/league-data' || apiName === 'league-data') {
     return createApiOutput_(getLeagueData(debug), callbackName);
   }
 
