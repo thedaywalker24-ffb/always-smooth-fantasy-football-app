@@ -38,6 +38,18 @@ const HEADER_IMAGE_URL =
 
 /** Sheet tab written by fetchLeagueMembersData / updateRostersAndRecordsData */
 const ROSTERS_RECORDS_SHEET = 'Rosters & Records';
+/** 0-based column index when "Streak" header is missing (column G) */
+const ROSTERS_STREAK_COL_FALLBACK = 6;
+/** 0-based column for manager display name when header "Display Name" is used (column J) */
+const ROSTERS_DISPLAY_NAME_COL_FALLBACK = 9;
+
+/** Optional tab: column H (8) holds manager photo URLs; rows matched to standings by Team Name */
+const TEAMS_SHEET = 'Teams';
+const TEAMS_MANAGER_PHOTO_COL = 8; // Column H (1-based)
+/** Teams tab: title/instructions may occupy row 1; column headers are on this row (1-based). */
+const TEAMS_HEADER_ROW = 2;
+/** First row of team data below the header row */
+const TEAMS_DATA_START_ROW = TEAMS_HEADER_ROW + 1;
 
 /**
  * Pulls a Google Drive file id from share links, uc URLs, or lh3.googleusercontent.com/d/…
@@ -77,6 +89,301 @@ function resolveHeaderImageSrc_(raw) {
 }
 
 /**
+ * @param {string} name
+ * @return {string}
+ */
+function normalizeTeamNameKey_(name) {
+  if (name === '' || name === null || name === undefined) return '';
+  return String(name).trim().toLowerCase();
+}
+
+/**
+ * Real-world / Sleeper label for a user (first + last if present, else display_name).
+ * @param {Object} user Sleeper user object
+ * @return {string}
+ */
+function sleeperManagerDisplayLabel_(user) {
+  if (!user) return '';
+  var fn = String(user.first_name || '').trim();
+  var ln = String(user.last_name || '').trim();
+  var combined = (fn + ' ' + ln).trim();
+  if (combined) return combined;
+  return String(user.display_name || '').trim();
+}
+
+/**
+ * @param {Array} headers Rosters & Records row 1
+ * @return {number} 0-based column index, or -1 if none
+ */
+function findRostersDisplayNameColumn_(headers) {
+  var norms = [];
+  for (var c = 0; c < headers.length; c++) {
+    norms[c] = normalizeTeamsHeader_(headers[c]);
+  }
+  var candidates = [
+    'display name',
+    'actual name',
+    'manager name',
+    'owner name',
+    'full name',
+    'real name',
+    'username',
+    'user name',
+    'name'
+  ];
+  var i;
+  var j;
+  for (i = 0; i < candidates.length; i++) {
+    j = norms.indexOf(candidates[i]);
+    if (j !== -1) return j;
+  }
+  for (c = 0; c < norms.length; c++) {
+    if (norms[c].indexOf('display') !== -1 && norms[c].indexOf('team') === -1) return c;
+  }
+  if (headers.length > ROSTERS_DISPLAY_NAME_COL_FALLBACK) return ROSTERS_DISPLAY_NAME_COL_FALLBACK;
+  return -1;
+}
+
+/**
+ * Formats streak cell for display after W-L, e.g. " (5W)" or " (4L)".
+ * @param {*} raw Rosters & Records "Streak" cell (e.g. from Sleeper metadata.streak)
+ * @return {string} suffix only, or "" if none
+ */
+function formatStreakSuffixForRecord_(raw) {
+  if (raw === '' || raw === null || raw === undefined) return '';
+  var s = String(raw).trim();
+  if (!s) return '';
+  var lower = s.toLowerCase();
+  if (lower === 'n/a' || lower === 'na' || lower === '—' || lower === '-') return '';
+
+  var m = s.match(/^(\d+)\s*([WwLl])$/);
+  if (m) return ' (' + m[1] + m[2].toUpperCase() + ')';
+
+  m = s.match(/^([WwLl])\s*(\d+)$/);
+  if (m) return ' (' + m[2] + m[1].toUpperCase() + ')';
+
+  if (/^[Ww]+$/.test(s)) return ' (' + s.length + 'W)';
+  if (/^[Ll]+$/.test(s)) return ' (' + s.length + 'L)';
+
+  var last = s.charAt(s.length - 1);
+  if (last === 'W' || last === 'w' || last === 'L' || last === 'l') {
+    var ch = last.toUpperCase();
+    var i = s.length - 1;
+    while (i >= 0 && String(s.charAt(i)).toUpperCase() === ch) i--;
+    var run = s.length - 1 - i;
+    if (run > 0) return ' (' + run + ch + ')';
+  }
+
+  return '';
+}
+
+/**
+ * @param {number} col0 0-based column index
+ * @return {string} A–Z, AA, …
+ */
+function columnIndexToA1Letter_(col0) {
+  var n = col0 + 1;
+  var s = '';
+  while (n > 0) {
+    var m = (n - 1) % 26;
+    s = String.fromCharCode(65 + m) + s;
+    n = ((n - m - 1) / 26) | 0;
+  }
+  return s;
+}
+
+/**
+ * @param {*} h
+ * @return {string}
+ */
+function normalizeTeamsHeader_(h) {
+  if (h === '' || h === null || h === undefined) return '';
+  return String(h)
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, ' ');
+}
+
+/**
+ * True if cell value looks like a photo URL (not a header placeholder like "Photo").
+ * @param {*} s
+ * @return {boolean}
+ */
+function looksLikePhotoUrl_(s) {
+  if (s === '' || s === null || s === undefined) return false;
+  var t = String(s).trim();
+  if (!t) return false;
+  var lower = t.toLowerCase();
+  if (
+    lower === 'photo' ||
+    lower === 'url' ||
+    lower === 'image' ||
+    lower === 'link' ||
+    lower === 'n/a' ||
+    lower === 'na' ||
+    lower === '—' ||
+    lower === '-'
+  ) {
+    return false;
+  }
+  if (extractDriveFileId_(t) !== '') return true;
+  return /^https?:\/\//i.test(t);
+}
+
+/**
+ * Picks the column on the Teams sheet that holds the Sleeper-style fantasy team name
+ * (must match Rosters & Records "Team Name"). Pass the header row cells (e.g. row 2).
+ * @param {Array} headers 0-based row of header cells
+ * @return {{ col0: number, reason: string }}
+ */
+function findTeamsSheetTeamNameColumn_(headers) {
+  var n = headers.length;
+  var norms = [];
+  var c;
+  for (c = 0; c < n; c++) {
+    norms[c] = normalizeTeamsHeader_(headers[c]);
+  }
+
+  for (c = 0; c < n; c++) {
+    if (norms[c] === 'team name') {
+      return { col0: c, reason: 'header matches "Team Name" (any case/spacing)' };
+    }
+  }
+  for (c = 0; c < n; c++) {
+    if (norms[c].indexOf('team name') !== -1) {
+      return { col0: c, reason: 'header contains "team name"' };
+    }
+  }
+  var fuzzy = ['fantasy team', 'sleeper team', 'roster name', 'team (name)'];
+  for (var f = 0; f < fuzzy.length; f++) {
+    for (c = 0; c < n; c++) {
+      if (norms[c] === fuzzy[f]) {
+        return { col0: c, reason: 'header is "' + fuzzy[f] + '"' };
+      }
+    }
+  }
+  for (c = 0; c < n; c++) {
+    if (norms[c].indexOf('team') !== -1 && norms[c].indexOf('name') !== -1) {
+      return { col0: c, reason: 'header contains both "team" and "name"' };
+    }
+  }
+  for (c = 0; c < n; c++) {
+    if (norms[c] === 'team') {
+      return { col0: c, reason: 'header is "Team" (single word)' };
+    }
+  }
+
+  var d = 3;
+  if (d < n) {
+    return {
+      col0: d,
+      reason:
+        'no recognizable team-name header — using column D (same as Rosters & Records); put a "Team Name" header in row ' +
+        TEAMS_HEADER_ROW +
+        ' or rename your column.'
+    };
+  }
+  return { col0: 0, reason: 'fallback column A (sheet is very narrow)' };
+}
+
+/**
+ * Builds team name (lowercase key) -> raw photo URL from "Teams" sheet, column H.
+ * Headers are read from TEAMS_HEADER_ROW; data from TEAMS_DATA_START_ROW onward.
+ * @param {GoogleAppsScript.Spreadsheet.Spreadsheet} spreadsheet
+ * @return {{ map: Object<string, string>, diagnostics: Object }}
+ */
+function buildManagerPhotoUrlMapFromTeamsSheet_(spreadsheet) {
+  var map = {};
+  var diag = {
+    teamsSheetFound: false,
+    teamsSheetName: TEAMS_SHEET,
+    photoColumn: 'H',
+    lastRow: 0,
+    lastCol: 0,
+    teamNameSource: '',
+    rowsScanned: 0,
+    rowsWithTeamName: 0,
+    rowsWithUrlInH: 0,
+    rowsNameButBlankH: 0,
+    mapEntryCount: 0,
+    sampleMapKeys: [],
+    sampleRawUrlPrefixes: [],
+    teamNameColumnLetter: '',
+    teamNameColumnPickReason: '',
+    headerRow: TEAMS_HEADER_ROW,
+    dataStartRow: TEAMS_DATA_START_ROW
+  };
+
+  var sheet = spreadsheet.getSheetByName(TEAMS_SHEET);
+  if (!sheet) {
+    diag.note = 'Sheet "' + TEAMS_SHEET + '" was not found in this spreadsheet.';
+    return { map: map, diagnostics: diag };
+  }
+  diag.teamsSheetFound = true;
+
+  var lastRow = sheet.getLastRow();
+  var lastCol = sheet.getLastColumn();
+  diag.lastRow = lastRow;
+  diag.lastCol = lastCol;
+  if (lastRow < TEAMS_HEADER_ROW || lastCol < 1) {
+    diag.note = 'Teams sheet is missing row ' + TEAMS_HEADER_ROW + ' (header row) or has no columns.';
+    return { map: map, diagnostics: diag };
+  }
+  if (lastRow < TEAMS_DATA_START_ROW) {
+    diag.note =
+      'Teams sheet has headers on row ' +
+      TEAMS_HEADER_ROW +
+      ' but no data rows below (need data from row ' +
+      TEAMS_DATA_START_ROW +
+      ' onward).';
+    return { map: map, diagnostics: diag };
+  }
+
+  var headerLast = Math.max(lastCol, 1);
+  var headers = sheet.getRange(TEAMS_HEADER_ROW, 1, TEAMS_HEADER_ROW, headerLast).getValues()[0];
+  var pick = findTeamsSheetTeamNameColumn_(headers);
+  var nameCol = pick.col0;
+  diag.teamNameColumnLetter = columnIndexToA1Letter_(nameCol);
+  diag.teamNameColumnPickReason = pick.reason;
+  var headerLabel = headers[nameCol];
+  diag.teamNameSource =
+    headerLabel !== '' && headerLabel != null && String(headerLabel).trim() !== ''
+      ? 'column ' + diag.teamNameColumnLetter + ' — row ' + TEAMS_HEADER_ROW + ' header "' + String(headerLabel) + '" (' + pick.reason + ')'
+      : 'column ' + diag.teamNameColumnLetter + ' — row ' + TEAMS_HEADER_ROW + ' (' + pick.reason + ')';
+
+  var nameCol1 = nameCol + 1;
+  var nameVals = sheet.getRange(TEAMS_DATA_START_ROW, nameCol1, lastRow, nameCol1).getValues();
+  var photoVals = sheet.getRange(TEAMS_DATA_START_ROW, TEAMS_MANAGER_PHOTO_COL, lastRow, TEAMS_MANAGER_PHOTO_COL).getValues();
+  diag.rowsScanned = nameVals.length;
+
+  var sampleKeys = [];
+  var samplePrefixes = [];
+  for (var r = 0; r < nameVals.length; r++) {
+    var teamName = nameVals[r][0];
+    var rawUrl = photoVals[r][0];
+    var hasName = !(teamName === '' || teamName === null || teamName === undefined);
+    var hasUrl = !(rawUrl === '' || rawUrl === null || rawUrl === undefined);
+    if (hasName) diag.rowsWithTeamName++;
+    if (hasUrl) diag.rowsWithUrlInH++;
+    if (hasName && !hasUrl) diag.rowsNameButBlankH++;
+    if (!hasName || !hasUrl) continue;
+    var trimmed = String(rawUrl).trim();
+    if (!looksLikePhotoUrl_(trimmed)) continue;
+    var key = normalizeTeamNameKey_(teamName);
+    if (!key) continue;
+    map[key] = trimmed;
+    if (sampleKeys.length < 5) {
+      sampleKeys.push(key);
+      samplePrefixes.push(trimmed.length > 48 ? trimmed.substring(0, 48) + '…' : trimmed);
+    }
+  }
+  diag.mapEntryCount = Object.keys(map).length;
+  diag.sampleMapKeys = sampleKeys;
+  diag.sampleRawUrlPrefixes = samplePrefixes;
+  return { map: map, diagnostics: diag };
+}
+
+/**
  * Serves the league dashboard HTML as a Web App.
  * @param {Object} e Request parameters (unused; present for Web App signature).
  * @return {GoogleAppsScript.HTML.HtmlOutput}
@@ -86,6 +393,8 @@ function doGet(e) {
   var t = HtmlService.createTemplateFromFile('index');
   t.headerImageUrl = raw;
   t.headerImageSrc = resolveHeaderImageSrc_(raw);
+  var debug = e && e.parameter && String(e.parameter.debug) === '1';
+  t.clientDiagnosticsEnabled = debug;
   return t
     .evaluate()
     .setTitle('League Dashboard')
@@ -95,15 +404,21 @@ function doGet(e) {
 /**
  * Returns team standings from the "Rosters & Records" sheet for the client UI.
  * Column positions are resolved from the header row so minor layout changes stay safe.
- * @return {{ teams: Array<{teamName: string, record: string, fantasyPoints: number}>, updatedAt: string, error?: string }>}
+ * @param {boolean} [includeDiagnostics] When true, payload includes `diagnostics` for photo/sheet troubleshooting (use ?debug=1 on the web app URL).
+ * @return {{ teams: Array<{teamName: string, record: string, fantasyPoints: number, managerPhotoSrc?: string, managerDisplayName?: string}>, updatedAt: string, error?: string, diagnostics?: Object }>}
  */
-function getLeagueData() {
+function getLeagueData(includeDiagnostics) {
+  const wantDiag = includeDiagnostics === true;
   const emptyPayload = function (err) {
-    return {
+    var o = {
       teams: [],
       updatedAt: new Date().toISOString(),
       error: err || undefined
     };
+    if (wantDiag) {
+      o.diagnostics = { photo: { note: err || 'error' }, rosterTeamCount: 0, teamsWithManagerPhotoSrc: 0 };
+    }
+    return o;
   };
 
   try {
@@ -122,14 +437,27 @@ function getLeagueData() {
     const lastRow = sheet.getLastRow();
     const lastCol = sheet.getLastColumn();
     if (lastRow < 2 || lastCol < 1) {
-      return { teams: [], updatedAt: new Date().toISOString() };
+      const emptyRoster = { teams: [], updatedAt: new Date().toISOString() };
+      if (wantDiag) {
+        const b = buildManagerPhotoUrlMapFromTeamsSheet_(spreadsheet);
+        emptyRoster.diagnostics = {
+          photoSheet: b.diagnostics,
+          rosterTeamCount: 0,
+          teamsWithManagerPhotoSrc: 0,
+          note: 'Rosters & Records has no data rows.'
+        };
+      }
+      return emptyRoster;
     }
 
     const headerRange = sheet.getRange(1, 1, 1, lastCol);
     const headers = headerRange.getValues()[0];
     const teamNameCol = headers.indexOf('Team Name');
     const wlCol = headers.indexOf('W-L Record');
+    const streakCol =
+      headers.indexOf('Streak') !== -1 ? headers.indexOf('Streak') : ROSTERS_STREAK_COL_FALLBACK;
     const fptsCol = headers.indexOf('Fpts (Total)');
+    const displayNameCol = findRostersDisplayNameColumn_(headers);
 
     if (teamNameCol === -1 || wlCol === -1 || fptsCol === -1) {
       return emptyPayload(
@@ -139,6 +467,12 @@ function getLeagueData() {
 
     const data = sheet.getRange(2, 1, lastRow, lastCol).getValues();
     const teams = [];
+    const built = buildManagerPhotoUrlMapFromTeamsSheet_(spreadsheet);
+    const managerPhotoByTeamKey = built.map;
+    const photoSheetDiag = built.diagnostics;
+
+    const rosterKeysForDiag = [];
+    let teamsWithPhotoCount = 0;
 
     for (let r = 0; r < data.length; r++) {
       const row = data[r];
@@ -148,10 +482,13 @@ function getLeagueData() {
       }
 
       const recordRaw = row[wlCol];
-      const record =
+      let record =
         recordRaw !== '' && recordRaw !== null && recordRaw !== undefined
           ? String(recordRaw)
           : '—';
+
+      const streakRaw = streakCol < row.length ? row[streakCol] : '';
+      record += formatStreakSuffixForRecord_(streakRaw);
 
       let fantasyPoints = row[fptsCol];
       if (fantasyPoints === '' || fantasyPoints === null || fantasyPoints === undefined) {
@@ -161,17 +498,53 @@ function getLeagueData() {
         fantasyPoints = isNaN(n) ? 0 : n;
       }
 
+      const teamKey = normalizeTeamNameKey_(teamName);
+      const rawPhoto = teamKey ? managerPhotoByTeamKey[teamKey] : '';
+      const managerPhotoSrc = rawPhoto ? resolveHeaderImageSrc_(rawPhoto) : '';
+
+      const displayRaw =
+        displayNameCol >= 0 && displayNameCol < row.length ? row[displayNameCol] : '';
+      const managerDisplayName =
+        displayRaw !== '' && displayRaw !== null && displayRaw !== undefined
+          ? String(displayRaw).trim()
+          : '';
+
+      if (wantDiag && rosterKeysForDiag.length < 12) rosterKeysForDiag.push(teamKey || '(blank key)');
+      if (managerPhotoSrc) teamsWithPhotoCount++;
+
       teams.push({
         teamName: String(teamName),
         record: record,
-        fantasyPoints: Math.round(fantasyPoints * 100) / 100
+        fantasyPoints: Math.round(fantasyPoints * 100) / 100,
+        managerPhotoSrc: managerPhotoSrc || undefined,
+        managerDisplayName: managerDisplayName || undefined
       });
     }
 
-    return {
+    const out = {
       teams: teams,
       updatedAt: new Date().toISOString()
     };
+    if (wantDiag) {
+      const unmatched = [];
+      for (let i = 0; i < teams.length; i++) {
+        if (!teams[i].managerPhotoSrc) unmatched.push(teams[i].teamName);
+      }
+      out.diagnostics = {
+        photoSheet: photoSheetDiag,
+        rosterTeamCount: teams.length,
+        teamsWithManagerPhotoSrc: teamsWithPhotoCount,
+        rosterNormalizedKeysSample: rosterKeysForDiag,
+        rosterNamesMissingPhoto: unmatched.slice(0, 16),
+        hint:
+          teamsWithPhotoCount === 0 && photoSheetDiag.mapEntryCount > 0
+            ? 'Teams sheet has URLs but none matched roster names — compare spelling vs rosterNormalizedKeysSample vs sampleMapKeys.'
+            : teamsWithPhotoCount === 0 && photoSheetDiag.rowsWithUrlInH === 0
+              ? 'Column H appears empty for all scanned rows — confirm URLs are in column H.'
+              : ''
+      };
+    }
+    return out;
   } catch (err) {
     return emptyPayload(err.message || String(err));
   }
@@ -574,7 +947,7 @@ function fetchLeagueMembersData() {
   sheet.clear();
 
   // Define headers for all expected columns
-  const headers = [
+    const headers = [
     "Row ID",
     "User ID",
     "User Avatar URL", // Renamed for clarity
@@ -583,7 +956,8 @@ function fetchLeagueMembersData() {
     "W-L Record",
     "Streak",
     "Roster ID",
-    "Fpts (Total)"
+    "Fpts (Total)",
+    "Display Name"
   ];
   sheet.getRange(1, 1, 1, headers.length).setValues([headers]).setFontWeight('bold');
 
@@ -615,7 +989,8 @@ function fetchLeagueMembersData() {
         '',               // Placeholder for W-L Record (Col F)
         '',               // Placeholder for Streak (Col G)
         '',               // Placeholder for Roster ID (Col H)
-        ''                // Placeholder for Fpts (Total) (Col I)
+        '',               // Placeholder for Fpts (Total) (Col I)
+        sleeperManagerDisplayLabel_(user) // Display Name (Col J)
       ]);
     });
 
@@ -654,6 +1029,7 @@ function updateRostersAndRecordsData() {
   const STREAK_COL = 6;          // Column G
   const ROSTER_ID_COL = 7;       // Column H
   const FPTS_COL = 8;            // Column I
+  const DISPLAY_NAME_COL = 9;  // Column J (not overwritten by roster API pass)
 
   // --- Get the Spreadsheet and Sheet ---
   const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
@@ -701,7 +1077,8 @@ function updateRostersAndRecordsData() {
       { name: "W-L Record", colIndex: WL_RECORD_COL },
       { name: "Streak", colIndex: STREAK_COL },
       { name: "Roster ID", colIndex: ROSTER_ID_COL },
-      { name: "Fpts (Total)", colIndex: FPTS_COL }
+      { name: "Fpts (Total)", colIndex: FPTS_COL },
+      { name: "Display Name", colIndex: DISPLAY_NAME_COL }
     ];
 
     // Ensure all necessary columns exist and add new ones if needed

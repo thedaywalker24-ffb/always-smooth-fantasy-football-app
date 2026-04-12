@@ -30,6 +30,9 @@
       box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35), 0 0 0 1px rgba(255, 255, 255, 0.08);
     }
   </style>
+  <script>
+    window.__FF_DIAG__ = <?!= clientDiagnosticsEnabled ?>;
+  </script>
 </head>
 <body class="min-h-screen text-slate-200 antialiased pb-10">
   <? if (headerImageUrl) { ?>
@@ -55,9 +58,27 @@
 
   <main id="grid" class="px-4 max-w-lg mx-auto grid gap-3 sm:grid-cols-2 sm:max-w-3xl" aria-live="polite"></main>
 
+  <div id="diag-wrap" class="hidden px-4 max-w-lg mx-auto sm:max-w-3xl mt-8 mb-10" aria-label="Diagnostics">
+    <p class="text-xs text-neon/90 font-medium uppercase tracking-wider mb-2">Diagnostics (opened with ?debug=1)</p>
+    <pre id="diag-panel" class="text-xs leading-relaxed text-slate-400 bg-black/40 border border-white/10 rounded-xl p-3 overflow-x-auto whitespace-pre-wrap break-words max-h-[55vh] overflow-y-auto"></pre>
+  </div>
+
   <template id="card-tpl">
     <article class="card-ring rounded-2xl bg-card/90 backdrop-blur-sm border border-white/5 p-4 flex flex-col gap-3 min-h-[120px]">
-      <h2 class="team-name text-lg sm:text-xl font-semibold text-white leading-snug break-words pr-1"></h2>
+      <div class="flex items-start gap-3 min-w-0">
+        <img
+          class="manager-photo hidden aspect-square w-12 h-12 sm:w-14 sm:h-14 shrink-0 rounded-lg object-cover border border-white/10 bg-white/5 shadow-inner"
+          alt=""
+          width="56"
+          height="56"
+          decoding="async"
+          loading="lazy"
+        />
+        <div class="flex-1 min-w-0">
+          <h2 class="team-name text-lg sm:text-xl font-semibold text-white leading-snug break-words pr-1 pt-0.5"></h2>
+          <p class="manager-display-name hidden text-xs sm:text-sm font-medium text-pink-400 leading-snug mt-1 break-words pr-1"></p>
+        </div>
+      </div>
       <div class="mt-auto flex items-end justify-between gap-3 pt-1 border-t border-white/10">
         <div>
           <p class="text-[10px] uppercase tracking-wider text-slate-500 mb-0.5">Record</p>
@@ -76,6 +97,17 @@
       var grid = document.getElementById('grid');
       var statusEl = document.getElementById('status');
       var tpl = document.getElementById('card-tpl');
+      var diagWrap = document.getElementById('diag-wrap');
+      var diagPanel = document.getElementById('diag-panel');
+
+      function diagnosticsRequested() {
+        if (typeof window.__FF_DIAG__ !== 'undefined' && window.__FF_DIAG__) return true;
+        try {
+          return /[?&]debug=1(?:&|$)/.test(window.location.search || '');
+        } catch (e) {
+          return false;
+        }
+      }
 
       function setStatus(msg, isError) {
         statusEl.textContent = msg;
@@ -99,21 +131,72 @@
           return;
         }
         var updated = payload.updatedAt ? new Date(payload.updatedAt) : null;
+        var wantDiag = diagnosticsRequested();
+        var hasDiag = !!payload.diagnostics;
         setStatus(
           updated
-            ? 'Updated ' + updated.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })
-            : 'Loaded ' + teams.length + ' teams',
+            ? 'Updated ' + updated.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }) +
+                (wantDiag && hasDiag ? ' · diagnostics below' : '') +
+                (wantDiag && !hasDiag ? ' · redeploy Apps Script for diagnostics' : '')
+            : 'Loaded ' + teams.length + ' teams' +
+                (wantDiag && hasDiag ? ' · diagnostics below' : '') +
+                (wantDiag && !hasDiag ? ' · redeploy Apps Script for diagnostics' : ''),
           false
         );
+
+        var diagJson = payload.diagnostics ? JSON.stringify(payload.diagnostics, null, 2) : '';
+        var imgLoadErrors = [];
 
         teams.forEach(function (t) {
           var node = tpl.content.cloneNode(true);
           var article = node.querySelector('article');
+          var photoEl = article.querySelector('.manager-photo');
+          var src = t.managerPhotoSrc;
+          if (src) {
+            photoEl.src = src;
+            photoEl.classList.remove('hidden');
+            photoEl.setAttribute('aria-hidden', 'true');
+            if (payload.diagnostics) {
+              photoEl.setAttribute('data-team', t.teamName || '');
+              photoEl.addEventListener(
+                'error',
+                function () {
+                  imgLoadErrors.push(t.teamName || '(team)');
+                  if (diagPanel) {
+                    diagPanel.textContent =
+                      diagJson +
+                      '\n\nBrowser reported <img> load failure for:\n' +
+                      imgLoadErrors.join('\n') +
+                      '\n\nTip: DevTools → Network → filter "Img" (or check blocked/mixed content).';
+                  }
+                },
+                { once: true }
+              );
+            }
+          } else {
+            photoEl.removeAttribute('src');
+            photoEl.classList.add('hidden');
+          }
           article.querySelector('.team-name').textContent = t.teamName || 'Unknown';
+          var nameSub = article.querySelector('.manager-display-name');
+          if (t.managerDisplayName) {
+            nameSub.textContent = t.managerDisplayName;
+            nameSub.classList.remove('hidden');
+          } else {
+            nameSub.textContent = '';
+            nameSub.classList.add('hidden');
+          }
           article.querySelector('.record').textContent = t.record || '—';
           article.querySelector('.points').textContent = formatPoints(t.fantasyPoints);
           grid.appendChild(node);
         });
+
+        if (payload.diagnostics && diagWrap && diagPanel) {
+          diagWrap.classList.remove('hidden');
+          diagPanel.textContent = diagJson;
+        } else if (diagWrap) {
+          diagWrap.classList.add('hidden');
+        }
       }
 
       function onFail(err) {
@@ -125,7 +208,7 @@
         google.script.run
           .withSuccessHandler(render)
           .withFailureHandler(onFail)
-          .getLeagueData();
+          .getLeagueData(diagnosticsRequested());
       }
 
       if (typeof google === 'undefined' || !google.script || !google.script.run) {
