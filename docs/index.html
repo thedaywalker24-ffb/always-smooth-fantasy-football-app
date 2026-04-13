@@ -84,6 +84,23 @@
             background: linear-gradient(180deg, rgba(2, 6, 23, 0.18), rgba(2, 6, 23, 0.92));
         }
 
+        @media (max-width: 767px) and (orientation: portrait) {
+            .banner-shell,
+            .banner-overlay {
+                min-height: min(18rem, 58vw);
+            }
+
+            .banner-image {
+                object-fit: contain;
+                object-position: center top;
+                background: #111827;
+            }
+
+            .banner-overlay {
+                background: linear-gradient(180deg, rgba(2, 6, 23, 0.28), rgba(2, 6, 23, 0.94));
+            }
+        }
+
         .pink-glow {
             text-shadow: 0 0 20px rgba(236, 72, 153, 0.38);
         }
@@ -253,4 +270,5 @@
     <script src="./app.js"></script>
 </body>
 </html>
+
 

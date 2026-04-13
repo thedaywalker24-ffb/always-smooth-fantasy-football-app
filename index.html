@@ -79,6 +79,22 @@
             padding: 2.5rem 1.5rem 1.5rem 1.5rem;
         }
 
+        @media (max-width: 767px) and (orientation: portrait) {
+            .banner-container {
+                aspect-ratio: 4 / 3;
+            }
+
+            .banner-image {
+                object-fit: contain;
+                object-position: center top;
+                background-color: #111827;
+            }
+
+            .banner-overlay {
+                background: linear-gradient(180deg, rgba(17, 24, 39, 0.24), rgba(17, 24, 39, 0.95));
+            }
+        }
+
         .glass-panel {
             backdrop-filter: blur(10px);
             transition: all 0.3s ease;
@@ -379,6 +395,7 @@
     </script>
 </body>
 </html>
+
 
 
 
