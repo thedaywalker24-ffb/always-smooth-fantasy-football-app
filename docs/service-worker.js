@@ -1,13 +1,18 @@
-const CACHE_NAME = 'always-smooth-shell-v1';
+const CACHE_NAME = 'always-smooth-shell-v2';
 const APP_SHELL = [
   './',
   './index.html',
   './app.js',
-  './manifest.webmanifest',
   './icons/icon-192.png',
   './icons/icon-512.png',
   './icons/apple-touch-icon.png'
 ];
+
+const NETWORK_FIRST_PATHS = new Set([
+  '/fantasy-football-app/',
+  '/fantasy-football-app/index.html',
+  '/fantasy-football-app/manifest.webmanifest'
+]);
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
@@ -30,6 +35,19 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(request.url);
 
   if (url.origin !== self.location.origin || request.method !== 'GET') {
+    return;
+  }
+
+  if (NETWORK_FIRST_PATHS.has(url.pathname)) {
+    event.respondWith(
+      fetch(request)
+        .then((response) => {
+          const copy = response.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(request, copy));
+          return response;
+        })
+        .catch(() => caches.match(request))
+    );
     return;
   }
 
