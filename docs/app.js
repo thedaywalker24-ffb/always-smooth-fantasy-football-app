@@ -3,9 +3,19 @@ const FALLBACK_PHOTO = 'https://images.unsplash.com/photo-1540747913346-19e32dc3
 const THEME_KEY = 'theme';
 const CONFIG_CACHE_KEY = 'always-smooth-config';
 const DATA_CACHE_KEY = 'always-smooth-league-data';
+const DEFAULT_CONFIG = {
+  appName: 'Always Smooth',
+  appShortName: 'Always Smooth',
+  appThemeColor: '#ec4899',
+  leagueSeason: '',
+  leagueWeek: '',
+  headerImageSrc: FALLBACK_PHOTO
+};
 
 let deferredInstallPrompt = null;
 let lastScrollTop = 0;
+const splashStartedAt = Date.now();
+const SPLASH_MIN_DURATION = 900;
 
 function getCachedJson(key) {
   try {
@@ -25,8 +35,19 @@ function setCachedJson(key, value) {
   }
 }
 
-function buildApiUrl(path) {
-  return `${API_BASE_URL.replace(/\/$/, '')}/${path.replace(/^\//, '')}`;
+function buildApiUrl(apiName, params = {}) {
+  const url = new URL(API_BASE_URL);
+  if (apiName) {
+    url.searchParams.set('api', apiName.replace(/^\//, ''));
+  }
+
+  Object.entries(params).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && value !== '') {
+      url.searchParams.set(key, String(value));
+    }
+  });
+
+  return url;
 }
 
 function fetchJsonp(path, params = {}) {
@@ -44,13 +65,7 @@ function fetchJsonp(path, params = {}) {
       'api/league-data': 'league-data'
     };
     const route = routeMap[path] || path.replace(/^\//, '');
-    const url = new URL(buildApiUrl(route));
-    Object.entries(params).forEach(([key, value]) => {
-      if (value !== undefined && value !== null && value !== '') {
-        url.searchParams.set(key, String(value));
-      }
-    });
-    url.searchParams.set('callback', callbackName);
+    const url = buildApiUrl(route, { ...params, callback: callbackName });
 
     script.src = url.toString();
     script.async = true;
@@ -117,6 +132,19 @@ function setBanner(message, tone = 'warning') {
     ? 'rounded-2xl border px-4 py-3 text-sm font-semibold shadow-sm border-red-300 bg-red-50 text-red-900 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-100'
     : 'rounded-2xl border px-4 py-3 text-sm font-semibold shadow-sm border-amber-300 bg-amber-50 text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-100';
   card.className = classes;
+}
+
+async function dismissSplash() {
+  const splash = document.getElementById('app-splash');
+  if (!splash || splash.classList.contains('is-hidden')) return;
+
+  const elapsed = Date.now() - splashStartedAt;
+  if (elapsed < SPLASH_MIN_DURATION) {
+    await new Promise((resolve) => window.setTimeout(resolve, SPLASH_MIN_DURATION - elapsed));
+  }
+
+  splash.classList.add('is-hidden');
+  window.setTimeout(() => splash.remove(), 450);
 }
 
 function formatTimestamp(value) {
@@ -319,18 +347,19 @@ async function bootstrap() {
   setupScrollBehavior();
   await registerServiceWorker();
   document.getElementById('refresh-button').addEventListener('click', () => loadStandings());
+  applyConfig(DEFAULT_CONFIG);
 
   try {
     await loadConfig();
   } catch (error) {
     console.error(error);
-    setBanner('App configuration could not be loaded live. Using cached values when available.');
+    setBanner('Live app configuration could not be loaded. The Apps Script deployment appears to require sign-in, so anonymous visitors are falling back to default branding.', 'error');
   }
 
   await loadStandings();
+  await dismissSplash();
 }
 
 if (typeof window !== 'undefined' && typeof document !== 'undefined' && typeof localStorage !== 'undefined') {
   bootstrap();
 }
-

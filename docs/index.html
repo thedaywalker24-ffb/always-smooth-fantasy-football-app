@@ -103,13 +103,71 @@
             display: none;
         }
 
-        ::-webkit-scrollbar { width: 10px; }
+        #app-splash {
+            position: fixed;
+            inset: 0;
+            z-index: 80;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 1.5rem;
+            background:
+                radial-gradient(circle at top, rgba(236, 72, 153, 0.28), transparent 34%),
+                linear-gradient(180deg, #020617 0%, #0f172a 100%);
+            transition: opacity 0.4s ease, visibility 0.4s ease;
+        }
+
+        #app-splash.is-hidden {
+            opacity: 0;
+            visibility: hidden;
+            pointer-events: none;
+        }
+
+        .app-splash-card {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 1rem;
+            text-align: center;
+        }
+
+        .app-splash-icon {
+            width: min(52vw, 220px);
+            aspect-ratio: 1;
+            border-radius: 2rem;
+            box-shadow: 0 30px 80px rgba(2, 6, 23, 0.55), 0 0 50px rgba(236, 72, 153, 0.18);
+        }
+
+        .app-splash-title {
+            font-size: clamp(1.85rem, 4vw, 2.8rem);
+            font-weight: 900;
+            font-style: italic;
+            letter-spacing: -0.04em;
+            text-transform: uppercase;
+            color: #f8fafc;
+        }
+
+        .app-splash-subtitle {
+            font-size: 0.72rem;
+            font-weight: 800;
+            letter-spacing: 0.24em;
+            text-transform: uppercase;
+            color: rgba(244, 114, 182, 0.92);
+        }
+::-webkit-scrollbar { width: 10px; }
         ::-webkit-scrollbar-track { background: transparent; }
         ::-webkit-scrollbar-thumb { background: rgba(148, 163, 184, 0.6); border-radius: 9999px; }
         .dark ::-webkit-scrollbar-thumb { background: rgba(71, 85, 105, 0.8); }
     </style>
 </head>
 <body class="text-slate-900 dark:text-white font-sans selection:bg-pink-500 selection:text-white transition-colors duration-300">
+    <div id="app-splash" aria-hidden="true">
+        <div class="app-splash-card">
+            <img src="./icons/icon-512.png" alt="Always Smooth app icon" class="app-splash-icon">
+            <div class="app-splash-title">Always Smooth</div>
+            <div class="app-splash-subtitle">Fantasy Football App</div>
+        </div>
+    </div>
     <div class="min-h-screen">
         <div id="status-banner" hidden class="mx-auto max-w-7xl px-4 pt-4 md:px-8">
             <div class="rounded-2xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-900 shadow-sm dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-100"></div>
@@ -195,3 +253,4 @@
     <script src="./app.js"></script>
 </body>
 </html>
+
