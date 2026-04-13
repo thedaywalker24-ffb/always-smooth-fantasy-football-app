@@ -1,4 +1,4 @@
-const API_BASE_URL = 'https://script.google.com/macros/s/AKfycbyLlwr37gzu2ZJhPs-SxJcknksk66fUKiFuWkidG9mYeLm8eQBstUxipr8vt372aozb/exec';
+const API_BASE_URL = 'https://script.google.com/macros/s/AKfycbwtM_NX16wFOHssvhvP2Iw7FI_7YcVgJ9-5DNbvNOblMxifawE4R-F_eiOLU1NsEggF/exec';
 const FALLBACK_PHOTO = 'https://images.unsplash.com/photo-1540747913346-19e32dc3e97e?q=80&w=600&auto=format&fit=crop';
 const THEME_KEY = 'theme';
 const CONFIG_CACHE_KEY = 'always-smooth-config';
@@ -25,8 +25,8 @@ function setCachedJson(key, value) {
   }
 }
 
-function buildApiUrl() {
-  return API_BASE_URL.replace(/\/$/, '');
+function buildApiUrl(path) {
+  return `${API_BASE_URL.replace(/\/$/, '')}/${path.replace(/^\//, '')}`;
 }
 
 function fetchJsonp(path, params = {}) {
@@ -39,8 +39,12 @@ function fetchJsonp(path, params = {}) {
       clearTimeout(timeoutId);
     };
 
-    const url = new URL(buildApiUrl());
-    url.searchParams.set('api', path.replace(/^\//, ''));
+    const routeMap = {
+      'api/config': 'config',
+      'api/league-data': 'league-data'
+    };
+    const route = routeMap[path] || path.replace(/^\//, '');
+    const url = new URL(buildApiUrl(route));
     Object.entries(params).forEach(([key, value]) => {
       if (value !== undefined && value !== null && value !== '') {
         url.searchParams.set(key, String(value));
@@ -326,4 +330,6 @@ async function bootstrap() {
   await registerServiceWorker();
 }
 
-bootstrap();
+if (typeof window !== 'undefined' && typeof document !== 'undefined' && typeof localStorage !== 'undefined') {
+  bootstrap();
+}

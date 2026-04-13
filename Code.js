@@ -588,11 +588,11 @@ function doGet(e) {
       .setMimeType(ContentService.MimeType.JSON);
   }
 
-  if (path === 'api/config' || apiName === 'config') {
+  if (path === 'config' || path === 'api/config' || apiName === 'config') {
     return createApiOutput_(buildClientConfig_(spreadsheet), callbackName);
   }
 
-  if (path === 'api/league-data' || apiName === 'league-data') {
+  if (path === 'league-data' || path === 'api/league-data' || apiName === 'league-data') {
     return createApiOutput_(getLeagueData(debug), callbackName);
   }
 
