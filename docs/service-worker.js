@@ -9,9 +9,9 @@ const APP_SHELL = [
 ];
 
 const NETWORK_FIRST_PATHS = new Set([
-  '/fantasy-football-app/',
-  '/fantasy-football-app/index.html',
-  '/fantasy-football-app/manifest.webmanifest'
+  '/always-smooth-fantasy-football-app/',
+  '/always-smooth-fantasy-football-app/index.html',
+  '/always-smooth-fantasy-football-app/manifest.webmanifest'
 ]);
 
 self.addEventListener('install', (event) => {
@@ -59,3 +59,4 @@ self.addEventListener('fetch', (event) => {
     }))
   );
 });
+

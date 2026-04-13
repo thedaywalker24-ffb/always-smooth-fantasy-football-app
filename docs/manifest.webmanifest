@@ -2,27 +2,28 @@
   "name": "Always Smooth League",
   "short_name": "Always Smooth",
   "description": "Fantasy football league dashboard for standings, matchups, and draft data.",
-  "start_url": "/fantasy-football-app/",
-  "scope": "/fantasy-football-app/",
+  "start_url": "/always-smooth-fantasy-football-app/",
+  "scope": "/always-smooth-fantasy-football-app/",
   "display": "standalone",
   "orientation": "portrait",
   "background_color": "#020617",
   "theme_color": "#ec4899",
   "icons": [
     {
-      "src": "/fantasy-football-app/icons/icon-192.png",
+      "src": "/always-smooth-fantasy-football-app/icons/icon-192.png",
       "sizes": "192x192",
       "type": "image/png"
     },
     {
-      "src": "/fantasy-football-app/icons/icon-512.png",
+      "src": "/always-smooth-fantasy-football-app/icons/icon-512.png",
       "sizes": "512x512",
       "type": "image/png"
     }
   ],
-  "id": "/fantasy-football-app/",
+  "id": "/always-smooth-fantasy-football-app/",
   "display_override": [
     "standalone",
     "minimal-ui"
   ]
 }
+
