@@ -317,6 +317,7 @@ async function bootstrap() {
   setupThemeControls();
   setupInstallPrompt();
   setupScrollBehavior();
+  await registerServiceWorker();
   document.getElementById('refresh-button').addEventListener('click', () => loadStandings());
 
   try {
@@ -327,9 +328,9 @@ async function bootstrap() {
   }
 
   await loadStandings();
-  await registerServiceWorker();
 }
 
 if (typeof window !== 'undefined' && typeof document !== 'undefined' && typeof localStorage !== 'undefined') {
   bootstrap();
 }
+
