@@ -151,7 +151,17 @@ function formatTimestamp(value) {
   if (!value) return 'Sync pending';
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return 'Sync pending';
-  return `Updated ${date.toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}`;
+  const now = new Date();
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const startOfTargetDay = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  const diffDays = Math.round((startOfToday - startOfTargetDay) / 86400000);
+  const timeLabel = date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+
+  if (diffDays === 0) return `Updated Today at ${timeLabel}`;
+  if (diffDays === 1) return `Updated Yesterday at ${timeLabel}`;
+
+  const dayLabel = date.toLocaleDateString([], { month: 'short', day: 'numeric' });
+  return `Updated ${dayLabel} at ${timeLabel}`;
 }
 
 function applyConfig(config) {
@@ -363,3 +373,4 @@ async function bootstrap() {
 if (typeof window !== 'undefined' && typeof document !== 'undefined' && typeof localStorage !== 'undefined') {
   bootstrap();
 }
+
