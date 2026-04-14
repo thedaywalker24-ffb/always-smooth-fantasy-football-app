@@ -255,10 +255,11 @@ function renderTeams(payload, isStale = false) {
     const streakValue = team.streak || 'None';
     const pointsFor = Math.round(Number(team.pointsFor || 0));
     const recordWithStreak = streakValue !== 'None' ? `${team.record} (${streakValue})` : team.record;
+    const sleeperTeamImageUrl = team.sleeperTeamImageUrl || '';
+    const trophies = team.trophies || 'None';
+    const beerTrophies = team.beerTrophies || 'None';
+    const mulliganLabel = team.mulligan ? '✅' : '❎';
     const teamPanelId = `team-panel-${index}`;
-    const winPct = formatWinPct(team.record);
-    const pointsPace = formatPointsPace(team.pointsFor, team.record);
-    const pointsBack = formatPointsBehindLeader(team.pointsFor, leaderPoints);
     const teamInsight = buildTeamInsight(team, index, leaderPoints);
     return `
       <article class="owner-tile glass-panel group relative overflow-hidden rounded-3xl border border-slate-200 bg-white/90 p-6 shadow-sm hover:border-pink-500/40 hover:shadow-xl dark:border-pink-500/10 dark:bg-slate-900/70" data-team-tile data-expanded="false">
@@ -284,22 +285,28 @@ function renderTeams(payload, isStale = false) {
           <div id="${teamPanelId}" class="team-expand-panel relative z-10" data-team-panel aria-hidden="true">
             <div class="team-expand-panel__inner">
               <div class="rounded-[1.5rem] border border-slate-200/80 bg-white/75 p-4 shadow-inner shadow-slate-200/50 dark:border-slate-800 dark:bg-slate-950/30 dark:shadow-none">
+                <div class="mb-4 flex min-h-24 items-center justify-center rounded-[1.25rem] border border-slate-200/80 bg-gradient-to-br from-slate-50 to-white px-4 py-4 dark:border-slate-800 dark:from-slate-900 dark:to-slate-950/70">
+                  ${sleeperTeamImageUrl
+                    ? `<img src="${sleeperTeamImageUrl}" alt="${team.teamName} Sleeper team image" class="max-h-20 w-auto object-contain" onerror="this.classList.add('hidden');this.nextElementSibling.classList.remove('hidden');">
+                       <p class="hidden text-xs font-bold uppercase tracking-[0.22em] text-slate-400">${team.teamName}</p>`
+                    : `<p class="text-xs font-bold uppercase tracking-[0.22em] text-slate-400">${team.teamName}</p>`}
+                </div>
                 <div class="team-stats-grid">
                   <div class="rounded-2xl bg-slate-100/80 px-3 py-3 dark:bg-slate-800/80">
                     <p class="text-[10px] font-bold uppercase tracking-[0.22em] text-slate-400">Rank</p>
                     <p class="mt-1 text-base font-black text-slate-800 dark:text-slate-100">#${index + 1}</p>
                   </div>
                   <div class="rounded-2xl bg-slate-100/80 px-3 py-3 dark:bg-slate-800/80">
-                    <p class="text-[10px] font-bold uppercase tracking-[0.22em] text-slate-400">Win Pct</p>
-                    <p class="mt-1 text-base font-black text-slate-800 dark:text-slate-100">${winPct}</p>
+                    <p class="text-[10px] font-bold uppercase tracking-[0.22em] text-slate-400">Mulligan</p>
+                    <p class="mt-1 text-base font-black text-slate-800 dark:text-slate-100">${mulliganLabel}</p>
                   </div>
                   <div class="rounded-2xl bg-slate-100/80 px-3 py-3 dark:bg-slate-800/80">
-                    <p class="text-[10px] font-bold uppercase tracking-[0.22em] text-slate-400">PF / Game</p>
-                    <p class="mt-1 text-base font-black text-slate-800 dark:text-slate-100">${pointsPace}</p>
+                    <p class="text-[10px] font-bold uppercase tracking-[0.22em] text-slate-400">Trophies</p>
+                    <p class="mt-1 text-base font-black text-slate-800 dark:text-slate-100">${trophies}</p>
                   </div>
                   <div class="rounded-2xl bg-slate-100/80 px-3 py-3 dark:bg-slate-800/80">
-                    <p class="text-[10px] font-bold uppercase tracking-[0.22em] text-slate-400">PF Behind #1</p>
-                    <p class="mt-1 text-base font-black text-slate-800 dark:text-slate-100">${pointsBack}</p>
+                    <p class="text-[10px] font-bold uppercase tracking-[0.22em] text-slate-400">Beer Trophies</p>
+                    <p class="mt-1 text-base font-black text-slate-800 dark:text-slate-100">${beerTrophies}</p>
                   </div>
                 </div>
                 <p class="pt-4 text-xs font-semibold leading-relaxed text-slate-500 dark:text-slate-400">${ownerName} has ${teamInsight}</p>

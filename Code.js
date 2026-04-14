@@ -58,9 +58,13 @@ const ROSTERS_STREAK_COL_FALLBACK = 6;
 /** 0-based column for manager display name when header "Display Name" is used (column J) */
 const ROSTERS_DISPLAY_NAME_COL_FALLBACK = 9;
 
-/** Optional tab: column H (8) holds manager photo URLs; rows matched to standings by Team Name */
+/** Optional tab: supplemental team data columns matched to standings by Team Name */
 const TEAMS_SHEET = 'Teams';
 const TEAMS_MANAGER_PHOTO_COL = 8; // Column H (1-based)
+const TEAMS_MULLIGAN_COL = 5; // Column E (1-based)
+const TEAMS_TROPHIES_COL = 12; // Column L (1-based)
+const TEAMS_SLEEPER_TEAM_IMAGE_COL = 13; // Column M (1-based)
+const TEAMS_BEER_TROPHIES_COL = 19; // Column S (1-based)
 /** Teams tab: title/instructions may occupy row 1; column headers are on this row (1-based). */
 const TEAMS_HEADER_ROW = 2;
 /** First row of team data below the header row */
@@ -427,28 +431,42 @@ function findTeamsSheetTeamNameColumn_(headers) {
   return { col0: 0, reason: 'fallback column A (sheet is very narrow)' };
 }
 
+function normalizeBooleanCell_(value) {
+  if (value === true || value === false) return value;
+  if (value === '' || value === null || value === undefined) return false;
+  var normalized = String(value).trim().toLowerCase();
+  return normalized === 'true' || normalized === 'yes' || normalized === 'y' || normalized === '1';
+}
+
 /**
- * Builds team name (lowercase key) -> raw photo URL from "Teams" sheet, column H.
+ * Builds team name (lowercase key) -> supplemental team fields from the "Teams" sheet.
  * Headers are read from TEAMS_HEADER_ROW; data from TEAMS_DATA_START_ROW onward.
  * @param {GoogleAppsScript.Spreadsheet.Spreadsheet} spreadsheet
- * @return {{ map: Object<string, string>, diagnostics: Object }}
+ * @return {{ map: Object<string, Object>, diagnostics: Object }}
  */
-function buildManagerPhotoUrlMapFromTeamsSheet_(spreadsheet) {
+function buildTeamsSheetDataMap_(spreadsheet) {
   var map = {};
   var diag = {
     teamsSheetFound: false,
     teamsSheetName: TEAMS_SHEET,
-    photoColumn: 'H',
+    managerPhotoColumn: 'H',
+    mulliganColumn: 'E',
+    trophiesColumn: 'L',
+    sleeperTeamImageColumn: 'M',
+    beerTrophiesColumn: 'S',
     lastRow: 0,
     lastCol: 0,
     teamNameSource: '',
     rowsScanned: 0,
     rowsWithTeamName: 0,
-    rowsWithUrlInH: 0,
-    rowsNameButBlankH: 0,
+    rowsWithManagerPhoto: 0,
+    rowsWithSleeperTeamImage: 0,
+    rowsWithTrophies: 0,
+    rowsWithBeerTrophies: 0,
+    rowsWithMulliganTrue: 0,
     mapEntryCount: 0,
     sampleMapKeys: [],
-    sampleRawUrlPrefixes: [],
+    sampleManagerPhotoPrefixes: [],
     teamNameColumnLetter: '',
     teamNameColumnPickReason: '',
     headerRow: TEAMS_HEADER_ROW,
@@ -493,29 +511,60 @@ function buildManagerPhotoUrlMapFromTeamsSheet_(spreadsheet) {
       : 'column ' + diag.teamNameColumnLetter + ' — row ' + TEAMS_HEADER_ROW + ' (' + pick.reason + ')';
 
   var nameCol1 = nameCol + 1;
-  var nameVals = sheet.getRange(TEAMS_DATA_START_ROW, nameCol1, lastRow, nameCol1).getValues();
-  var photoVals = sheet.getRange(TEAMS_DATA_START_ROW, TEAMS_MANAGER_PHOTO_COL, lastRow, TEAMS_MANAGER_PHOTO_COL).getValues();
+  var numRows = lastRow - TEAMS_DATA_START_ROW + 1;
+  var nameVals = sheet.getRange(TEAMS_DATA_START_ROW, nameCol1, numRows, 1).getValues();
+  var managerPhotoVals = sheet.getRange(TEAMS_DATA_START_ROW, TEAMS_MANAGER_PHOTO_COL, numRows, 1).getValues();
+  var mulliganVals = sheet.getRange(TEAMS_DATA_START_ROW, TEAMS_MULLIGAN_COL, numRows, 1).getValues();
+  var trophiesVals = sheet.getRange(TEAMS_DATA_START_ROW, TEAMS_TROPHIES_COL, numRows, 1).getDisplayValues();
+  var sleeperTeamImageVals = sheet.getRange(TEAMS_DATA_START_ROW, TEAMS_SLEEPER_TEAM_IMAGE_COL, numRows, 1).getValues();
+  var beerTrophiesVals = sheet.getRange(TEAMS_DATA_START_ROW, TEAMS_BEER_TROPHIES_COL, numRows, 1).getDisplayValues();
   diag.rowsScanned = nameVals.length;
 
   var sampleKeys = [];
   var samplePrefixes = [];
   for (var r = 0; r < nameVals.length; r++) {
     var teamName = nameVals[r][0];
-    var rawUrl = photoVals[r][0];
+    var rawManagerPhoto = managerPhotoVals[r][0];
+    var rawMulligan = mulliganVals[r][0];
+    var rawTrophies = trophiesVals[r][0];
+    var rawSleeperTeamImage = sleeperTeamImageVals[r][0];
+    var rawBeerTrophies = beerTrophiesVals[r][0];
     var hasName = !(teamName === '' || teamName === null || teamName === undefined);
-    var hasUrl = !(rawUrl === '' || rawUrl === null || rawUrl === undefined);
+    var hasManagerPhoto = !(rawManagerPhoto === '' || rawManagerPhoto === null || rawManagerPhoto === undefined);
+    var hasSleeperTeamImage = !(rawSleeperTeamImage === '' || rawSleeperTeamImage === null || rawSleeperTeamImage === undefined);
+    var hasTrophies = !(rawTrophies === '' || rawTrophies === null || rawTrophies === undefined);
+    var hasBeerTrophies = !(rawBeerTrophies === '' || rawBeerTrophies === null || rawBeerTrophies === undefined);
+    var mulligan = normalizeBooleanCell_(rawMulligan);
     if (hasName) diag.rowsWithTeamName++;
-    if (hasUrl) diag.rowsWithUrlInH++;
-    if (hasName && !hasUrl) diag.rowsNameButBlankH++;
-    if (!hasName || !hasUrl) continue;
-    var trimmed = String(rawUrl).trim();
-    if (!looksLikePhotoUrl_(trimmed)) continue;
+    if (hasManagerPhoto) diag.rowsWithManagerPhoto++;
+    if (hasSleeperTeamImage) diag.rowsWithSleeperTeamImage++;
+    if (hasTrophies) diag.rowsWithTrophies++;
+    if (hasBeerTrophies) diag.rowsWithBeerTrophies++;
+    if (mulligan) diag.rowsWithMulliganTrue++;
+    if (!hasName) continue;
     var key = normalizeTeamNameKey_(teamName);
     if (!key) continue;
-    map[key] = trimmed;
+
+    var managerPhoto = hasManagerPhoto && looksLikePhotoUrl_(String(rawManagerPhoto).trim())
+      ? formatDriveUrl(String(rawManagerPhoto).trim())
+      : '';
+    var sleeperTeamImage = hasSleeperTeamImage && looksLikePhotoUrl_(String(rawSleeperTeamImage).trim())
+      ? formatDriveUrl(String(rawSleeperTeamImage).trim())
+      : '';
+    var trophies = hasTrophies ? String(rawTrophies).trim() : '';
+    var beerTrophies = hasBeerTrophies ? String(rawBeerTrophies).trim() : '';
+
+    map[key] = {
+      managerPhotoUrl: managerPhoto,
+      sleeperTeamImageUrl: sleeperTeamImage,
+      trophies: trophies,
+      beerTrophies: beerTrophies,
+      mulligan: mulligan
+    };
+
     if (sampleKeys.length < 5) {
       sampleKeys.push(key);
-      samplePrefixes.push(trimmed.length > 48 ? trimmed.substring(0, 48) + '…' : trimmed);
+      samplePrefixes.push(managerPhoto.length > 48 ? managerPhoto.substring(0, 48) + '…' : managerPhoto);
     }
   }
   diag.mapEntryCount = Object.keys(map).length;
@@ -621,7 +670,7 @@ function doGet(e) {
  * Returns team standings from the "Rosters & Records" sheet for the client UI.
  * Column positions are resolved from the header row so minor layout changes stay safe.
  * @param {boolean} [includeDiagnostics] When true, payload includes `diagnostics` for photo/sheet troubleshooting (use ?debug=1 on the web app URL).
- * @return {{ teams: Array<{teamName: string, realName: string, record: string, streak: string, pointsFor: number, photoUrl: string}>, updatedAt: string, error?: string, diagnostics?: Object }}
+ * @return {{ teams: Array<{teamName: string, realName: string, record: string, streak: string, pointsFor: number, photoUrl: string, sleeperTeamImageUrl: string, trophies: string, beerTrophies: string, mulligan: boolean}>, updatedAt: string, error?: string, diagnostics?: Object }}
  */
 function getLeagueData(includeDiagnostics) {
   const wantDiag = includeDiagnostics === true;
@@ -662,7 +711,7 @@ function getLeagueData(includeDiagnostics) {
         updatedAt: new Date().toISOString()
       };
       if (wantDiag) {
-        const photoBuild = buildManagerPhotoUrlMapFromTeamsSheet_(spreadsheet);
+        const photoBuild = buildTeamsSheetDataMap_(spreadsheet);
         emptyRoster.diagnostics = {
           photoSheet: photoBuild.diagnostics,
           rosterTeamCount: 0,
@@ -688,8 +737,8 @@ function getLeagueData(includeDiagnostics) {
     }
 
     const rows = rosterSheet.getRange(2, 1, lastRow - 1, lastCol).getValues();
-    const photoBuild = buildManagerPhotoUrlMapFromTeamsSheet_(spreadsheet);
-    const managerPhotoByTeamKey = photoBuild.map;
+    const photoBuild = buildTeamsSheetDataMap_(spreadsheet);
+    const teamsSheetDataByTeamKey = photoBuild.map;
     const teams = [];
     const rosterKeysForDiag = [];
     let teamsWithPhotoUrl = 0;
@@ -705,7 +754,7 @@ function getLeagueData(includeDiagnostics) {
       const rawRecord = row[recordCol];
       const rawStreak = streakCol >= 0 && streakCol < row.length ? row[streakCol] : '';
       const rawPointsFor = row[pointsForCol];
-      const rawPhotoUrl = teamKey ? managerPhotoByTeamKey[teamKey] : '';
+      const teamSheetData = teamKey ? teamsSheetDataByTeamKey[teamKey] : null;
 
       const record =
         rawRecord === '' || rawRecord === null || rawRecord === undefined
@@ -726,7 +775,12 @@ function getLeagueData(includeDiagnostics) {
         pointsFor = isNaN(num) ? 0 : num;
       }
 
-      const photoUrl = rawPhotoUrl ? formatDriveUrl(rawPhotoUrl) : '';
+      const photoUrl = teamSheetData && teamSheetData.managerPhotoUrl ? teamSheetData.managerPhotoUrl : '';
+      const sleeperTeamImageUrl =
+        teamSheetData && teamSheetData.sleeperTeamImageUrl ? teamSheetData.sleeperTeamImageUrl : '';
+      const trophies = teamSheetData && teamSheetData.trophies ? teamSheetData.trophies : '';
+      const beerTrophies = teamSheetData && teamSheetData.beerTrophies ? teamSheetData.beerTrophies : '';
+      const mulligan = teamSheetData ? teamSheetData.mulligan === true : false;
 
       if (wantDiag && rosterKeysForDiag.length < 12) {
         rosterKeysForDiag.push(teamKey || '(blank key)');
@@ -739,7 +793,11 @@ function getLeagueData(includeDiagnostics) {
         record: record,
         streak: streak,
         pointsFor: Math.round(pointsFor * 100) / 100,
-        photoUrl: photoUrl
+        photoUrl: photoUrl,
+        sleeperTeamImageUrl: sleeperTeamImageUrl,
+        trophies: trophies,
+        beerTrophies: beerTrophies,
+        mulligan: mulligan
       });
     }
 
