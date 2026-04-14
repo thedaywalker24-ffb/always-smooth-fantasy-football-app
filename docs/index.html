@@ -171,6 +171,144 @@
             text-transform: uppercase;
             color: rgba(244, 114, 182, 0.92);
         }
+        .owner-tile {
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            min-height: 100%;
+            cursor: pointer;
+            isolation: isolate;
+            transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
+        }
+
+        .owner-tile[data-expanded="true"] {
+            transform: translateY(-4px);
+            box-shadow: 0 25px 60px rgba(236, 72, 153, 0.16);
+            border-color: rgba(236, 72, 153, 0.4);
+        }
+
+        .owner-tile[data-expanded="true"] .team-card-shell {
+            gap: 1rem;
+        }
+
+        .team-card-shell {
+            display: flex;
+            flex: 1;
+            flex-direction: column;
+            gap: 0.75rem;
+            transition: gap 0.3s ease;
+        }
+
+        .team-seam-button {
+            width: 100%;
+            border: 0;
+            background: transparent;
+            padding: 0;
+            color: inherit;
+            cursor: pointer;
+        }
+
+        .team-seam-button:focus-visible {
+            outline: 2px solid rgba(236, 72, 153, 0.75);
+            outline-offset: 6px;
+            border-radius: 1.25rem;
+        }
+
+        .team-seam-line {
+            position: relative;
+            display: flex;
+            align-items: center;
+            gap: 0.85rem;
+            padding: 0.2rem 0;
+        }
+
+        .team-seam-line::before,
+        .team-seam-line::after {
+            content: "";
+            height: 1px;
+            flex: 1;
+            background: linear-gradient(90deg, rgba(148, 163, 184, 0.18), rgba(148, 163, 184, 0.75), rgba(148, 163, 184, 0.18));
+            transition: background 0.3s ease, transform 0.3s ease;
+        }
+
+        .dark .team-seam-line::before,
+        .dark .team-seam-line::after {
+            background: linear-gradient(90deg, rgba(71, 85, 105, 0.18), rgba(100, 116, 139, 0.85), rgba(71, 85, 105, 0.18));
+        }
+
+        .team-seam-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.7rem;
+            border-radius: 9999px;
+            border: 1px solid rgba(226, 232, 240, 0.95);
+            background: rgba(255, 255, 255, 0.9);
+            padding: 0.55rem 0.8rem 0.55rem 0.9rem;
+            box-shadow: 0 10px 30px rgba(15, 23, 42, 0.07);
+            transition: border-color 0.3s ease, background 0.3s ease, transform 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        .dark .team-seam-pill {
+            border-color: rgba(51, 65, 85, 0.9);
+            background: rgba(15, 23, 42, 0.92);
+        }
+
+        .owner-tile[data-expanded="true"] .team-seam-line::before,
+        .owner-tile[data-expanded="true"] .team-seam-line::after {
+            transform: scaleX(1.02);
+            background: linear-gradient(90deg, rgba(236, 72, 153, 0.15), rgba(236, 72, 153, 0.9), rgba(251, 146, 60, 0.18));
+        }
+
+        .owner-tile[data-expanded="true"] .team-seam-pill {
+            transform: translateY(-1px);
+            border-color: rgba(236, 72, 153, 0.35);
+            background: rgba(253, 242, 248, 0.94);
+            box-shadow: 0 16px 34px rgba(236, 72, 153, 0.14);
+        }
+
+        .dark .owner-tile[data-expanded="true"] .team-seam-pill {
+            background: rgba(30, 41, 59, 0.96);
+        }
+
+        .team-expand-panel {
+            display: grid;
+            grid-template-rows: 0fr;
+            opacity: 0;
+            transform: translateY(-8px);
+            transition: grid-template-rows 0.34s ease, opacity 0.22s ease, transform 0.3s ease;
+        }
+
+        .team-expand-panel__inner {
+            overflow: hidden;
+        }
+
+        .owner-tile[data-expanded="true"] .team-expand-panel {
+            grid-template-rows: 1fr;
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .team-stats-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 0.75rem;
+        }
+
+        @media (min-width: 640px) {
+            .team-stats-grid {
+                grid-template-columns: repeat(4, minmax(0, 1fr));
+            }
+        }
+
+        .team-expand-icon {
+            transition: transform 0.3s ease, background-color 0.3s ease, color 0.3s ease;
+        }
+
+        .owner-tile[data-expanded="true"] .team-expand-icon {
+            transform: rotate(180deg);
+            background-color: rgba(236, 72, 153, 0.16);
+            color: rgb(219, 39, 119);
+        }
 ::-webkit-scrollbar { width: 10px; }
         ::-webkit-scrollbar-track { background: transparent; }
         ::-webkit-scrollbar-thumb { background: rgba(148, 163, 184, 0.6); border-radius: 9999px; }
