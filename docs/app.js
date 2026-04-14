@@ -253,7 +253,8 @@ function renderTeams(payload, isStale = false) {
     const photoUrl = team.photoUrl || FALLBACK_PHOTO;
     const ownerName = team.realName || 'Owner not set';
     const streakValue = team.streak || 'None';
-    const pointsFor = Number(team.pointsFor || 0).toFixed(2);
+    const pointsFor = Math.round(Number(team.pointsFor || 0));
+    const recordWithStreak = streakValue !== 'None' ? `${team.record} (${streakValue})` : team.record;
     const teamPanelId = `team-panel-${index}`;
     const winPct = formatWinPct(team.record);
     const pointsPace = formatPointsPace(team.pointsFor, team.record);
@@ -276,15 +277,7 @@ function renderTeams(payload, isStale = false) {
 
           <button type="button" class="team-seam-button relative z-10" data-team-toggle aria-expanded="false" aria-controls="${teamPanelId}" aria-label="Toggle more stats for ${team.teamName}">
             <span class="team-seam-line">
-              <span class="team-seam-pill">
-                <span>
-                  <span class="block text-[10px] font-bold uppercase tracking-[0.24em] text-slate-400">Team Snapshot</span>
-                  <span class="mt-1 block text-xs font-semibold text-slate-500 dark:text-slate-400">Tap for more team stats</span>
-                </span>
-                <span class="team-expand-icon inline-flex h-9 w-9 items-center justify-center rounded-full bg-pink-500/10 text-pink-500">
-                  <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
-                </span>
-              </span>
+              <span class="sr-only">Toggle more team stats</span>
             </span>
           </button>
 
@@ -314,14 +307,10 @@ function renderTeams(payload, isStale = false) {
             </div>
           </div>
 
-          <div class="relative z-10 mt-auto grid grid-cols-3 gap-4 border-t border-slate-100 pt-4 dark:border-slate-800">
+          <div class="relative z-10 mt-auto grid grid-cols-[minmax(0,1fr)_auto] gap-4 border-t border-slate-100 pt-4 dark:border-slate-800">
             <div>
               <p class="text-[10px] font-bold uppercase tracking-[0.22em] text-slate-400">Record</p>
-              <p class="text-sm font-black text-slate-700 dark:text-slate-200">${team.record}</p>
-            </div>
-            <div>
-              <p class="text-[10px] font-bold uppercase tracking-[0.22em] text-slate-400">Streak</p>
-              <p class="text-sm font-black text-slate-700 dark:text-slate-200">${streakValue}</p>
+              <p class="text-sm font-black text-slate-700 dark:text-slate-200">${recordWithStreak}</p>
             </div>
             <div class="text-right">
               <p class="text-[10px] font-bold uppercase tracking-[0.22em] text-slate-400">PF</p>
