@@ -65,6 +65,7 @@ const TEAMS_MULLIGAN_COL = 5; // Column E (1-based)
 const TEAMS_TROPHIES_COL = 12; // Column L (1-based)
 const TEAMS_SLEEPER_TEAM_IMAGE_COL = 13; // Column M (1-based)
 const TEAMS_BEER_TROPHIES_COL = 19; // Column S (1-based)
+const TEAMS_MVP_IMAGE_COL = 22; // Column V (1-based)
 /** Teams tab: title/instructions may occupy row 1; column headers are on this row (1-based). */
 const TEAMS_HEADER_ROW = 2;
 /** First row of team data below the header row */
@@ -454,6 +455,7 @@ function buildTeamsSheetDataMap_(spreadsheet) {
     trophiesColumn: 'L',
     sleeperTeamImageColumn: 'M',
     beerTrophiesColumn: 'S',
+    teamMvpImageColumn: 'V',
     lastRow: 0,
     lastCol: 0,
     teamNameSource: '',
@@ -464,6 +466,7 @@ function buildTeamsSheetDataMap_(spreadsheet) {
     rowsWithTrophies: 0,
     rowsWithBeerTrophies: 0,
     rowsWithMulliganTrue: 0,
+    rowsWithTeamMvpImage: 0,
     mapEntryCount: 0,
     sampleMapKeys: [],
     sampleManagerPhotoPrefixes: [],
@@ -518,6 +521,7 @@ function buildTeamsSheetDataMap_(spreadsheet) {
   var trophiesVals = sheet.getRange(TEAMS_DATA_START_ROW, TEAMS_TROPHIES_COL, numRows, 1).getDisplayValues();
   var sleeperTeamImageVals = sheet.getRange(TEAMS_DATA_START_ROW, TEAMS_SLEEPER_TEAM_IMAGE_COL, numRows, 1).getValues();
   var beerTrophiesVals = sheet.getRange(TEAMS_DATA_START_ROW, TEAMS_BEER_TROPHIES_COL, numRows, 1).getDisplayValues();
+  var teamMvpImageVals = sheet.getRange(TEAMS_DATA_START_ROW, TEAMS_MVP_IMAGE_COL, numRows, 1).getValues();
   diag.rowsScanned = nameVals.length;
 
   var sampleKeys = [];
@@ -529,17 +533,20 @@ function buildTeamsSheetDataMap_(spreadsheet) {
     var rawTrophies = trophiesVals[r][0];
     var rawSleeperTeamImage = sleeperTeamImageVals[r][0];
     var rawBeerTrophies = beerTrophiesVals[r][0];
+    var rawTeamMvpImage = teamMvpImageVals[r][0];
     var hasName = !(teamName === '' || teamName === null || teamName === undefined);
     var hasManagerPhoto = !(rawManagerPhoto === '' || rawManagerPhoto === null || rawManagerPhoto === undefined);
     var hasSleeperTeamImage = !(rawSleeperTeamImage === '' || rawSleeperTeamImage === null || rawSleeperTeamImage === undefined);
     var hasTrophies = !(rawTrophies === '' || rawTrophies === null || rawTrophies === undefined);
     var hasBeerTrophies = !(rawBeerTrophies === '' || rawBeerTrophies === null || rawBeerTrophies === undefined);
+    var hasTeamMvpImage = !(rawTeamMvpImage === '' || rawTeamMvpImage === null || rawTeamMvpImage === undefined);
     var mulligan = normalizeBooleanCell_(rawMulligan);
     if (hasName) diag.rowsWithTeamName++;
     if (hasManagerPhoto) diag.rowsWithManagerPhoto++;
     if (hasSleeperTeamImage) diag.rowsWithSleeperTeamImage++;
     if (hasTrophies) diag.rowsWithTrophies++;
     if (hasBeerTrophies) diag.rowsWithBeerTrophies++;
+    if (hasTeamMvpImage) diag.rowsWithTeamMvpImage++;
     if (mulligan) diag.rowsWithMulliganTrue++;
     if (!hasName) continue;
     var key = normalizeTeamNameKey_(teamName);
@@ -551,12 +558,16 @@ function buildTeamsSheetDataMap_(spreadsheet) {
     var sleeperTeamImage = hasSleeperTeamImage && looksLikePhotoUrl_(String(rawSleeperTeamImage).trim())
       ? formatDriveUrl(String(rawSleeperTeamImage).trim())
       : '';
+    var teamMvpImageUrl = hasTeamMvpImage && looksLikePhotoUrl_(String(rawTeamMvpImage).trim())
+      ? formatDriveUrl(String(rawTeamMvpImage).trim())
+      : '';
     var trophies = hasTrophies ? String(rawTrophies).trim() : '';
     var beerTrophies = hasBeerTrophies ? String(rawBeerTrophies).trim() : '';
 
     map[key] = {
       managerPhotoUrl: managerPhoto,
       sleeperTeamImageUrl: sleeperTeamImage,
+      teamMvpImageUrl: teamMvpImageUrl,
       trophies: trophies,
       beerTrophies: beerTrophies,
       mulligan: mulligan
@@ -670,7 +681,7 @@ function doGet(e) {
  * Returns team standings from the "Rosters & Records" sheet for the client UI.
  * Column positions are resolved from the header row so minor layout changes stay safe.
  * @param {boolean} [includeDiagnostics] When true, payload includes `diagnostics` for photo/sheet troubleshooting (use ?debug=1 on the web app URL).
- * @return {{ teams: Array<{teamName: string, realName: string, record: string, streak: string, pointsFor: number, photoUrl: string, sleeperTeamImageUrl: string, trophies: string, beerTrophies: string, mulligan: boolean}>, updatedAt: string, error?: string, diagnostics?: Object }}
+ * @return {{ teams: Array<{teamName: string, realName: string, record: string, streak: string, pointsFor: number, photoUrl: string, sleeperTeamImageUrl: string, teamMvpImageUrl: string, trophies: string, beerTrophies: string, mulligan: boolean}>, updatedAt: string, error?: string, diagnostics?: Object }}
  */
 function getLeagueData(includeDiagnostics) {
   const wantDiag = includeDiagnostics === true;
@@ -778,6 +789,8 @@ function getLeagueData(includeDiagnostics) {
       const photoUrl = teamSheetData && teamSheetData.managerPhotoUrl ? teamSheetData.managerPhotoUrl : '';
       const sleeperTeamImageUrl =
         teamSheetData && teamSheetData.sleeperTeamImageUrl ? teamSheetData.sleeperTeamImageUrl : '';
+      const teamMvpImageUrl =
+        teamSheetData && teamSheetData.teamMvpImageUrl ? teamSheetData.teamMvpImageUrl : '';
       const trophies = teamSheetData && teamSheetData.trophies ? teamSheetData.trophies : '';
       const beerTrophies = teamSheetData && teamSheetData.beerTrophies ? teamSheetData.beerTrophies : '';
       const mulligan = teamSheetData ? teamSheetData.mulligan === true : false;
@@ -795,6 +808,7 @@ function getLeagueData(includeDiagnostics) {
         pointsFor: Math.round(pointsFor * 100) / 100,
         photoUrl: photoUrl,
         sleeperTeamImageUrl: sleeperTeamImageUrl,
+        teamMvpImageUrl: teamMvpImageUrl,
         trophies: trophies,
         beerTrophies: beerTrophies,
         mulligan: mulligan
