@@ -256,12 +256,16 @@ function renderTeams(payload, isStale = false) {
     const pointsFor = Math.round(Number(team.pointsFor || 0));
     const recordWithStreak = streakValue !== 'None' ? `${team.record} (${streakValue})` : team.record;
     const sleeperTeamImageUrl = team.sleeperTeamImageUrl || '';
+    const teamMvpName = team.teamMvpName || 'Not set';
     const teamMvpImageUrl = team.teamMvpImageUrl || '';
     const trophies = team.trophies || 'None';
     const beerTrophies = team.beerTrophies || 'None';
     const mulliganLabel = team.mulligan ? '✅' : '❎';
     const teamPanelId = `team-panel-${index}`;
     const teamInsight = buildTeamInsight(team, index, leaderPoints);
+    const teamExpandCardStyle = sleeperTeamImageUrl
+      ? `style="background-image: linear-gradient(180deg, rgba(253, 242, 248, 0.22), rgba(15, 23, 42, 0.22)), url('${sleeperTeamImageUrl.replace(/'/g, '%27')}');"`
+      : '';
     return `
       <article class="owner-tile glass-panel group relative overflow-hidden rounded-3xl border border-slate-200 bg-white/90 p-6 shadow-sm hover:border-pink-500/40 hover:shadow-xl dark:border-pink-500/10 dark:bg-slate-900/70" data-team-tile data-expanded="false">
         <div class="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-pink-500 via-rose-400 to-orange-300"></div>
@@ -285,40 +289,36 @@ function renderTeams(payload, isStale = false) {
 
           <div id="${teamPanelId}" class="team-expand-panel relative z-10" data-team-panel aria-hidden="true">
             <div class="team-expand-panel__inner">
-              <div class="team-expand-card rounded-[1.5rem] p-4">
-                <div class="team-image-frame mb-4 flex min-h-24 items-center justify-center rounded-[1.25rem] px-4 py-4">
-                  ${sleeperTeamImageUrl
-                    ? `<img src="${sleeperTeamImageUrl}" alt="${team.teamName} Sleeper team image" class="max-h-20 w-auto object-contain" onerror="this.classList.add('hidden');this.nextElementSibling.classList.remove('hidden');">
-                       <p class="hidden text-xs font-bold uppercase tracking-[0.22em] text-slate-400">${team.teamName}</p>`
-                    : `<p class="text-xs font-bold uppercase tracking-[0.22em] text-slate-400">${team.teamName}</p>`}
-                </div>
+              <div class="team-expand-card rounded-[1.5rem] p-4" ${teamExpandCardStyle}>
+                <div class="team-expand-content">
                 <div class="team-expand-stats">
                   <div class="team-stat-row">
                     <div>
                       <p class="text-[10px] font-bold uppercase tracking-[0.22em] text-pink-500/80">Team MVP</p>
-                      <p class="mt-1 text-sm font-black text-slate-800 dark:text-slate-100">${teamMvpImageUrl ? 'Featured player' : 'Not set'}</p>
+                      <p class="mt-1 text-sm font-black text-white">${teamMvpName}</p>
                     </div>
                     <div class="shrink-0">
                       ${teamMvpImageUrl
                         ? `<img src="${teamMvpImageUrl}" alt="${team.teamName} MVP" class="team-mvp-image" onerror="this.classList.add('hidden');this.nextElementSibling.classList.remove('hidden');">
-                           <span class="hidden text-sm font-black text-slate-400">N/A</span>`
-                        : `<span class="text-sm font-black text-slate-400">N/A</span>`}
+                           <span class="hidden text-sm font-black text-white/70">N/A</span>`
+                        : `<span class="text-sm font-black text-white/70">N/A</span>`}
                     </div>
                   </div>
                   <div class="team-stat-row">
                     <p class="text-[10px] font-bold uppercase tracking-[0.22em] text-pink-500/80">Mulligan</p>
-                    <p class="text-base font-black text-slate-800 dark:text-slate-100">${mulliganLabel}</p>
+                    <p class="text-base font-black text-white">${mulliganLabel}</p>
                   </div>
                   <div class="team-stat-row">
                     <p class="text-[10px] font-bold uppercase tracking-[0.22em] text-pink-500/80">Trophies</p>
-                    <p class="text-base font-black text-slate-800 dark:text-slate-100">${trophies}</p>
+                    <p class="text-base font-black text-white">${trophies}</p>
                   </div>
                   <div class="team-stat-row">
                     <p class="text-[10px] font-bold uppercase tracking-[0.22em] text-pink-500/80">Beer Trophies</p>
-                    <p class="text-base font-black text-slate-800 dark:text-slate-100">${beerTrophies}</p>
+                    <p class="text-base font-black text-white">${beerTrophies}</p>
                   </div>
                 </div>
-                <p class="pt-4 text-xs font-semibold leading-relaxed text-slate-500 dark:text-slate-400">${ownerName} has ${teamInsight}</p>
+                <p class="pt-4 text-xs font-semibold leading-relaxed text-white/78">${ownerName} has ${teamInsight}</p>
+                </div>
               </div>
             </div>
           </div>
