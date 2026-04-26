@@ -41,6 +41,24 @@ python3 -m http.server 8000 --directory docs
 
 Apps Script deployment is managed with clasp config in `.clasp.json`. The `.claspignore` excludes `docs/**`, so GitHub Pages assets are not pushed to Apps Script.
 
+Admin writes from the app require an Apps Script Script Property named `ALWAYS_SMOOTH_ADMIN_CODE`. Set it in Apps Script Project Settings before deploying admin-edit features. Use a league-maintenance code that is not reused anywhere sensitive.
+
+The first admin-edit workflow is intentionally narrow: press and hold `Beer Trophies` in an expanded team card, enter the admin code, and Apps Script updates that team's `Teams` tab column S value.
+
+## Deployment Sequence
+
+Use this order for changes that touch both Apps Script data/routes and the GitHub Pages frontend, such as adding a new field to `Code.js` and rendering it in `docs/app.js`:
+
+1. Validate locally: run syntax checks, review `git diff`, and optionally serve `docs/` with the static server command above.
+2. Commit locally as a checkpoint, but do not push GitHub Pages yet if the frontend depends on new Apps Script behavior.
+3. Push Apps Script source with `clasp push`. This updates root Apps Script files only; `docs/**` is ignored by `.claspignore`.
+4. In Apps Script, update the Web App deployment to a new version and keep the same public deployment URL unless intentionally changing it.
+5. Verify the Apps Script URL still serves `api=config` and `api=league-data`, using `debug=1` when diagnostics are useful.
+6. Push the git branch with `git push origin master`; GitHub Pages publishes the `docs/` frontend from the repo.
+7. Verify the live GitHub Pages app, especially after service-worker cache bumps.
+
+More detailed notes are in `docs/developer-continuity.md`.
+
 ## Continuity Docs
 
 - [Canonical agent entrypoint](SKILL.md)

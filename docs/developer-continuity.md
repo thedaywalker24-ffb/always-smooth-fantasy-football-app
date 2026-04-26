@@ -36,11 +36,46 @@
 * Prompt files are refined if recurring startup or maintenance rules change.
 * The next recommended task is recorded in `docs/project-state.md`.
 
+## Deployment Runbook
+
+Use this sequence when a change touches both root Apps Script files and the GitHub Pages frontend. The goal is to make the backend contract live before the published frontend depends on it.
+
+1. Review the worktree with `git status --short --branch` and `git diff`.
+2. Run local checks that match the touched files, usually `node --check Code.js`, `node --check docs/app.js`, `node --check docs/service-worker.js`, and `git diff --check`.
+3. If frontend behavior changed, optionally run `python3 -m http.server 8000 --directory docs` and inspect the app locally.
+4. If cached frontend assets changed, bump `CACHE_NAME` in `docs/service-worker.js`.
+5. Commit locally with `git add ...` and `git commit -m "..."` so there is a rollback point before deployment.
+6. If root Apps Script files changed, run `clasp status` to see what clasp will push.
+7. Run `clasp push` to update the Apps Script project. Remember `.claspignore` excludes `docs/**`, so this does not publish the GitHub Pages frontend.
+8. Open Apps Script, then use Deploy > Manage deployments > Edit on the existing Web App deployment.
+9. Select or create a new version for the pushed code, keep Execute as and Who has access unchanged unless deliberately changing access, then deploy.
+10. Confirm the Web App URL did not change. If it did change intentionally, update `API_BASE_URL` in `docs/app.js` and document the change.
+11. Verify Apps Script directly with the deployed URL plus `?api=config` and `?api=league-data`; use `?api=league-data&debug=1` when sheet diagnostics are needed.
+12. Push the repo with `git push origin master` so GitHub Pages publishes the `docs/` frontend.
+13. After GitHub Pages finishes publishing, hard-refresh or reload the installed PWA and confirm the live app shows the new frontend behavior.
+14. If the feature added or changed sheet columns, verify the Google Sheet has the expected tab/header/cell values before considering the deployment complete.
+
+If a change is frontend-only, skip the `clasp push` and Apps Script deployment steps. If a change is backend-only, still commit and push git for source-of-truth continuity, but GitHub Pages may not need a visible check beyond confirming existing frontend calls still work.
+
+## Admin Editing
+
+Admin writes from the GitHub Pages app use a simple admin-code gate because the frontend is public and still talks to Apps Script through JSONP.
+
+* The admin code must be stored as Apps Script Script Property `ALWAYS_SMOOTH_ADMIN_CODE`.
+* Do not hardcode the admin code in repo files or frontend code.
+* Do not reuse a sensitive password because the simple JSONP/GET write flow can expose the code in browser/network history.
+* Only whitelisted fields should be writable; the first supported field is `beerTrophies`, which writes to `Teams` column S.
+* The frontend activation gesture should remain press-and-hold, not a normal tap/click, to reduce accidental edits.
+* Write routes should return structured `{ ok, error }` payloads and the frontend should refresh live standings after successful writes.
+* If expanding editable fields, add explicit field-to-column mapping in `Code.js` and update this documentation.
+
 ## Known Fragile Areas
 
 * `docs/app.js` hardcodes the Apps Script deployment URL. Changing the deployment requires updating `API_BASE_URL`.
 * JSONP depends on `Code.js#createApiOutput_` and callback validation; replacing it with normal fetch requires confirming Apps Script CORS/public access behavior.
 * `.claspignore` excludes `docs/**`; pushing Apps Script with clasp will not deploy the GitHub Pages frontend.
+* Admin write access depends on Apps Script Script Property `ALWAYS_SMOOTH_ADMIN_CODE`; without it, write routes should fail closed.
+* Admin write routes use the existing JSONP/GET pattern for simplicity, so keep them limited to low-risk, whitelisted league-maintenance fields.
 * `Settings` tab must provide values in `B2:B5` for season, week, league ID, and app icon URL, with fallbacks in `Code.js`.
 * `Rosters & Records` must include `Team Name`, `W-L Record`, and `Fpts (Total)` headers for the frontend payload.
 * `Rosters & Records` `Streak` falls back to column G if the header is missing.

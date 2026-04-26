@@ -16,6 +16,11 @@ let deferredInstallPrompt = null;
 let lastScrollTop = 0;
 const splashStartedAt = Date.now();
 const SPLASH_MIN_DURATION = 900;
+const ADMIN_EDIT_HOLD_MS = 850;
+let adminEditTimer = null;
+let adminEditActivated = false;
+let adminEditStart = null;
+let adminCodeCache = '';
 
 function getCachedJson(key) {
   try {
@@ -62,7 +67,8 @@ function fetchJsonp(path, params = {}) {
 
     const routeMap = {
       'api/config': 'config',
-      'api/league-data': 'league-data'
+      'api/league-data': 'league-data',
+      'api/update-team-field': 'update-team-field'
     };
     const route = routeMap[path] || path.replace(/^\//, '');
     const url = buildApiUrl(route, { ...params, callback: callbackName });
@@ -164,6 +170,16 @@ function formatTimestamp(value) {
   return `Updated ${dayLabel} at ${timeLabel}`;
 }
 
+function escapeHtml(value) {
+  return String(value ?? '').replace(/[&<>"']/g, (char) => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;'
+  })[char]);
+}
+
 function applyConfig(config) {
   if (!config) return;
   document.title = `${config.appName || 'Always Smooth'} ${config.leagueSeason || ''}`.trim();
@@ -259,9 +275,10 @@ function renderTeams(payload, isStale = false) {
     const teamMvpName = team.teamMvpName || 'Not set';
     const teamMvpImageUrl = team.teamMvpImageUrl || '';
     const trophies = String(team.trophies || '').trim();
-    const ownerTrophiesMarkup = trophies ? `<span class="shrink-0">${trophies}</span>` : '';
+    const ownerTrophiesMarkup = trophies ? `<span class="shrink-0">${escapeHtml(trophies)}</span>` : '';
     const turkeyWatch = team.turkeyWatch || 'None';
-    const beerTrophies = team.beerTrophies || 'None';
+    const beerTrophiesValue = String(team.beerTrophies || '').trim();
+    const beerTrophies = beerTrophiesValue || 'None';
     const mulliganLabel = team.mulligan ? '✅' : '❎';
     const teamPanelId = `team-panel-${index}`;
     const teamInsight = buildTeamInsight(team, index, leaderPoints);
@@ -314,9 +331,9 @@ function renderTeams(payload, isStale = false) {
                     <p class="text-[10px] font-bold uppercase tracking-[0.22em] text-pink-500/80">Turkey Watch</p>
                     <p class="text-base font-black text-slate-950 dark:text-white">${turkeyWatch}</p>
                   </div>
-                  <div class="team-stat-row">
+                  <div class="team-stat-row" data-admin-edit-field="beerTrophies" data-admin-edit-label="Beer Trophies" data-team-name="${escapeHtml(team.teamName)}" data-current-value="${escapeHtml(beerTrophiesValue)}" title="Press and hold to edit Beer Trophies">
                     <p class="text-[10px] font-bold uppercase tracking-[0.22em] text-pink-500/80">Beer Trophies</p>
-                    <p class="text-base font-black text-slate-950 dark:text-white">${beerTrophies}</p>
+                    <p class="text-base font-black text-slate-950 dark:text-white">${escapeHtml(beerTrophies)}</p>
                   </div>
                 </div>
                 <p class="pt-4 text-xs font-semibold leading-relaxed text-slate-600 dark:text-white/80">${ownerName} has ${teamInsight}</p>
@@ -386,6 +403,110 @@ function setupStandingsAccordion() {
     if (!tile || event.target.closest('a, button, input, select, textarea, summary')) return;
     toggleTile(tile);
   });
+}
+
+function clearAdminEditTimer() {
+  if (adminEditTimer) {
+    window.clearTimeout(adminEditTimer);
+    adminEditTimer = null;
+  }
+  adminEditStart = null;
+}
+
+function getAdminCode() {
+  if (adminCodeCache) return adminCodeCache;
+  const entered = window.prompt('Enter the Always Smooth admin code to update league data.');
+  if (entered === null) return '';
+  adminCodeCache = entered.trim();
+  return adminCodeCache;
+}
+
+async function updateEditableTeamField(target) {
+  if (!target) return;
+  const teamName = target.dataset.teamName || '';
+  const field = target.dataset.adminEditField || '';
+  const label = target.dataset.adminEditLabel || 'Team Field';
+  const currentValue = target.dataset.currentValue || '';
+  const adminCode = getAdminCode();
+  if (!adminCode) return;
+
+  const nextValue = window.prompt(`Update ${label} for ${teamName}`, currentValue);
+  if (nextValue === null) return;
+
+  target.setAttribute('aria-busy', 'true');
+  setBanner(`Updating ${label} for ${teamName}...`);
+
+  try {
+    const payload = await fetchJsonp('api/update-team-field', {
+      teamName,
+      field,
+      value: nextValue.trim(),
+      adminCode
+    });
+    if (!payload || payload.ok !== true) {
+      throw new Error(payload?.error || 'Update failed.');
+    }
+
+    await loadStandings();
+    setBanner(`${label} updated for ${teamName}.`);
+  } catch (error) {
+    console.error(error);
+    if (/admin code/i.test(error.message || '')) {
+      adminCodeCache = '';
+    }
+    setBanner(`Update failed: ${error.message || error}`, 'error');
+  } finally {
+    target.removeAttribute('aria-busy');
+  }
+}
+
+function setupAdminEditing() {
+  const grid = document.getElementById('standings-grid');
+  if (!grid || grid.dataset.adminEditingBound === 'true') return;
+
+  grid.dataset.adminEditingBound = 'true';
+  grid.addEventListener('pointerdown', (event) => {
+    const target = event.target.closest('[data-admin-edit-field]');
+    if (!target || (event.pointerType === 'mouse' && event.button !== 0)) return;
+
+    clearAdminEditTimer();
+    adminEditActivated = false;
+    adminEditStart = {
+      x: event.clientX,
+      y: event.clientY
+    };
+    adminEditTimer = window.setTimeout(() => {
+      adminEditTimer = null;
+      adminEditActivated = true;
+      updateEditableTeamField(target);
+    }, ADMIN_EDIT_HOLD_MS);
+  });
+
+  grid.addEventListener('pointermove', (event) => {
+    if (!adminEditStart) return;
+    const movedX = Math.abs(event.clientX - adminEditStart.x);
+    const movedY = Math.abs(event.clientY - adminEditStart.y);
+    if (movedX > 12 || movedY > 12) {
+      clearAdminEditTimer();
+    }
+  });
+
+  ['pointerup', 'pointercancel', 'pointerleave'].forEach((eventName) => {
+    grid.addEventListener(eventName, clearAdminEditTimer);
+  });
+
+  grid.addEventListener('contextmenu', (event) => {
+    if (event.target.closest('[data-admin-edit-field]')) {
+      event.preventDefault();
+    }
+  });
+
+  grid.addEventListener('click', (event) => {
+    if (!adminEditActivated || !event.target.closest('[data-admin-edit-field]')) return;
+    event.preventDefault();
+    event.stopPropagation();
+    adminEditActivated = false;
+  }, true);
 }
 async function loadConfig() {
   const cached = getCachedJson(CONFIG_CACHE_KEY);
@@ -493,6 +614,7 @@ async function bootstrap() {
   setupInstallPrompt();
   setupScrollBehavior();
   setupStandingsAccordion();
+  setupAdminEditing();
   await registerServiceWorker();
   document.getElementById('refresh-button').addEventListener('click', () => loadStandings());
   applyConfig(DEFAULT_CONFIG);

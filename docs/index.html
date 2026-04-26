@@ -327,6 +327,15 @@
             box-shadow: none;
         }
 
+        .team-stat-row[data-admin-edit-field] {
+            cursor: pointer;
+        }
+
+        .team-stat-row[data-admin-edit-field][aria-busy="true"] {
+            opacity: 0.72;
+            pointer-events: none;
+        }
+
         .team-mvp-image {
             width: 3rem;
             height: 3rem;

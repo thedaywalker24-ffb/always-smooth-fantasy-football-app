@@ -72,6 +72,14 @@ const TEAMS_MVP_IMAGE_COL = 22; // Column V (1-based)
 const TEAMS_HEADER_ROW = 2;
 /** First row of team data below the header row */
 const TEAMS_DATA_START_ROW = TEAMS_HEADER_ROW + 1;
+const ADMIN_CODE_PROPERTY = 'ALWAYS_SMOOTH_ADMIN_CODE';
+const EDITABLE_TEAM_FIELD_CONFIG = {
+  beerTrophies: {
+    label: 'Beer Trophies',
+    col: TEAMS_BEER_TROPHIES_COL,
+    maxLength: 40
+  }
+};
 
 /**
  * Pulls a Google Drive file id from share links, uc URLs, or lh3.googleusercontent.com/d/…
@@ -648,6 +656,145 @@ function createApiOutput_(payload, callbackName) {
 }
 
 /**
+ * @param {string} field
+ * @return {string}
+ */
+function normalizeEditableTeamFieldKey_(field) {
+  var normalized = String(field || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+  if (normalized === 'beertrophies') return 'beerTrophies';
+  return '';
+}
+
+/**
+ * @param {string} field
+ * @return {{key: string, label: string, col: number, maxLength: number}|null}
+ */
+function getEditableTeamFieldConfig_(field) {
+  var key = normalizeEditableTeamFieldKey_(field);
+  if (!key || !EDITABLE_TEAM_FIELD_CONFIG[key]) return null;
+  var config = EDITABLE_TEAM_FIELD_CONFIG[key];
+  return {
+    key: key,
+    label: config.label,
+    col: config.col,
+    maxLength: config.maxLength
+  };
+}
+
+/**
+ * @param {*} raw
+ * @param {{label: string, maxLength: number}} config
+ * @return {{value: string, error: string}}
+ */
+function sanitizeEditableTeamFieldValue_(raw, config) {
+  var value = raw === null || raw === undefined ? '' : String(raw).trim();
+  if (value.length > config.maxLength) {
+    return {
+      value: '',
+      error: config.label + ' must be ' + config.maxLength + ' characters or fewer.'
+    };
+  }
+  if (/^=/.test(value)) {
+    return {
+      value: '',
+      error: config.label + ' cannot start with "=".'
+    };
+  }
+  return { value: value, error: '' };
+}
+
+/**
+ * Updates one whitelisted Teams-sheet field after validating the admin code.
+ * This intentionally supports only low-risk league-maintenance fields.
+ * @param {GoogleAppsScript.Spreadsheet.Spreadsheet} spreadsheet
+ * @param {Object} params
+ * @return {Object}
+ */
+function updateTeamField_(spreadsheet, params) {
+  var fail = function (message) {
+    return {
+      ok: false,
+      error: message,
+      updatedAt: new Date().toISOString()
+    };
+  };
+
+  if (!spreadsheet) return fail('No spreadsheet is available.');
+
+  var expectedAdminCode = PropertiesService
+    .getScriptProperties()
+    .getProperty(ADMIN_CODE_PROPERTY);
+  if (!expectedAdminCode) {
+    return fail('Admin updates are not configured. Set Script Property ' + ADMIN_CODE_PROPERTY + '.');
+  }
+
+  var providedAdminCode = String(
+    params.adminCode || params.admin_code || params.code || ''
+  );
+  if (providedAdminCode !== String(expectedAdminCode)) {
+    return fail('Invalid admin code.');
+  }
+
+  var fieldConfig = getEditableTeamFieldConfig_(params.field || params.editField);
+  if (!fieldConfig) {
+    return fail('That field is not editable from the app.');
+  }
+
+  var teamName = String(params.teamName || params.team || '').trim();
+  if (!teamName) return fail('Missing team name.');
+
+  var sanitized = sanitizeEditableTeamFieldValue_(params.value, fieldConfig);
+  if (sanitized.error) return fail(sanitized.error);
+
+  var sheet = spreadsheet.getSheetByName(TEAMS_SHEET);
+  if (!sheet) return fail('Sheet "' + TEAMS_SHEET + '" was not found.');
+
+  var lastRow = sheet.getLastRow();
+  var lastCol = sheet.getLastColumn();
+  if (lastRow < TEAMS_DATA_START_ROW || lastCol < 1) {
+    return fail('Sheet "' + TEAMS_SHEET + '" has no editable team rows.');
+  }
+
+  var headers = sheet.getRange(TEAMS_HEADER_ROW, 1, 1, Math.max(lastCol, 1)).getValues()[0];
+  var pick = findTeamsSheetTeamNameColumn_(headers);
+  var nameCol1 = pick.col0 + 1;
+  var numRows = lastRow - TEAMS_DATA_START_ROW + 1;
+  var nameVals = sheet.getRange(TEAMS_DATA_START_ROW, nameCol1, numRows, 1).getValues();
+  var targetKey = normalizeTeamNameKey_(teamName);
+  var targetRow = 0;
+  for (var r = 0; r < nameVals.length; r++) {
+    if (normalizeTeamNameKey_(nameVals[r][0]) === targetKey) {
+      targetRow = TEAMS_DATA_START_ROW + r;
+    }
+  }
+
+  if (!targetRow) return fail('Team "' + teamName + '" was not found on the Teams sheet.');
+
+  var lock = LockService.getScriptLock();
+  var hasLock = false;
+  try {
+    lock.waitLock(5000);
+    hasLock = true;
+    sheet.getRange(targetRow, fieldConfig.col).setValue(sanitized.value);
+    SpreadsheetApp.flush();
+    return {
+      ok: true,
+      teamName: teamName,
+      field: fieldConfig.key,
+      label: fieldConfig.label,
+      value: sanitized.value,
+      row: targetRow,
+      column: columnIndexToA1Letter_(fieldConfig.col - 1),
+      updatedAt: new Date().toISOString()
+    };
+  } catch (err) {
+    return fail(err.message || String(err));
+  } finally {
+    if (hasLock) lock.releaseLock();
+  }
+}
+
+/**
  * Serves the league dashboard HTML as a Web App.
  * @param {Object} e Request parameters (unused; present for Web App signature).
  * @return {GoogleAppsScript.HTML.HtmlOutput}
@@ -672,6 +819,10 @@ function doGet(e) {
 
   if (path === 'league-data' || path === 'api/league-data' || apiName === 'league-data') {
     return createApiOutput_(getLeagueData(debug), callbackName);
+  }
+
+  if (path === 'update-team-field' || path === 'api/update-team-field' || apiName === 'update-team-field') {
+    return createApiOutput_(updateTeamField_(spreadsheet, params), callbackName);
   }
 
   var raw = HEADER_IMAGE_URL || '';

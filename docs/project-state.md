@@ -2,10 +2,10 @@
 
 ## Current Status
 
-* Last completed section: Team-card accordion now moves `Trophies` inline with the manager name and shows `Turkey Watch` from `Teams` column I on 2026-04-26.
+* Last completed section: Press-and-hold admin editing for `Beer Trophies` added with Apps Script admin-code validation on 2026-04-26.
 * Current section in progress: Selecting the next app feature after the standings/team-card foundation.
 * Next recommended task: Define the weekly matchups/betting sheet and Apps Script route contract before building UI.
-* Open risks: Hardcoded Apps Script deployment URL, fragile Google Sheets tab/column dependencies, fixed matchup sheet row offsets, no automated tests, and duplicated/legacy Apps Script paths.
+* Open risks: Hardcoded Apps Script deployment URL, simple JSONP/GET admin write flow, fragile Google Sheets tab/column dependencies, fixed matchup sheet row offsets, no automated tests, and duplicated/legacy Apps Script paths.
 * Most relevant files: `SKILL.md`, `docs/index.html`, `docs/app.js`, `docs/service-worker.js`, `docs/manifest.webmanifest`, `Code.js`, `index.html`, `.clasp.json`, `.claspignore`.
 
 ## App Overview
@@ -32,6 +32,7 @@ The app should complement Sleeper, not replace it. Sleeper remains the place for
 * `index.html` at repo root is an Apps Script HTML template version of the dashboard that uses `google.script.run`; it appears older than the GitHub Pages frontend but remains part of the Apps Script deployment.
 * `Code2.gs.js` contains an older/simple Sleeper players import function and may be legacy.
 * `.clasp.json` points to the Apps Script project; `.claspignore` excludes `docs/**` from Apps Script pushes.
+* Deployment sequencing is documented in `README.md` and detailed in `docs/developer-continuity.md`: validate, commit locally, `clasp push`, update the Apps Script Web App deployment, then `git push origin master` for GitHub Pages.
 
 ## Frontend / Backend Interaction Model
 
@@ -41,12 +42,13 @@ The hosted frontend in `docs/` calls a hardcoded Apps Script deployment URL:
 const API_BASE_URL = 'https://script.google.com/macros/s/AKfycbwtM_NX16wFOHssvhvP2Iw7FI_7YcVgJ9-5DNbvNOblMxifawE4R-F_eiOLU1NsEggF/exec';
 ```
 
-Because cross-origin Apps Script requests are constrained, `docs/app.js` uses JSONP. It adds `api=config` or `api=league-data` plus a generated `callback` parameter. `Code.js` validates the callback name and returns JavaScript when JSONP is requested.
+Because cross-origin Apps Script requests are constrained, `docs/app.js` uses JSONP. It adds `api=config`, `api=league-data`, or admin write route names plus a generated `callback` parameter. `Code.js` validates the callback name and returns JavaScript when JSONP is requested.
 
 Current routes handled by `Code.js#doGet`:
 
 * `api=config` / `config`: frontend branding, season, week, header image, icon URL.
 * `api=league-data` / `league-data`: standings/team cards payload.
+* `api=update-team-field` / `update-team-field`: admin-code-protected write route for whitelisted Teams-sheet fields.
 * `manifest.json`: Apps Script-served manifest payload for the Apps Script-hosted version.
 * default route: renders root `index.html` as an Apps Script template.
 
@@ -71,6 +73,10 @@ Known tabs and dependencies:
 * `B3`: week.
 * `B4`: Sleeper league ID.
 * `B5`: app icon URL.
+
+Apps Script Script Properties:
+
+* `ALWAYS_SMOOTH_ADMIN_CODE`: admin code required for app-originated write routes.
 
 `Rosters & Records` expected headers:
 
@@ -111,9 +117,11 @@ Known tabs and dependencies:
 * Team cards sorted by wins and points for.
 * Expandable standings cards with supplemental stats: team MVP, mulligan, turkey watch, beer trophies, background team image, and manager photo; trophies display inline with the manager name.
 * Expanded team-card detail panels use a light glass overlay in light mode and a darker cinematic overlay in dark mode.
+* Press-and-hold admin edit for `Beer Trophies`, writing to `Teams` column S after Apps Script admin-code validation.
 * Apps Script spreadsheet menu for league data operations.
 * Sleeper sync functions for members, records, rosters, players, matchups, and draft picks.
 * Defensive helpers for Google Drive image URLs and missing settings.
+* Documented deployment runbook for changes spanning Apps Script, GitHub Pages, and git.
 
 ## In-Progress Work
 
@@ -126,6 +134,7 @@ Known tabs and dependencies:
 
 * No automated test suite or lint/build script exists.
 * Frontend deploy URL for Apps Script is hardcoded in `docs/app.js`.
+* Admin writes use a simple JSONP/GET route protected by `ALWAYS_SMOOTH_ADMIN_CODE`; keep editable fields low-risk and whitelisted.
 * `fetchMatchupData` writes to hardcoded row `278` and reads week number from `API Data!A19`.
 * Expanded team-card styling is split between `docs/index.html` CSS overlays/row glass and `docs/app.js` rendered Tailwind text classes; keep both light/dark paths aligned.
 * Root `index.html` and `docs/index.html` can drift because one is Apps Script templated and one is GitHub Pages static.
