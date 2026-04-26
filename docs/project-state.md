@@ -2,9 +2,9 @@
 
 ## Current Status
 
-* Last completed section: Press-and-hold admin editing for `Beer Trophies` added with Apps Script admin-code validation on 2026-04-26.
-* Current section in progress: Selecting the next app feature after the standings/team-card foundation.
-* Next recommended task: Define the weekly matchups/betting sheet and Apps Script route contract before building UI.
+* Last completed section: Bottom Home/Betting tab overlay added to the GitHub Pages frontend on 2026-04-26.
+* Current section in progress: Betting feature foundation; the Betting tab exists but intentionally has no content or data binding yet.
+* Next recommended task: Define the weekly bets Google Sheets schema and Apps Script route contract, then render the first Betting tab data.
 * Open risks: Hardcoded Apps Script deployment URL, simple JSONP/GET admin write flow, fragile Google Sheets tab/column dependencies, fixed matchup sheet row offsets, no automated tests, and duplicated/legacy Apps Script paths.
 * Most relevant files: `SKILL.md`, `docs/index.html`, `docs/app.js`, `docs/service-worker.js`, `docs/manifest.webmanifest`, `Code.js`, `index.html`, `.clasp.json`, `.claspignore`.
 
@@ -118,6 +118,7 @@ Apps Script Script Properties:
 * Expandable standings cards with supplemental stats: team MVP, mulligan, turkey watch, beer trophies, background team image, and manager photo; trophies display inline with the manager name.
 * Expanded team-card detail panels use a light glass overlay in light mode and a darker cinematic overlay in dark mode.
 * Press-and-hold admin edit for `Beer Trophies`, writing to `Teams` column S after Apps Script admin-code validation.
+* Fixed bottom tab overlay for `Home` and `Betting`; Home wraps the current standings dashboard and Betting is a blank starter panel.
 * Apps Script spreadsheet menu for league data operations.
 * Sleeper sync functions for members, records, rosters, players, matchups, and draft picks.
 * Defensive helpers for Google Drive image URLs and missing settings.
@@ -127,7 +128,7 @@ Apps Script Script Properties:
 
 * Recent work is focused on the standings team-card accordion, including mode-aware expanded-panel styling.
 * Weekly matchups are represented in spreadsheet import logic but not yet surfaced as a real frontend feature.
-* Weekly betting is part of the product workflow but does not appear implemented in the current frontend.
+* Weekly betting now has a frontend tab placeholder but no sheet/API contract or rendered betting data yet.
 * Draft capital/draft results are imported in Apps Script but only represented by placeholder/static UI in the frontend.
 
 ## Known Issues
@@ -150,8 +151,8 @@ Apps Script Script Properties:
 
 ## Recommended Next 3 Steps
 
-1. Define the weekly betting Google Sheets schema and Apps Script route contract before building UI.
-2. Expose matchup data through a read-only `api/matchups` or expanded `api/league-data` payload, then render it in `docs/`.
+1. Define the weekly bets Google Sheets schema and Apps Script route contract.
+2. Expose betting and matchup context through a read-only route or expanded `api/league-data` payload, then render it inside the existing Betting tab.
 3. Clean up legacy/duplicated Apps Script paths only after current deployed behavior is confirmed.
 
 ## Notes For Future Sessions

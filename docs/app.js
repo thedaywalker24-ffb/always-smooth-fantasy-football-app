@@ -600,6 +600,51 @@ function setupScrollBehavior() {
   }, { passive: true });
 }
 
+function setActiveTab(tabName, shouldScroll = false) {
+  const activeTab = tabName === 'betting' ? 'betting' : 'home';
+  document.querySelectorAll('[data-tab-panel]').forEach((panel) => {
+    panel.hidden = panel.dataset.tabPanel !== activeTab;
+  });
+
+  document.querySelectorAll('[data-app-tab]').forEach((button) => {
+    const isActive = button.dataset.appTab === activeTab;
+    button.setAttribute('aria-selected', isActive ? 'true' : 'false');
+    button.tabIndex = isActive ? 0 : -1;
+  });
+
+  if (shouldScroll) {
+    const main = document.getElementById('app-main');
+    if (main) {
+      main.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }
+}
+
+function setupAppTabs() {
+  const tabs = Array.from(document.querySelectorAll('[data-app-tab]'));
+  if (!tabs.length) return;
+
+  tabs.forEach((button, index) => {
+    button.addEventListener('click', () => setActiveTab(button.dataset.appTab, true));
+    button.addEventListener('keydown', (event) => {
+      const keyActions = {
+        ArrowLeft: index - 1,
+        ArrowRight: index + 1,
+        Home: 0,
+        End: tabs.length - 1
+      };
+      if (!(event.key in keyActions)) return;
+
+      event.preventDefault();
+      const nextIndex = (keyActions[event.key] + tabs.length) % tabs.length;
+      tabs[nextIndex].focus();
+      setActiveTab(tabs[nextIndex].dataset.appTab, true);
+    });
+  });
+
+  setActiveTab('home');
+}
+
 async function registerServiceWorker() {
   if (!('serviceWorker' in navigator)) return;
   try {
@@ -613,6 +658,7 @@ async function bootstrap() {
   setupThemeControls();
   setupInstallPrompt();
   setupScrollBehavior();
+  setupAppTabs();
   setupStandingsAccordion();
   setupAdminEditing();
   await registerServiceWorker();

@@ -90,6 +90,7 @@ Admin writes from the GitHub Pages app use a simple admin-code gate because the 
 * Expanded team-card detail styling is split between `docs/index.html` CSS overlays/row glass and `docs/app.js` rendered Tailwind text classes; update both when changing light/dark treatment.
 * `docs/service-worker.js` caches app shell files; update `CACHE_NAME` when changing cached assets in a way that must invalidate old clients.
 * Root `index.html` and `docs/index.html` are separate frontends and can drift.
+* The GitHub Pages frontend has a fixed bottom tab overlay in `docs/index.html`; `docs/app.js#setActiveTab` toggles `[data-tab-panel]` views. The `Betting` panel is intentionally blank until a Google Sheets/API data contract exists.
 
 ## Don't Do This
 
@@ -106,8 +107,8 @@ Admin writes from the GitHub Pages app use a simple admin-code gate because the 
 ## Handoff Notes
 
 * The continuity system is now bootstrapped; future skill maintenance should tighten existing artifacts rather than expanding volume by default.
-* The newest visible work is standings card accordion polish, including mode-aware expanded-panel overlays.
-* The next product-shaping feature is likely weekly matchups and betting.
+* The newest visible work is the bottom `Home`/`Betting` tab overlay in the GitHub Pages frontend. Home contains the existing standings dashboard; Betting is a blank starter panel.
+* The next product-shaping feature is the Google Sheets-backed weekly betting contract and first Betting tab render.
 * When adding a new frontend feature, first decide whether its data should be part of `league-data` or exposed by a new Apps Script `api` route.
 * For betting, prefer a Google Sheets-backed schema that can be audited and edited by the league manager.
 * Use defensive UI for missing/empty sheet values because league spreadsheets will be manually maintained.
@@ -128,4 +129,5 @@ Admin writes from the GitHub Pages app use a simple admin-code gate because the 
 * League-specific language and visuals are acceptable and useful.
 * Prefer clarity over generic configurability.
 * Weekly betting should be easy to understand, hard to accidentally misuse, and auditable in Google Sheets.
+* Keep the Betting tab blank until the sheet schema and Apps Script route are explicit; avoid hardcoding sample bets that could be mistaken for real league data.
 * Standings, matchup, and betting views should make Sleeper data and supplemental league rules feel like one coherent league hub.
