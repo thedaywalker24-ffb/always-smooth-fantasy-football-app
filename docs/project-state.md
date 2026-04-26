@@ -2,7 +2,7 @@
 
 ## Current Status
 
-* Last completed section: Expanded team-card accordion styling now uses mode-aware light/dark overlays on 2026-04-26.
+* Last completed section: Team-card accordion now moves `Trophies` inline with the manager name and shows `Turkey Watch` from `Teams` column I on 2026-04-26.
 * Current section in progress: Selecting the next app feature after the standings/team-card foundation.
 * Next recommended task: Define the weekly matchups/betting sheet and Apps Script route contract before building UI.
 * Open risks: Hardcoded Apps Script deployment URL, fragile Google Sheets tab/column dependencies, fixed matchup sheet row offsets, no automated tests, and duplicated/legacy Apps Script paths.
@@ -92,6 +92,7 @@ Known tabs and dependencies:
 * Team name column is detected by header, falling back to column D when needed.
 * Column E: mulligan.
 * Column H: manager photo.
+* Column I: turkey watch.
 * Column L: trophies.
 * Column M: Sleeper team image.
 * Column Q: team MVP name.
@@ -108,7 +109,7 @@ Known tabs and dependencies:
 * Live config load from Apps Script with fallback defaults.
 * Live standings load from Apps Script with local cached fallback.
 * Team cards sorted by wins and points for.
-* Expandable standings cards with supplemental stats: team MVP, mulligan, trophies, beer trophies, background team image, and manager photo.
+* Expandable standings cards with supplemental stats: team MVP, mulligan, turkey watch, beer trophies, background team image, and manager photo; trophies display inline with the manager name.
 * Expanded team-card detail panels use a light glass overlay in light mode and a darker cinematic overlay in dark mode.
 * Apps Script spreadsheet menu for league data operations.
 * Sleeper sync functions for members, records, rosters, players, matchups, and draft picks.

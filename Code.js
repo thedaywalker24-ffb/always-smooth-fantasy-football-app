@@ -62,6 +62,7 @@ const ROSTERS_DISPLAY_NAME_COL_FALLBACK = 9;
 const TEAMS_SHEET = 'Teams';
 const TEAMS_MANAGER_PHOTO_COL = 8; // Column H (1-based)
 const TEAMS_MULLIGAN_COL = 5; // Column E (1-based)
+const TEAMS_TURKEY_WATCH_COL = 9; // Column I (1-based)
 const TEAMS_TROPHIES_COL = 12; // Column L (1-based)
 const TEAMS_SLEEPER_TEAM_IMAGE_COL = 13; // Column M (1-based)
 const TEAMS_MVP_NAME_COL = 17; // Column Q (1-based)
@@ -453,6 +454,7 @@ function buildTeamsSheetDataMap_(spreadsheet) {
     teamsSheetName: TEAMS_SHEET,
     managerPhotoColumn: 'H',
     mulliganColumn: 'E',
+    turkeyWatchColumn: 'I',
     trophiesColumn: 'L',
     sleeperTeamImageColumn: 'M',
     teamMvpNameColumn: 'Q',
@@ -465,6 +467,7 @@ function buildTeamsSheetDataMap_(spreadsheet) {
     rowsWithTeamName: 0,
     rowsWithManagerPhoto: 0,
     rowsWithSleeperTeamImage: 0,
+    rowsWithTurkeyWatch: 0,
     rowsWithTrophies: 0,
     rowsWithBeerTrophies: 0,
     rowsWithMulliganTrue: 0,
@@ -521,6 +524,7 @@ function buildTeamsSheetDataMap_(spreadsheet) {
   var nameVals = sheet.getRange(TEAMS_DATA_START_ROW, nameCol1, numRows, 1).getValues();
   var managerPhotoVals = sheet.getRange(TEAMS_DATA_START_ROW, TEAMS_MANAGER_PHOTO_COL, numRows, 1).getValues();
   var mulliganVals = sheet.getRange(TEAMS_DATA_START_ROW, TEAMS_MULLIGAN_COL, numRows, 1).getValues();
+  var turkeyWatchVals = sheet.getRange(TEAMS_DATA_START_ROW, TEAMS_TURKEY_WATCH_COL, numRows, 1).getDisplayValues();
   var trophiesVals = sheet.getRange(TEAMS_DATA_START_ROW, TEAMS_TROPHIES_COL, numRows, 1).getDisplayValues();
   var sleeperTeamImageVals = sheet.getRange(TEAMS_DATA_START_ROW, TEAMS_SLEEPER_TEAM_IMAGE_COL, numRows, 1).getValues();
   var teamMvpNameVals = sheet.getRange(TEAMS_DATA_START_ROW, TEAMS_MVP_NAME_COL, numRows, 1).getDisplayValues();
@@ -534,6 +538,7 @@ function buildTeamsSheetDataMap_(spreadsheet) {
     var teamName = nameVals[r][0];
     var rawManagerPhoto = managerPhotoVals[r][0];
     var rawMulligan = mulliganVals[r][0];
+    var rawTurkeyWatch = turkeyWatchVals[r][0];
     var rawTrophies = trophiesVals[r][0];
     var rawSleeperTeamImage = sleeperTeamImageVals[r][0];
     var rawTeamMvpName = teamMvpNameVals[r][0];
@@ -542,6 +547,7 @@ function buildTeamsSheetDataMap_(spreadsheet) {
     var hasName = !(teamName === '' || teamName === null || teamName === undefined);
     var hasManagerPhoto = !(rawManagerPhoto === '' || rawManagerPhoto === null || rawManagerPhoto === undefined);
     var hasSleeperTeamImage = !(rawSleeperTeamImage === '' || rawSleeperTeamImage === null || rawSleeperTeamImage === undefined);
+    var hasTurkeyWatch = !(rawTurkeyWatch === '' || rawTurkeyWatch === null || rawTurkeyWatch === undefined);
     var hasTrophies = !(rawTrophies === '' || rawTrophies === null || rawTrophies === undefined);
     var hasBeerTrophies = !(rawBeerTrophies === '' || rawBeerTrophies === null || rawBeerTrophies === undefined);
     var hasTeamMvpName = !(rawTeamMvpName === '' || rawTeamMvpName === null || rawTeamMvpName === undefined);
@@ -550,6 +556,7 @@ function buildTeamsSheetDataMap_(spreadsheet) {
     if (hasName) diag.rowsWithTeamName++;
     if (hasManagerPhoto) diag.rowsWithManagerPhoto++;
     if (hasSleeperTeamImage) diag.rowsWithSleeperTeamImage++;
+    if (hasTurkeyWatch) diag.rowsWithTurkeyWatch++;
     if (hasTrophies) diag.rowsWithTrophies++;
     if (hasBeerTrophies) diag.rowsWithBeerTrophies++;
     if (hasTeamMvpName) diag.rowsWithTeamMvpName++;
@@ -569,6 +576,7 @@ function buildTeamsSheetDataMap_(spreadsheet) {
     var teamMvpImageUrl = hasTeamMvpImage && looksLikePhotoUrl_(String(rawTeamMvpImage).trim())
       ? formatDriveUrl(String(rawTeamMvpImage).trim())
       : '';
+    var turkeyWatch = hasTurkeyWatch ? String(rawTurkeyWatch).trim() : '';
     var trophies = hasTrophies ? String(rawTrophies).trim() : '';
     var beerTrophies = hasBeerTrophies ? String(rawBeerTrophies).trim() : '';
 
@@ -577,6 +585,7 @@ function buildTeamsSheetDataMap_(spreadsheet) {
       sleeperTeamImageUrl: sleeperTeamImage,
       teamMvpName: teamMvpName,
       teamMvpImageUrl: teamMvpImageUrl,
+      turkeyWatch: turkeyWatch,
       trophies: trophies,
       beerTrophies: beerTrophies,
       mulligan: mulligan
@@ -690,7 +699,7 @@ function doGet(e) {
  * Returns team standings from the "Rosters & Records" sheet for the client UI.
  * Column positions are resolved from the header row so minor layout changes stay safe.
  * @param {boolean} [includeDiagnostics] When true, payload includes `diagnostics` for photo/sheet troubleshooting (use ?debug=1 on the web app URL).
- * @return {{ teams: Array<{teamName: string, realName: string, record: string, streak: string, pointsFor: number, photoUrl: string, sleeperTeamImageUrl: string, teamMvpName: string, teamMvpImageUrl: string, trophies: string, beerTrophies: string, mulligan: boolean}>, updatedAt: string, error?: string, diagnostics?: Object }}
+ * @return {{ teams: Array<{teamName: string, realName: string, record: string, streak: string, pointsFor: number, photoUrl: string, sleeperTeamImageUrl: string, teamMvpName: string, teamMvpImageUrl: string, turkeyWatch: string, trophies: string, beerTrophies: string, mulligan: boolean}>, updatedAt: string, error?: string, diagnostics?: Object }}
  */
 function getLeagueData(includeDiagnostics) {
   const wantDiag = includeDiagnostics === true;
@@ -801,6 +810,7 @@ function getLeagueData(includeDiagnostics) {
       const teamMvpName = teamSheetData && teamSheetData.teamMvpName ? teamSheetData.teamMvpName : '';
       const teamMvpImageUrl =
         teamSheetData && teamSheetData.teamMvpImageUrl ? teamSheetData.teamMvpImageUrl : '';
+      const turkeyWatch = teamSheetData && teamSheetData.turkeyWatch ? teamSheetData.turkeyWatch : '';
       const trophies = teamSheetData && teamSheetData.trophies ? teamSheetData.trophies : '';
       const beerTrophies = teamSheetData && teamSheetData.beerTrophies ? teamSheetData.beerTrophies : '';
       const mulligan = teamSheetData ? teamSheetData.mulligan === true : false;
@@ -820,6 +830,7 @@ function getLeagueData(includeDiagnostics) {
         sleeperTeamImageUrl: sleeperTeamImageUrl,
         teamMvpName: teamMvpName,
         teamMvpImageUrl: teamMvpImageUrl,
+        turkeyWatch: turkeyWatch,
         trophies: trophies,
         beerTrophies: beerTrophies,
         mulligan: mulligan

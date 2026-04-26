@@ -46,7 +46,7 @@
 * `Rosters & Records` `Streak` falls back to column G if the header is missing.
 * `Rosters & Records` display/real name resolution prefers headers like `Display Name`, then falls back to column J.
 * `Teams` supplemental data expects headers on row 2 and data from row 3.
-* `Teams` supplemental columns are fixed for mulligan, manager photo, trophies, Sleeper team image, team MVP name, beer trophies, and team MVP image.
+* `Teams` supplemental columns are fixed for mulligan, manager photo, turkey watch, trophies, Sleeper team image, team MVP name, beer trophies, and team MVP image.
 * `Teams` team-name matching is normalized lower-case string matching against `Rosters & Records` team names.
 * Google Drive image links are rewritten to `https://lh3.googleusercontent.com/d/...=w1920`; Drive sharing/permissions can still break images.
 * `fetchMatchupData` depends on `API Data!A19` and writes matchup data starting at row `278`.

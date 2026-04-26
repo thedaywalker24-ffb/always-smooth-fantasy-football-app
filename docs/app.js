@@ -258,7 +258,9 @@ function renderTeams(payload, isStale = false) {
     const sleeperTeamImageUrl = team.sleeperTeamImageUrl || '';
     const teamMvpName = team.teamMvpName || 'Not set';
     const teamMvpImageUrl = team.teamMvpImageUrl || '';
-    const trophies = team.trophies || 'None';
+    const trophies = String(team.trophies || '').trim();
+    const ownerTrophiesMarkup = trophies ? `<span class="shrink-0">${trophies}</span>` : '';
+    const turkeyWatch = team.turkeyWatch || 'None';
     const beerTrophies = team.beerTrophies || 'None';
     const mulliganLabel = team.mulligan ? '✅' : '❎';
     const teamPanelId = `team-panel-${index}`;
@@ -277,7 +279,7 @@ function renderTeams(payload, isStale = false) {
             </div>
             <div class="min-w-0 flex-1">
               <h3 class="truncate text-lg font-black italic uppercase leading-none tracking-tight text-slate-900 transition-colors group-hover:text-pink-500 dark:text-white">${team.teamName}</h3>
-              <p class="mt-2 truncate text-sm font-semibold text-pink-500 dark:text-pink-400">${ownerName}</p>
+              <p class="mt-2 flex min-w-0 items-center gap-1 text-sm font-semibold text-pink-500 dark:text-pink-400"><span class="truncate">${ownerName}</span>${ownerTrophiesMarkup}</p>
             </div>
           </div>
 
@@ -309,8 +311,8 @@ function renderTeams(payload, isStale = false) {
                     <p class="text-base font-black text-slate-950 dark:text-white">${mulliganLabel}</p>
                   </div>
                   <div class="team-stat-row">
-                    <p class="text-[10px] font-bold uppercase tracking-[0.22em] text-pink-500/80">Trophies</p>
-                    <p class="text-base font-black text-slate-950 dark:text-white">${trophies}</p>
+                    <p class="text-[10px] font-bold uppercase tracking-[0.22em] text-pink-500/80">Turkey Watch</p>
+                    <p class="text-base font-black text-slate-950 dark:text-white">${turkeyWatch}</p>
                   </div>
                   <div class="team-stat-row">
                     <p class="text-[10px] font-bold uppercase tracking-[0.22em] text-pink-500/80">Beer Trophies</p>
