@@ -2,7 +2,7 @@
 
 ## Current Status
 
-* Last completed section: Root `SKILL.md` canonical entrypoint added to the lightweight continuity system on 2026-04-26.
+* Last completed section: Expanded team-card accordion styling now uses mode-aware light/dark overlays on 2026-04-26.
 * Current section in progress: Selecting the next app feature after the standings/team-card foundation.
 * Next recommended task: Define the weekly matchups/betting sheet and Apps Script route contract before building UI.
 * Open risks: Hardcoded Apps Script deployment URL, fragile Google Sheets tab/column dependencies, fixed matchup sheet row offsets, no automated tests, and duplicated/legacy Apps Script paths.
@@ -109,13 +109,14 @@ Known tabs and dependencies:
 * Live standings load from Apps Script with local cached fallback.
 * Team cards sorted by wins and points for.
 * Expandable standings cards with supplemental stats: team MVP, mulligan, trophies, beer trophies, background team image, and manager photo.
+* Expanded team-card detail panels use a light glass overlay in light mode and a darker cinematic overlay in dark mode.
 * Apps Script spreadsheet menu for league data operations.
 * Sleeper sync functions for members, records, rosters, players, matchups, and draft picks.
 * Defensive helpers for Google Drive image URLs and missing settings.
 
 ## In-Progress Work
 
-* Recent git history is focused on "add accordion to team tiles", suggesting the standings card expansion interaction is the newest active work.
+* Recent work is focused on the standings team-card accordion, including mode-aware expanded-panel styling.
 * Weekly matchups are represented in spreadsheet import logic but not yet surfaced as a real frontend feature.
 * Weekly betting is part of the product workflow but does not appear implemented in the current frontend.
 * Draft capital/draft results are imported in Apps Script but only represented by placeholder/static UI in the frontend.
@@ -125,6 +126,7 @@ Known tabs and dependencies:
 * No automated test suite or lint/build script exists.
 * Frontend deploy URL for Apps Script is hardcoded in `docs/app.js`.
 * `fetchMatchupData` writes to hardcoded row `278` and reads week number from `API Data!A19`.
+* Expanded team-card styling is split between `docs/index.html` CSS overlays/row glass and `docs/app.js` rendered Tailwind text classes; keep both light/dark paths aligned.
 * Root `index.html` and `docs/index.html` can drift because one is Apps Script templated and one is GitHub Pages static.
 * `Code2.gs.js` appears to duplicate/precede the more complete `fetchSleeperPlayers` implementation in `Code.js`.
 * Apps Script functions use a mix of modern JS, legacy comments, and some stale placeholders.

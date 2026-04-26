@@ -264,7 +264,7 @@ function renderTeams(payload, isStale = false) {
     const teamPanelId = `team-panel-${index}`;
     const teamInsight = buildTeamInsight(team, index, leaderPoints);
     const teamExpandCardStyle = sleeperTeamImageUrl
-      ? `style="background-image: linear-gradient(180deg, rgba(253, 242, 248, 0.22), rgba(15, 23, 42, 0.22)), url('${sleeperTeamImageUrl.replace(/'/g, '%27')}');"`
+      ? `style="background-image: url('${sleeperTeamImageUrl.replace(/'/g, '%27')}');"`
       : '';
     return `
       <article class="owner-tile glass-panel group relative overflow-hidden rounded-3xl border border-slate-200 bg-white/90 p-6 shadow-sm hover:border-pink-500/40 hover:shadow-xl dark:border-pink-500/10 dark:bg-slate-900/70" data-team-tile data-expanded="false">
@@ -295,29 +295,29 @@ function renderTeams(payload, isStale = false) {
                   <div class="team-stat-row">
                     <div>
                       <p class="text-[10px] font-bold uppercase tracking-[0.22em] text-pink-500/80">Team MVP</p>
-                      <p class="mt-1 text-sm font-black text-white">${teamMvpName}</p>
+                      <p class="mt-1 text-sm font-black text-slate-950 dark:text-white">${teamMvpName}</p>
                     </div>
                     <div class="shrink-0">
                       ${teamMvpImageUrl
                         ? `<img src="${teamMvpImageUrl}" alt="${team.teamName} MVP" class="team-mvp-image" onerror="this.classList.add('hidden');this.nextElementSibling.classList.remove('hidden');">
-                           <span class="hidden text-sm font-black text-white/70">N/A</span>`
-                        : `<span class="text-sm font-black text-white/70">N/A</span>`}
+                           <span class="hidden text-sm font-black text-slate-500 dark:text-white/70">N/A</span>`
+                        : `<span class="text-sm font-black text-slate-500 dark:text-white/70">N/A</span>`}
                     </div>
                   </div>
                   <div class="team-stat-row">
                     <p class="text-[10px] font-bold uppercase tracking-[0.22em] text-pink-500/80">Mulligan</p>
-                    <p class="text-base font-black text-white">${mulliganLabel}</p>
+                    <p class="text-base font-black text-slate-950 dark:text-white">${mulliganLabel}</p>
                   </div>
                   <div class="team-stat-row">
                     <p class="text-[10px] font-bold uppercase tracking-[0.22em] text-pink-500/80">Trophies</p>
-                    <p class="text-base font-black text-white">${trophies}</p>
+                    <p class="text-base font-black text-slate-950 dark:text-white">${trophies}</p>
                   </div>
                   <div class="team-stat-row">
                     <p class="text-[10px] font-bold uppercase tracking-[0.22em] text-pink-500/80">Beer Trophies</p>
-                    <p class="text-base font-black text-white">${beerTrophies}</p>
+                    <p class="text-base font-black text-slate-950 dark:text-white">${beerTrophies}</p>
                   </div>
                 </div>
-                <p class="pt-4 text-xs font-semibold leading-relaxed text-white/78">${ownerName} has ${teamInsight}</p>
+                <p class="pt-4 text-xs font-semibold leading-relaxed text-slate-600 dark:text-white/80">${ownerName} has ${teamInsight}</p>
                 </div>
               </div>
             </div>

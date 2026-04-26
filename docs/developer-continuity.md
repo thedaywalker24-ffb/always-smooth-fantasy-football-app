@@ -52,6 +52,7 @@
 * `fetchMatchupData` depends on `API Data!A19` and writes matchup data starting at row `278`.
 * `fetchAndPopulateRosters` depends on `Sleeper Players` having `Player ID` and `Full Name` headers.
 * `fetchDraftPicksData` hardcodes Sleeper draft IDs for 2023, 2024, and 2025.
+* Expanded team-card detail styling is split between `docs/index.html` CSS overlays/row glass and `docs/app.js` rendered Tailwind text classes; update both when changing light/dark treatment.
 * `docs/service-worker.js` caches app shell files; update `CACHE_NAME` when changing cached assets in a way that must invalidate old clients.
 * Root `index.html` and `docs/index.html` are separate frontends and can drift.
 
@@ -70,7 +71,7 @@
 ## Handoff Notes
 
 * The continuity system is now bootstrapped; future skill maintenance should tighten existing artifacts rather than expanding volume by default.
-* The newest visible work appears to be standings card accordion behavior.
+* The newest visible work is standings card accordion polish, including mode-aware expanded-panel overlays.
 * The next product-shaping feature is likely weekly matchups and betting.
 * When adding a new frontend feature, first decide whether its data should be part of `league-data` or exposed by a new Apps Script `api` route.
 * For betting, prefer a Google Sheets-backed schema that can be audited and edited by the league manager.
