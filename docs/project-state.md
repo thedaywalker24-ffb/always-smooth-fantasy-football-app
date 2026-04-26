@@ -2,11 +2,11 @@
 
 ## Current Status
 
-* Last completed section: Lightweight repo-specific skill/continuity system v1 reviewed and tightened on 2026-04-26.
+* Last completed section: Root `SKILL.md` canonical entrypoint added to the lightweight continuity system on 2026-04-26.
 * Current section in progress: Selecting the next app feature after the standings/team-card foundation.
 * Next recommended task: Define the weekly matchups/betting sheet and Apps Script route contract before building UI.
 * Open risks: Hardcoded Apps Script deployment URL, fragile Google Sheets tab/column dependencies, fixed matchup sheet row offsets, no automated tests, and duplicated/legacy Apps Script paths.
-* Most relevant files: `docs/index.html`, `docs/app.js`, `docs/service-worker.js`, `docs/manifest.webmanifest`, `Code.js`, `index.html`, `.clasp.json`, `.claspignore`.
+* Most relevant files: `SKILL.md`, `docs/index.html`, `docs/app.js`, `docs/service-worker.js`, `docs/manifest.webmanifest`, `Code.js`, `index.html`, `.clasp.json`, `.claspignore`.
 
 ## App Overview
 
@@ -23,7 +23,7 @@ The app should complement Sleeper, not replace it. Sleeper remains the place for
 
 ## Current Architecture Summary
 
-* The repo-specific skill system is intentionally lightweight and lives in `README.md`, this file, `docs/developer-continuity.md`, and the two prompt files in `prompts/`.
+* The repo-specific skill system is intentionally lightweight. `SKILL.md` is the canonical entrypoint and points into `README.md`, this file, `docs/developer-continuity.md`, and the two prompt files in `prompts/`.
 * `docs/` is the current GitHub Pages frontend.
 * `docs/index.html` contains the app shell, Tailwind CDN setup, custom CSS, splash/install UI, standings container, and secondary informational cards.
 * `docs/app.js` is vanilla JS that fetches Apps Script data via JSONP, caches config/data in `localStorage`, renders standings cards, and controls theming/install behavior.
@@ -100,7 +100,7 @@ Known tabs and dependencies:
 
 ## Completed Sections / Implemented Features
 
-* Repo continuity/skill system v1: official artifacts exist and define the operating manual, current state, startup prompt, and skill-maintenance prompt.
+* Repo continuity/skill system v1: root `SKILL.md` and official artifacts exist and define the entrypoint, operating manual, current state, startup prompt, and skill-maintenance prompt.
 * GitHub Pages static frontend for the app shell.
 * PWA metadata, app icons, install prompt handling, and service worker caching.
 * Light/dark/system theme toggle with local preference.
@@ -144,4 +144,4 @@ Known tabs and dependencies:
 
 ## Notes For Future Sessions
 
-Start every session by reading this file, `docs/developer-continuity.md`, and the prompt files. Then inspect `git status`, `docs/app.js`, and relevant `Code.js` sections before making changes. Do not create duplicate continuity docs; improve the five official artifacts when new reusable project knowledge is learned.
+Start every session by reading `SKILL.md`, this file, `docs/developer-continuity.md`, and the prompt files. Then inspect `git status`, `docs/app.js`, and relevant `Code.js` sections before making changes. Do not create duplicate continuity docs; improve the official artifacts when new reusable project knowledge is learned.

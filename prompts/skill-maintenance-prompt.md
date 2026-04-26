@@ -4,11 +4,11 @@ Use this prompt when maintaining the repo's continuity system, operating manual,
 
 Goal: keep future sessions fast, accurate, and consistent with the current Always Smooth Fantasy Football App architecture.
 
-Smallest useful version: maintain only the official artifacts unless the user explicitly asks for a packaged Codex skill or another docs layer.
+Smallest useful version: maintain only the official artifacts unless the user explicitly asks for another docs layer.
 
 Maintenance workflow:
 
-1. Read `README.md`, `docs/project-state.md`, `docs/developer-continuity.md`, and both prompt files.
+1. Read `SKILL.md`, `README.md`, `docs/project-state.md`, `docs/developer-continuity.md`, and both prompt files.
 2. Inspect recent code changes and `git status`.
 3. Identify whether any completed work changed product behavior, architecture, setup, deployment, API routes, Google Sheets schema, or fragile assumptions.
 4. Update `docs/project-state.md` first, especially the pinned `Current Status` section.
@@ -35,5 +35,5 @@ Guardrails:
 * Do not remove useful historical context unless it is obsolete and replaced with clearer current truth.
 * Do not let prompt/docs drift away from code reality.
 * Do not create duplicate continuity docs if an existing file can be updated.
-* Do not create a separate `SKILL.md` package for this repo-local continuity layer unless explicitly requested.
+* Keep root `SKILL.md` as a concise entrypoint; do not create additional packaged skill files unless explicitly requested.
 * Keep docs compact and high-signal; future agents should be able to rehydrate quickly.

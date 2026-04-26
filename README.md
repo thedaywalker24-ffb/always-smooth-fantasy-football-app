@@ -43,6 +43,7 @@ Apps Script deployment is managed with clasp config in `.clasp.json`. The `.clas
 
 ## Continuity Docs
 
+- [Canonical agent entrypoint](SKILL.md)
 - [Current project state](docs/project-state.md)
 - [Developer continuity manual](docs/developer-continuity.md)
 - [Session bootstrap prompt](prompts/session-bootstrap-prompt.md)

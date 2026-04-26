@@ -13,8 +13,8 @@
 ## Workflow Rules
 
 * Treat the repo as the source of truth for code and continuity.
-* The lightweight repo-specific skill system is exactly these official artifacts: `README.md`, `docs/project-state.md`, `docs/developer-continuity.md`, `prompts/session-bootstrap-prompt.md`, and `prompts/skill-maintenance-prompt.md`.
-* Do not create a packaged Codex `SKILL.md` or extra continuity tree unless explicitly requested; this project currently needs compact repo-local operating docs, not another abstraction.
+* The lightweight repo-specific skill system is exactly these official artifacts: `SKILL.md`, `README.md`, `docs/project-state.md`, `docs/developer-continuity.md`, `prompts/session-bootstrap-prompt.md`, and `prompts/skill-maintenance-prompt.md`.
+* `SKILL.md` is the canonical entrypoint only; do not create extra packaged skill files or a larger continuity tree unless explicitly requested.
 * Keep GitHub Pages frontend work in `docs/` unless deliberately changing hosting strategy.
 * Keep Apps Script/spreadsheet automation in root Apps Script files.
 * Prefer small, reviewable changes over broad rewrites.
