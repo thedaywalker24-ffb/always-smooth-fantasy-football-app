@@ -2,7 +2,7 @@
 
 ## Current Status
 
-* Last completed section: Bottom Home/Betting tab overlay added to the GitHub Pages frontend on 2026-04-26.
+* Last completed section: Home standings header now uses Settings-backed season/week pills without the duplicate standings subtitle.
 * Current section in progress: Betting feature foundation; the Betting tab exists but intentionally has no content or data binding yet.
 * Next recommended task: Define the weekly bets Google Sheets schema and Apps Script route contract, then render the first Betting tab data.
 * Open risks: Hardcoded Apps Script deployment URL, simple JSONP/GET admin write flow, fragile Google Sheets tab/column dependencies, fixed matchup sheet row offsets, no automated tests, and duplicated/legacy Apps Script paths.
@@ -69,8 +69,8 @@ Known tabs and dependencies:
 
 `Settings` cells:
 
-* `B2`: season.
-* `B3`: week.
+* `B2`: season, rendered in the home `Season` pill.
+* `B3`: week, rendered in the home `Week` pill.
 * `B4`: Sleeper league ID.
 * `B5`: app icon URL.
 
@@ -114,6 +114,7 @@ Apps Script Script Properties:
 * Splash screen and mobile-friendly banner.
 * Live config load from Apps Script with fallback defaults.
 * Live standings load from Apps Script with local cached fallback.
+* Home standings header season/week pills are populated from the `Settings` tab via `api=config`; missing Settings values render as `--` instead of hardcoded season/week numbers.
 * Team cards sorted by wins and points for.
 * Expandable standings cards with supplemental stats: team MVP, mulligan, turkey watch, beer trophies, background team image, and manager photo; trophies display inline with the manager name.
 * Expanded team-card detail panels use a light glass overlay in light mode and a darker cinematic overlay in dark mode.

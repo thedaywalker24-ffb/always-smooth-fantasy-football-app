@@ -76,7 +76,7 @@ Admin writes from the GitHub Pages app use a simple admin-code gate because the 
 * `.claspignore` excludes `docs/**`; pushing Apps Script with clasp will not deploy the GitHub Pages frontend.
 * Admin write access depends on Apps Script Script Property `ALWAYS_SMOOTH_ADMIN_CODE`; without it, write routes should fail closed.
 * Admin write routes use the existing JSONP/GET pattern for simplicity, so keep them limited to low-risk, whitelisted league-maintenance fields.
-* `Settings` tab must provide values in `B2:B5` for season, week, league ID, and app icon URL, with fallbacks in `Code.js`.
+* `Settings` tab must provide values in `B2:B5` for season, week, league ID, and app icon URL. Season/week intentionally fall back to blank placeholders in the frontend, while league ID and app icon retain backend defaults.
 * `Rosters & Records` must include `Team Name`, `W-L Record`, and `Fpts (Total)` headers for the frontend payload.
 * `Rosters & Records` `Streak` falls back to column G if the header is missing.
 * `Rosters & Records` display/real name resolution prefers headers like `Display Name`, then falls back to column J.

@@ -42,8 +42,8 @@ const SETTINGS_SEASON_CELL = 'B2';
 const SETTINGS_WEEK_CELL = 'B3';
 const SETTINGS_LEAGUE_ID_CELL = 'B4';
 const SETTINGS_APP_ICON_CELL = 'B5';
-const DEFAULT_LEAGUE_SEASON = '2026';
-const DEFAULT_LEAGUE_WEEK = '1';
+const DEFAULT_LEAGUE_SEASON = '';
+const DEFAULT_LEAGUE_WEEK = '';
 const DEFAULT_LEAGUE_ID = GLOBAL_LEAGUE_ID;
 const DEFAULT_APP_ICON_URL = 'https://drive.google.com/file/d/1M-Q8iesdrChF0Nf4U7_d0doV2esUaov2/view?usp=drive_link';
 const APP_NAME = 'Always Smooth League';
@@ -120,17 +120,12 @@ function resolveHeaderImageSrc_(raw) {
 
 /**
  * Reads the current league season from the Settings sheet.
- * Defaults safely so the UI still renders if the sheet or cell is missing.
+ * Falls back to blank so the UI renders a placeholder when Settings is missing.
  * @param {GoogleAppsScript.Spreadsheet.Spreadsheet} spreadsheet
  * @return {string}
  */
 function getLeagueSeason_(spreadsheet) {
-  if (!spreadsheet) return DEFAULT_LEAGUE_SEASON;
-  var sheet = spreadsheet.getSheetByName(SETTINGS_SHEET);
-  if (!sheet) return DEFAULT_LEAGUE_SEASON;
-  var raw = sheet.getRange(SETTINGS_SEASON_CELL).getDisplayValue();
-  var season = String(raw || '').trim();
-  return season || DEFAULT_LEAGUE_SEASON;
+  return getSettingsValue_(spreadsheet, SETTINGS_SEASON_CELL, DEFAULT_LEAGUE_SEASON);
 }
 
 /**

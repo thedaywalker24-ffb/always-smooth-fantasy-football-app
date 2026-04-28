@@ -182,12 +182,13 @@ function escapeHtml(value) {
 
 function applyConfig(config) {
   if (!config) return;
-  document.title = `${config.appName || 'Always Smooth'} ${config.leagueSeason || ''}`.trim();
+  const leagueSeason = String(config.leagueSeason || '').trim();
+  const leagueWeek = String(config.leagueWeek || '').trim();
+  document.title = `${config.appName || 'Always Smooth'} ${leagueSeason}`.trim();
   document.querySelector('meta[name="theme-color"]').setAttribute('content', config.appThemeColor || '#ec4899');
   document.getElementById('page-title').textContent = config.appShortName || 'Always Smooth';
-  document.getElementById('season-pill').textContent = `Season ${config.leagueSeason || '--'}`;
-  document.getElementById('week-pill').textContent = `Week ${config.leagueWeek || '--'}`;
-  document.getElementById('standings-subtitle').textContent = `${config.leagueSeason || 'Current'} Regular Season`;
+  document.getElementById('season-pill').textContent = `Season ${leagueSeason || '--'}`;
+  document.getElementById('week-pill').textContent = `Week ${leagueWeek || '--'}`;
   const banner = document.getElementById('league-banner');
   banner.src = config.headerImageSrc || FALLBACK_PHOTO;
   banner.onerror = () => {
