@@ -873,7 +873,7 @@ function renderBettingForm() {
     const value = picks[index] || '';
     const result = bettingData.results?.[index] || '';
     return `
-      <article class="glass-panel rounded-3xl border border-slate-200 bg-white/90 p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900/70">
+      <article class="betting-bet-card glass-panel rounded-3xl border border-slate-200 bg-white/90 p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900/70" data-betting-bet-card>
         <div class="mb-4 flex items-start justify-between gap-4">
           <div>
             <p class="text-[10px] font-black uppercase tracking-[0.22em] text-pink-500">Bet ${index + 1}</p>
@@ -964,13 +964,26 @@ function updateBettingOptionSelection(button) {
   });
 }
 
+function setBettingTeamSelectOpen(select, isOpen) {
+  const toggle = select.querySelector('[data-team-select-toggle]');
+  const menu = select.querySelector('[data-team-select-menu]');
+  const card = select.closest('[data-betting-bet-card]');
+
+  if (toggle) toggle.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+  if (menu) menu.hidden = !isOpen;
+  if (card) {
+    if (isOpen) {
+      card.dataset.selectOpen = 'true';
+    } else {
+      delete card.dataset.selectOpen;
+    }
+  }
+}
+
 function closeBettingTeamSelects(exceptSelect = null) {
   document.querySelectorAll('[data-team-select]').forEach((select) => {
     if (select === exceptSelect) return;
-    const toggle = select.querySelector('[data-team-select-toggle]');
-    const menu = select.querySelector('[data-team-select-menu]');
-    if (toggle) toggle.setAttribute('aria-expanded', 'false');
-    if (menu) menu.hidden = true;
+    setBettingTeamSelectOpen(select, false);
   });
 }
 
@@ -981,8 +994,7 @@ function toggleBettingTeamSelect(button) {
 
   const shouldOpen = menu.hidden;
   closeBettingTeamSelects(select);
-  menu.hidden = !shouldOpen;
-  button.setAttribute('aria-expanded', shouldOpen ? 'true' : 'false');
+  setBettingTeamSelectOpen(select, shouldOpen);
 }
 
 function selectBettingTeamOption(button) {
