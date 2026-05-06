@@ -2,9 +2,9 @@
 
 ## Current Status
 
-* Last completed section: Betting submit timeout false-failure fix; submit routes now get a longer JSONP timeout and read only the fixed option-bank range.
-* Current section in progress: Betting workflow verification against the live `App Data Collection` sheet and Apps Script deployment.
-* Next recommended task: Deploy Apps Script and GitHub Pages, then verify `api=betting-data` and one test submission against the live sheet.
+* Last completed section: Betting avatar dropdown layering fix; team/manager dropdown menus now render through a body-level fixed portal so later bet cards do not cover them on mobile.
+* Current section in progress: Betting workflow verification against the live `App Data Collection` sheet and GitHub Pages deployment.
+* Next recommended task: Push GitHub Pages and verify the Android team-option dropdown stays above later bet cards.
 * Open risks: Hardcoded Apps Script deployment URL, simple JSONP/GET admin and betting write flows, public trust-based bet submission, fragile Google Sheets tab/column dependencies, fixed matchup sheet row offsets, no automated tests, and duplicated/legacy Apps Script paths.
 * Most relevant files: `SKILL.md`, `docs/index.html`, `docs/app.js`, `docs/service-worker.js`, `docs/manifest.webmanifest`, `Code.js`, `index.html`, `.clasp.json`, `.claspignore`.
 
@@ -135,6 +135,7 @@ Apps Script Script Properties:
 * Press-and-hold admin edit for `Beer Trophies`, writing to `Teams` column S after Apps Script admin-code validation.
 * Fixed bottom tab overlay for `Home` and `Betting`; Home wraps the current standings dashboard and Betting renders the weekly betting workflow.
 * Betting tab reads `App Data Collection`, lets a league member select their team, renders member profile photos from `N2:N11`, renders six weekly prompts from `B1:G1`, maps input types through `B13:G13`, `team_choice`, and `H1:K6`, confirms overwrites, and submits picks to that member's row in `B2:G11`.
+* Betting team/manager avatar dropdowns use a fixed body-level menu portal so expanded lists can overlap lower bet cards on Android and other mobile browsers.
 * Betting submissions use the submit response to refresh the selected member form instead of immediately making a second sheet read.
 * Apps Script spreadsheet menu for league data operations.
 * Sleeper sync functions for members, records, rosters, players, matchups, and draft picks.

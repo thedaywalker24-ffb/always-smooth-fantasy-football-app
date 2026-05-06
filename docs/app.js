@@ -26,6 +26,7 @@ let bettingData = null;
 let selectedBettingMemberRow = null;
 let bettingStatusMessage = '';
 let bettingStatusTone = 'warning';
+let activeBettingTeamSelect = null;
 
 function getCachedJson(key) {
   try {
@@ -728,6 +729,7 @@ function renderBettingHeader(actionsMarkup = '') {
 function renderBettingMemberPicker() {
   const root = getBettingRoot();
   if (!root || !bettingData) return;
+  clearBettingTeamSelectState();
 
   if (!bettingData.members.length) {
     renderBettingEmpty('No betting members are available yet.');
@@ -860,6 +862,7 @@ function renderBettingForm() {
     renderBettingMemberPicker();
     return;
   }
+  clearBettingTeamSelectState();
 
   const finalized = bettingData.resultsPosted === true;
   const picks = Array.isArray(member.picks) ? member.picks : [];
@@ -964,19 +967,89 @@ function updateBettingOptionSelection(button) {
   });
 }
 
+function removeBettingTeamSelectPortal() {
+  document.querySelector('[data-team-select-portal]')?.remove();
+}
+
+function clearBettingTeamSelectState() {
+  activeBettingTeamSelect = null;
+  removeBettingTeamSelectPortal();
+  document.querySelectorAll('[data-betting-bet-card][data-select-open]').forEach((card) => {
+    delete card.dataset.selectOpen;
+  });
+  document.querySelectorAll('[data-team-select-toggle][aria-expanded="true"]').forEach((toggle) => {
+    toggle.setAttribute('aria-expanded', 'false');
+  });
+}
+
+function positionBettingTeamSelectPortal(select, portal) {
+  const trigger = select.querySelector('[data-team-select-toggle]');
+  if (!trigger || !portal) return;
+
+  const viewportPadding = 12;
+  const menuGap = 7;
+  const rect = trigger.getBoundingClientRect();
+  const width = Math.min(rect.width, window.innerWidth - (viewportPadding * 2));
+  const left = Math.min(
+    Math.max(rect.left, viewportPadding),
+    window.innerWidth - width - viewportPadding
+  );
+  const spaceBelow = window.innerHeight - rect.bottom - viewportPadding - menuGap;
+  const spaceAbove = rect.top - viewportPadding - menuGap;
+  const opensBelow = spaceBelow >= 150 || spaceBelow >= spaceAbove;
+  const maxHeight = Math.min(288, Math.max(128, opensBelow ? spaceBelow : spaceAbove));
+  const top = opensBelow
+    ? rect.bottom + menuGap
+    : Math.max(viewportPadding, rect.top - menuGap - maxHeight);
+
+  portal.style.left = `${left}px`;
+  portal.style.top = `${top}px`;
+  portal.style.width = `${width}px`;
+  portal.style.maxHeight = `${maxHeight}px`;
+}
+
+function renderBettingTeamSelectPortal(select) {
+  const menu = select.querySelector('[data-team-select-menu]');
+  if (!menu) return;
+
+  removeBettingTeamSelectPortal();
+
+  const portal = document.createElement('div');
+  portal.className = 'betting-team-select-menu betting-team-select-menu--portal';
+  portal.dataset.teamSelectPortal = 'true';
+  portal.dataset.betIndex = select.dataset.betIndex || '';
+  portal.innerHTML = menu.innerHTML;
+  document.body.appendChild(portal);
+  positionBettingTeamSelectPortal(select, portal);
+}
+
+function updateActiveBettingTeamSelectPosition() {
+  if (!activeBettingTeamSelect) return;
+  const portal = document.querySelector('[data-team-select-portal]');
+  positionBettingTeamSelectPortal(activeBettingTeamSelect, portal);
+}
+
 function setBettingTeamSelectOpen(select, isOpen) {
   const toggle = select.querySelector('[data-team-select-toggle]');
   const menu = select.querySelector('[data-team-select-menu]');
   const card = select.closest('[data-betting-bet-card]');
 
   if (toggle) toggle.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
-  if (menu) menu.hidden = !isOpen;
+  if (menu) menu.hidden = true;
   if (card) {
     if (isOpen) {
       card.dataset.selectOpen = 'true';
     } else {
       delete card.dataset.selectOpen;
     }
+  }
+
+  if (isOpen) {
+    activeBettingTeamSelect = select;
+    renderBettingTeamSelectPortal(select);
+  } else if (activeBettingTeamSelect === select) {
+    activeBettingTeamSelect = null;
+    removeBettingTeamSelectPortal();
   }
 }
 
@@ -989,16 +1062,18 @@ function closeBettingTeamSelects(exceptSelect = null) {
 
 function toggleBettingTeamSelect(button) {
   const select = button.closest('[data-team-select]');
-  const menu = select?.querySelector('[data-team-select-menu]');
-  if (!select || !menu) return;
+  if (!select) return;
 
-  const shouldOpen = menu.hidden;
+  const shouldOpen = button.getAttribute('aria-expanded') !== 'true';
   closeBettingTeamSelects(select);
   setBettingTeamSelectOpen(select, shouldOpen);
 }
 
 function selectBettingTeamOption(button) {
-  const select = button.closest('[data-team-select]');
+  const portal = button.closest('[data-team-select-portal]');
+  const select = button.closest('[data-team-select]') ||
+    activeBettingTeamSelect ||
+    document.querySelector(`[data-team-select][data-bet-index="${portal?.dataset.betIndex || ''}"]`);
   if (!select) return;
 
   const value = button.dataset.value || '';
@@ -1119,6 +1194,24 @@ function setupBettingControls() {
       closeBettingTeamSelects();
     }
   });
+
+  document.addEventListener('click', (event) => {
+    const portal = event.target.closest('[data-team-select-portal]');
+    if (portal) {
+      const teamOption = event.target.closest('[data-team-select-option]');
+      if (teamOption) {
+        selectBettingTeamOption(teamOption);
+      }
+      return;
+    }
+
+    if (!event.target.closest('[data-team-select]')) {
+      closeBettingTeamSelects();
+    }
+  });
+
+  window.addEventListener('resize', updateActiveBettingTeamSelectPosition);
+  window.addEventListener('scroll', updateActiveBettingTeamSelectPosition, { passive: true });
 
   root.addEventListener('submit', (event) => {
     if (event.target.id !== 'betting-form') return;
