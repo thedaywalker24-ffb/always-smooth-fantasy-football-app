@@ -606,6 +606,26 @@ function normalizeMemberNameKey(name) {
   return String(name || '').trim().toLowerCase();
 }
 
+function normalizeBettingOptionKey(value) {
+  return String(value || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+
+function isBettingTeamChoiceKey(value) {
+  const key = normalizeBettingOptionKey(value);
+  return [
+    'teamchoice',
+    'teamchoices',
+    'teamoption',
+    'teamoptions',
+    'teams',
+    'managerchoice',
+    'managerchoices',
+    'manageroption',
+    'manageroptions',
+    'managers'
+  ].includes(key);
+}
+
 function getBettingMemberByName(name) {
   if (!bettingData || !Array.isArray(bettingData.members)) return null;
   const key = normalizeMemberNameKey(name);
@@ -785,7 +805,11 @@ function getBettingInputMarkup(bet, value, disabled) {
   const fieldName = `bet-${bet.index}`;
   const safeValue = escapeHtml(value || '');
 
-  if (bet.optionBankKey === 'teamchoice') {
+  if (
+    isBettingTeamChoiceKey(bet.optionBankKey) ||
+    isBettingTeamChoiceKey(bet.mapping) ||
+    isBettingTeamChoiceKey(bet.optionBankLabel)
+  ) {
     return getBettingTeamSelectMarkup(bet, value, disabled);
   }
 

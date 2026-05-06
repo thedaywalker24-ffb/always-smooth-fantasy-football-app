@@ -822,6 +822,23 @@ function normalizeBettingOptionKey_(value) {
 }
 
 /**
+ * @param {string} key normalized betting option key
+ * @return {boolean}
+ */
+function isBettingTeamChoiceKey_(key) {
+  return key === 'teamchoice' ||
+    key === 'teamchoices' ||
+    key === 'teamoption' ||
+    key === 'teamoptions' ||
+    key === 'teams' ||
+    key === 'managerchoice' ||
+    key === 'managerchoices' ||
+    key === 'manageroption' ||
+    key === 'manageroptions' ||
+    key === 'managers';
+}
+
+/**
  * @param {string} mapping
  * @param {Object<string, {key: string, label: string, options: string[]}>} banksByKey
  * @param {Object<string, {key: string, label: string, options: string[]}>} dynamicOptionsByKey
@@ -959,9 +976,21 @@ function buildWeeklyBetConfigs_(sheet, memberNames) {
     label: 'Team Choice',
     options: Array.isArray(memberNames) ? memberNames : []
   };
-  var dynamicOptionsByKey = {
-    teamchoice: teamChoiceBank
-  };
+  var dynamicOptionsByKey = {};
+  [
+    'teamchoice',
+    'teamchoices',
+    'teamoption',
+    'teamoptions',
+    'teams',
+    'managerchoice',
+    'managerchoices',
+    'manageroption',
+    'manageroptions',
+    'managers'
+  ].forEach(function (key) {
+    if (isBettingTeamChoiceKey_(key)) dynamicOptionsByKey[key] = teamChoiceBank;
+  });
   var bets = [];
   var warnings = [];
 

@@ -94,7 +94,7 @@ Admin writes from the GitHub Pages app use a simple admin-code gate because the 
 * Root `index.html` and `docs/index.html` are separate frontends and can drift.
 * The GitHub Pages frontend has a fixed bottom tab overlay in `docs/index.html`; `docs/app.js#setActiveTab` toggles `[data-tab-panel]` views and lazy-loads Betting data the first time the Betting tab is opened.
 * `App Data Collection` powers Betting. `B1:G1` are weekly prompts, `A2:A11` are members, `B2:G11` are submissions, `B12:G12` are results/finalization cells, `B13:G13` maps input types, `H1:K6` holds reusable option banks, and `N2:N11` holds member profile photos.
-* Betting mapping `team_choice` is dynamic and renders a custom avatar dropdown from `App Data Collection!A2:A11` plus `N2:N11`, not from the static `H1:K6` option banks.
+* Betting mappings `team_choice`, `team_options`, and manager/team aliases are dynamic and render a custom avatar dropdown from `App Data Collection!A2:A11` plus `N2:N11`, not from the static `H1:K6` option banks.
 * Betting option-bank reads should stay limited to `H1:K6`; avoid using `getLastRow()` for those banks because unrelated sheet content can make Apps Script reads unnecessarily slow.
 * The app should only write Betting submissions to `App Data Collection!B2:G11`. Do not let app-originated writes touch prompt, results, mapping, or option-bank ranges.
 
