@@ -739,7 +739,7 @@ function renderBettingMemberPicker() {
 
   const memberCards = bettingData.members.map((member) => `
     <button type="button" data-betting-member-row="${member.row}" class="betting-member-tile glass-panel group min-h-32 rounded-2xl border border-slate-200 bg-white/90 px-3 py-4 text-center shadow-sm transition hover:border-pink-500/40 hover:shadow-xl dark:border-slate-800 dark:bg-slate-900/70" aria-label="${escapeHtml(member.name)} ${member.submitted ? 'submitted' : 'open'}">
-      <span class="betting-member-tile-accent" aria-hidden="true"></span>
+      <span class="betting-member-tile-accent absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-pink-500 via-rose-400 to-orange-300" aria-hidden="true"></span>
       <div class="betting-member-tile-content flex h-full min-w-0 flex-col items-center justify-center gap-3">
         ${getBettingMemberAvatarMarkup(member, 'compact')}
         <div class="w-full min-w-0">

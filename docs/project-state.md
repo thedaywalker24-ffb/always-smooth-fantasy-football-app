@@ -2,7 +2,7 @@
 
 ## Current Status
 
-* Last completed section: Betting member picker compact mobile layout and home-style top accent; initial Betting screen now uses explicit CSS grid rules for two-column compact member tiles on phones.
+* Last completed section: Betting member picker compact mobile layout and home-style top accent; initial Betting screen now uses explicit CSS grid rules plus a data-attribute accent fallback for compact member tiles on phones.
 * Current section in progress: Betting workflow verification against the live `App Data Collection` sheet and GitHub Pages deployment.
 * Next recommended task: Push GitHub Pages and verify the compact Android member picker plus team-option dropdown behavior.
 * Open risks: Hardcoded Apps Script deployment URL, simple JSONP/GET admin and betting write flows, public trust-based bet submission, fragile Google Sheets tab/column dependencies, fixed matchup sheet row offsets, no automated tests, and duplicated/legacy Apps Script paths.
