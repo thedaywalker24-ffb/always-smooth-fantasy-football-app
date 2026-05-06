@@ -79,6 +79,12 @@ function fetchJsonp(path, params = {}) {
     };
     const route = routeMap[path] || path.replace(/^\//, '');
     const url = buildApiUrl(route, { ...params, callback: callbackName });
+    const timeoutMsByRoute = {
+      'betting-data': 30000,
+      'submit-bets': 45000,
+      'update-team-field': 45000
+    };
+    const timeoutMs = timeoutMsByRoute[route] || 15000;
 
     script.src = url.toString();
     script.async = true;
@@ -86,7 +92,7 @@ function fetchJsonp(path, params = {}) {
     const timeoutId = window.setTimeout(() => {
       cleanup();
       reject(new Error(`Timed out loading ${path}`));
-    }, 15000);
+    }, timeoutMs);
 
     window[callbackName] = (payload) => {
       cleanup();
@@ -872,7 +878,12 @@ async function submitBettingForm() {
     }
     bettingStatusMessage = `Picks saved for ${member.name}.`;
     bettingStatusTone = 'success';
-    await loadBettingData();
+    member.picks = Array.isArray(payload.picks) ? payload.picks : values;
+    member.submitted = true;
+    if (bettingData) {
+      bettingData.updatedAt = payload.updatedAt || bettingData.updatedAt;
+    }
+    renderBettingForm();
   } catch (error) {
     console.error(error);
     setBettingStatus(`Submit failed: ${error.message || error}`, 'error');

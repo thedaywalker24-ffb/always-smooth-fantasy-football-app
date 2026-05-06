@@ -77,6 +77,7 @@ Admin writes from the GitHub Pages app use a simple admin-code gate because the 
 * Admin write access depends on Apps Script Script Property `ALWAYS_SMOOTH_ADMIN_CODE`; without it, write routes should fail closed.
 * Admin write routes use the existing JSONP/GET pattern for simplicity, so keep them limited to low-risk, whitelisted league-maintenance fields.
 * Betting submissions also use JSONP/GET for the public GitHub Pages app. Keep server-side validation strict because the frontend is not authenticated.
+* Apps Script write routes can be slow on cold starts. `docs/app.js#fetchJsonp` uses longer timeouts for `submit-bets` and `update-team-field` than for normal read routes.
 * `Settings` tab must provide values in `B2:B5` for season, week, league ID, and app icon URL. Season/week intentionally fall back to blank placeholders in the frontend, while league ID and app icon retain backend defaults.
 * `Rosters & Records` must include `Team Name`, `W-L Record`, and `Fpts (Total)` headers for the frontend payload.
 * `Rosters & Records` `Streak` falls back to column G if the header is missing.
@@ -93,6 +94,7 @@ Admin writes from the GitHub Pages app use a simple admin-code gate because the 
 * Root `index.html` and `docs/index.html` are separate frontends and can drift.
 * The GitHub Pages frontend has a fixed bottom tab overlay in `docs/index.html`; `docs/app.js#setActiveTab` toggles `[data-tab-panel]` views and lazy-loads Betting data the first time the Betting tab is opened.
 * `App Data Collection` powers Betting. `B1:G1` are weekly prompts, `A2:A11` are members, `B2:G11` are submissions, `B12:G12` are results/finalization cells, `B13:G13` maps input types, and `H1:K6` holds reusable option banks.
+* Betting option-bank reads should stay limited to `H1:K6`; avoid using `getLastRow()` for those banks because unrelated sheet content can make Apps Script reads unnecessarily slow.
 * The app should only write Betting submissions to `App Data Collection!B2:G11`. Do not let app-originated writes touch prompt, results, mapping, or option-bank ranges.
 
 ## Don't Do This

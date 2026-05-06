@@ -61,6 +61,7 @@ const BETTING_FIRST_BET_COL = 2; // Column B (1-based)
 const BETTING_BET_COUNT = 6;
 const BETTING_OPTION_BANK_FIRST_COL = 8; // Column H (1-based)
 const BETTING_OPTION_BANK_COLS = 4; // H:K
+const BETTING_OPTION_BANK_ROWS = 6; // H1:K6
 const BETTING_MAX_PICK_LENGTH = 120;
 
 /** Sheet tab written by fetchLeagueMembersData / updateRostersAndRecordsData */
@@ -873,9 +874,8 @@ function resolveBettingInputConfig_(mapping, banksByKey) {
  * @return {{list: Array<{key: string, label: string, options: string[]}>, byKey: Object<string, {key: string, label: string, options: string[]}>}}
  */
 function buildBettingOptionBanks_(sheet) {
-  var rowCount = Math.max(sheet.getLastRow(), 6);
   var values = sheet
-    .getRange(1, BETTING_OPTION_BANK_FIRST_COL, rowCount, BETTING_OPTION_BANK_COLS)
+    .getRange(1, BETTING_OPTION_BANK_FIRST_COL, BETTING_OPTION_BANK_ROWS, BETTING_OPTION_BANK_COLS)
     .getDisplayValues();
   var list = [];
   var byKey = {};
@@ -940,6 +940,7 @@ function buildWeeklyBetConfigs_(sheet) {
 
   return {
     bets: bets,
+    optionBanks: optionBanks.list,
     warnings: warnings
   };
 }
@@ -1004,7 +1005,7 @@ function getBettingData_(spreadsheet) {
       resultsPosted: results.some(function (value) {
         return !isBlankDisplayValue_(value);
       }),
-      optionBanks: buildBettingOptionBanks_(sheet).list,
+      optionBanks: config.optionBanks,
       warnings: config.warnings,
       updatedAt: new Date().toISOString()
     };
@@ -1163,7 +1164,6 @@ function submitBettingPicks_(spreadsheet, params) {
     lock.waitLock(5000);
     hasLock = true;
     sheet.getRange(memberRow, BETTING_FIRST_BET_COL, 1, BETTING_BET_COUNT).setValues([sanitized]);
-    SpreadsheetApp.flush();
     return {
       ok: true,
       member: {
