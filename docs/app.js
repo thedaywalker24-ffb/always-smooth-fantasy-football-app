@@ -636,7 +636,8 @@ function getBettingMemberByName(name) {
 function getBettingMemberAvatarMarkup(member, size = 'default') {
   const isLarge = size === 'large';
   const isTiny = size === 'tiny';
-  const sizeClass = isLarge ? 'large' : isTiny ? 'tiny' : '';
+  const isCompact = size === 'compact';
+  const sizeClass = isLarge ? 'large' : isTiny ? 'tiny' : isCompact ? 'compact' : '';
   const initialsClass = `betting-member-initials${sizeClass ? ` betting-member-initials--${sizeClass}` : ''}`;
   const imageClass = `betting-member-photo${sizeClass ? ` betting-member-photo--${sizeClass}` : ''}`;
   const initials = escapeHtml(getMemberInitials(member?.name));
@@ -737,16 +738,13 @@ function renderBettingMemberPicker() {
   }
 
   const memberCards = bettingData.members.map((member) => `
-    <button type="button" data-betting-member-row="${member.row}" class="glass-panel group rounded-3xl border border-slate-200 bg-white/90 p-5 text-left shadow-sm transition hover:border-pink-500/40 hover:shadow-xl dark:border-slate-800 dark:bg-slate-900/70">
-      <div class="flex items-center justify-between gap-4">
-        <div class="flex min-w-0 items-center gap-4">
-          ${getBettingMemberAvatarMarkup(member)}
-          <div class="min-w-0">
-            <p class="truncate text-lg font-black italic uppercase leading-tight tracking-tight text-slate-900 group-hover:text-pink-500 dark:text-white">${escapeHtml(member.name)}</p>
-            <p class="mt-2 text-xs font-black uppercase tracking-[0.18em] text-slate-400">${member.submitted ? 'Submitted' : 'Open'}</p>
-          </div>
+    <button type="button" data-betting-member-row="${member.row}" class="glass-panel group min-h-32 rounded-2xl border border-slate-200 bg-white/90 px-3 py-4 text-center shadow-sm transition hover:border-pink-500/40 hover:shadow-xl dark:border-slate-800 dark:bg-slate-900/70" aria-label="${escapeHtml(member.name)} ${member.submitted ? 'submitted' : 'open'}">
+      <div class="flex h-full min-w-0 flex-col items-center justify-center gap-3">
+        ${getBettingMemberAvatarMarkup(member, 'compact')}
+        <div class="w-full min-w-0">
+          <p class="truncate text-sm font-black italic uppercase leading-tight tracking-tight text-slate-900 group-hover:text-pink-500 dark:text-white">${escapeHtml(member.name)}</p>
+          <span class="${member.submitted ? 'bg-emerald-500 text-white' : 'border border-slate-200 bg-white text-slate-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300'} mt-2 inline-flex rounded-full px-2.5 py-1 text-[9px] font-black uppercase tracking-[0.14em]">${member.submitted ? 'In' : 'Open'}</span>
         </div>
-        <span class="${member.submitted ? 'bg-emerald-500 text-white' : 'border border-slate-200 bg-white text-slate-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300'} shrink-0 rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-[0.16em]">${member.submitted ? 'In' : 'Pick'}</span>
       </div>
     </button>
   `).join('');
@@ -758,7 +756,7 @@ function renderBettingMemberPicker() {
       ${bettingData.warnings?.length ? `
         <div class="${getBettingStatusClass('warning')}">${bettingData.warnings.map(escapeHtml).join(' ')}</div>
       ` : ''}
-      <div class="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+      <div class="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3 lg:grid-cols-5">
         ${memberCards}
       </div>
     </div>
