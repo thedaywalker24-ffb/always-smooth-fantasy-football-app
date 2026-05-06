@@ -2,10 +2,10 @@
 
 ## Current Status
 
-* Last completed section: Home standings header now uses Settings-backed season/week pills without the duplicate standings subtitle.
-* Current section in progress: Betting feature foundation; the Betting tab exists but intentionally has no content or data binding yet.
-* Next recommended task: Define the weekly bets Google Sheets schema and Apps Script route contract, then render the first Betting tab data.
-* Open risks: Hardcoded Apps Script deployment URL, simple JSONP/GET admin write flow, fragile Google Sheets tab/column dependencies, fixed matchup sheet row offsets, no automated tests, and duplicated/legacy Apps Script paths.
+* Last completed section: Google Sheets-backed Betting tab v1 added with member selection, six weekly picks, option-bank inputs, public overwrite confirmation, and finalized-results lockout.
+* Current section in progress: Betting workflow verification against the live `App Data Collection` sheet and Apps Script deployment.
+* Next recommended task: Deploy Apps Script and GitHub Pages, then verify `api=betting-data` and one test submission against the live sheet.
+* Open risks: Hardcoded Apps Script deployment URL, simple JSONP/GET admin and betting write flows, public trust-based bet submission, fragile Google Sheets tab/column dependencies, fixed matchup sheet row offsets, no automated tests, and duplicated/legacy Apps Script paths.
 * Most relevant files: `SKILL.md`, `docs/index.html`, `docs/app.js`, `docs/service-worker.js`, `docs/manifest.webmanifest`, `Code.js`, `index.html`, `.clasp.json`, `.claspignore`.
 
 ## App Overview
@@ -42,12 +42,14 @@ The hosted frontend in `docs/` calls a hardcoded Apps Script deployment URL:
 const API_BASE_URL = 'https://script.google.com/macros/s/AKfycbwtM_NX16wFOHssvhvP2Iw7FI_7YcVgJ9-5DNbvNOblMxifawE4R-F_eiOLU1NsEggF/exec';
 ```
 
-Because cross-origin Apps Script requests are constrained, `docs/app.js` uses JSONP. It adds `api=config`, `api=league-data`, or admin write route names plus a generated `callback` parameter. `Code.js` validates the callback name and returns JavaScript when JSONP is requested.
+Because cross-origin Apps Script requests are constrained, `docs/app.js` uses JSONP. It adds `api=config`, `api=league-data`, betting route names, or admin write route names plus a generated `callback` parameter. `Code.js` validates the callback name and returns JavaScript when JSONP is requested.
 
 Current routes handled by `Code.js#doGet`:
 
 * `api=config` / `config`: frontend branding, season, week, header image, icon URL.
 * `api=league-data` / `league-data`: standings/team cards payload.
+* `api=betting-data` / `betting-data`: weekly betting prompts, members, current picks, results, and input option metadata from `App Data Collection`.
+* `api=submit-bets` / `submit-bets`: public league-member betting write route limited to `App Data Collection!B2:G11`.
 * `api=update-team-field` / `update-team-field`: admin-code-protected write route for whitelisted Teams-sheet fields.
 * `manifest.json`: Apps Script-served manifest payload for the Apps Script-hosted version.
 * default route: renders root `index.html` as an Apps Script template.
@@ -65,7 +67,7 @@ Known tabs and dependencies:
 * `Sleeper Players`: player lookup data for roster population.
 * `Team Rosters`: generated roster output.
 * `Draft Results`: generated draft pick output.
-* `App Data Collection`: cleared by helper function.
+* `App Data Collection`: weekly betting prompts, member picks, results, input mappings, option banks, and helper-cleared submission range.
 
 `Settings` cells:
 
@@ -105,6 +107,17 @@ Apps Script Script Properties:
 * Column S: beer trophies.
 * Column V: team MVP image.
 
+`App Data Collection` betting contract:
+
+* `A1`: member/team header.
+* `B1:G1`: six weekly bet prompts.
+* `A2:A11`: 10 member/team rows.
+* `B2:G11`: member submissions; these are the only betting cells written by the app.
+* `A12:G12`: weekly results row; any value in `B12:G12` locks submissions.
+* `B13:G13`: input mapping for each prompt. Blank or `text` renders a text input; otherwise values match normalized option-bank headers.
+* `H1:K1`: option-bank headers.
+* `H2:K6`: option values. Two-option banks render as pill buttons; larger banks render as dropdowns.
+
 ## Completed Sections / Implemented Features
 
 * Repo continuity/skill system v1: root `SKILL.md` and official artifacts exist and define the entrypoint, operating manual, current state, startup prompt, and skill-maintenance prompt.
@@ -119,7 +132,8 @@ Apps Script Script Properties:
 * Expandable standings cards with supplemental stats: team MVP, mulligan, turkey watch, beer trophies, background team image, and manager photo; trophies display inline with the manager name.
 * Expanded team-card detail panels use a light glass overlay in light mode and a darker cinematic overlay in dark mode.
 * Press-and-hold admin edit for `Beer Trophies`, writing to `Teams` column S after Apps Script admin-code validation.
-* Fixed bottom tab overlay for `Home` and `Betting`; Home wraps the current standings dashboard and Betting is a blank starter panel.
+* Fixed bottom tab overlay for `Home` and `Betting`; Home wraps the current standings dashboard and Betting renders the weekly betting workflow.
+* Betting tab reads `App Data Collection`, lets a league member select their team, renders six weekly prompts from `B1:G1`, maps input types through `B13:G13` and `H1:K6`, confirms overwrites, and submits picks to that member's row in `B2:G11`.
 * Apps Script spreadsheet menu for league data operations.
 * Sleeper sync functions for members, records, rosters, players, matchups, and draft picks.
 * Defensive helpers for Google Drive image URLs and missing settings.
@@ -129,7 +143,7 @@ Apps Script Script Properties:
 
 * Recent work is focused on the standings team-card accordion, including mode-aware expanded-panel styling.
 * Weekly matchups are represented in spreadsheet import logic but not yet surfaced as a real frontend feature.
-* Weekly betting now has a frontend tab placeholder but no sheet/API contract or rendered betting data yet.
+* Weekly betting v1 is implemented but still needs live Apps Script deployment and sheet verification.
 * Draft capital/draft results are imported in Apps Script but only represented by placeholder/static UI in the frontend.
 
 ## Known Issues
@@ -137,6 +151,7 @@ Apps Script Script Properties:
 * No automated test suite or lint/build script exists.
 * Frontend deploy URL for Apps Script is hardcoded in `docs/app.js`.
 * Admin writes use a simple JSONP/GET route protected by `ALWAYS_SMOOTH_ADMIN_CODE`; keep editable fields low-risk and whitelisted.
+* Betting submissions use a public JSONP/GET route and trust known league members not to submit for each other; server validation limits writes to the configured member rows and bet columns.
 * `fetchMatchupData` writes to hardcoded row `278` and reads week number from `API Data!A19`.
 * Expanded team-card styling is split between `docs/index.html` CSS overlays/row glass and `docs/app.js` rendered Tailwind text classes; keep both light/dark paths aligned.
 * Root `index.html` and `docs/index.html` can drift because one is Apps Script templated and one is GitHub Pages static.
@@ -152,8 +167,8 @@ Apps Script Script Properties:
 
 ## Recommended Next 3 Steps
 
-1. Define the weekly bets Google Sheets schema and Apps Script route contract.
-2. Expose betting and matchup context through a read-only route or expanded `api/league-data` payload, then render it inside the existing Betting tab.
+1. Deploy Apps Script, update the Web App version, and verify `?api=betting-data` returns the expected sheet payload.
+2. Publish GitHub Pages and test selecting a member, submitting picks, overwrite confirmation, and results-row lockout.
 3. Clean up legacy/duplicated Apps Script paths only after current deployed behavior is confirmed.
 
 ## Notes For Future Sessions

@@ -5,7 +5,7 @@ Supplemental app for the Always Smooth Dynasty League, a 10-team fantasy footbal
 ## Product Context
 
 - Primary audience: the 10 members of the Always Smooth Dynasty League.
-- Core workflow: open the app to check league data and, as development continues, place weekly fantasy football bets.
+- Core workflow: open the app to check league data and place weekly fantasy football bets.
 - Source of truth: the repo for code and continuity, Google Sheets for league data, Sleeper for imported fantasy data.
 - Out of scope: replacing Sleeper as the place where managers set lineups and manage teams.
 
@@ -21,6 +21,8 @@ Supplemental app for the Always Smooth Dynasty League, a 10-team fantasy footbal
 ## Architecture
 
 The GitHub Pages frontend calls the deployed Apps Script web app with JSONP. Apps Script reads from Google Sheets, enriches roster/standings data with supplemental team data, and returns payloads used by the frontend.
+
+The Betting tab is also Google Sheets-backed. It reads weekly prompts, member rows, submissions, results, input mappings, and option banks from `App Data Collection`; app-originated betting writes are limited to member submission cells `B2:G11`.
 
 Important entry points:
 

@@ -3,6 +3,7 @@ const FALLBACK_PHOTO = 'https://images.unsplash.com/photo-1540747913346-19e32dc3
 const THEME_KEY = 'theme';
 const CONFIG_CACHE_KEY = 'always-smooth-config';
 const DATA_CACHE_KEY = 'always-smooth-league-data';
+const BETTING_BET_COUNT = 6;
 const DEFAULT_CONFIG = {
   appName: 'Always Smooth',
   appShortName: 'Always Smooth',
@@ -21,6 +22,10 @@ let adminEditTimer = null;
 let adminEditActivated = false;
 let adminEditStart = null;
 let adminCodeCache = '';
+let bettingData = null;
+let selectedBettingMemberRow = null;
+let bettingStatusMessage = '';
+let bettingStatusTone = 'warning';
 
 function getCachedJson(key) {
   try {
@@ -68,7 +73,9 @@ function fetchJsonp(path, params = {}) {
     const routeMap = {
       'api/config': 'config',
       'api/league-data': 'league-data',
-      'api/update-team-field': 'update-team-field'
+      'api/betting-data': 'betting-data',
+      'api/update-team-field': 'update-team-field',
+      'api/submit-bets': 'submit-bets'
     };
     const route = routeMap[path] || path.replace(/^\//, '');
     const url = buildApiUrl(route, { ...params, callback: callbackName });
@@ -538,6 +545,382 @@ async function loadStandings() {
   }
 }
 
+function getBettingStatusClass(tone = 'warning') {
+  const base = 'rounded-2xl border px-4 py-3 text-sm font-semibold shadow-sm';
+  if (tone === 'error') {
+    return `${base} border-red-300 bg-red-50 text-red-900 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-100`;
+  }
+  if (tone === 'success') {
+    return `${base} border-emerald-300 bg-emerald-50 text-emerald-900 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-100`;
+  }
+  return `${base} border-amber-300 bg-amber-50 text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-100`;
+}
+
+function getBettingStatusMarkup() {
+  const hidden = bettingStatusMessage ? '' : ' hidden';
+  return `<div id="betting-status"${hidden} class="${getBettingStatusClass(bettingStatusTone)}">${escapeHtml(bettingStatusMessage)}</div>`;
+}
+
+function setBettingStatus(message, tone = 'warning') {
+  bettingStatusMessage = message || '';
+  bettingStatusTone = tone;
+  const status = document.getElementById('betting-status');
+  if (!status) return;
+
+  if (!bettingStatusMessage) {
+    status.hidden = true;
+    status.textContent = '';
+    return;
+  }
+
+  status.hidden = false;
+  status.className = getBettingStatusClass(tone);
+  status.textContent = bettingStatusMessage;
+}
+
+function getBettingRoot() {
+  return document.getElementById('betting-root');
+}
+
+function getBettingWeekLabel() {
+  return `Week ${bettingData?.week || '--'} Bets`;
+}
+
+function getCurrentBettingMember() {
+  if (!bettingData || !selectedBettingMemberRow) return null;
+  return bettingData.members.find((member) => Number(member.row) === Number(selectedBettingMemberRow)) || null;
+}
+
+function renderBettingSkeleton() {
+  const root = getBettingRoot();
+  if (!root) return;
+
+  root.innerHTML = `
+    <div class="space-y-6">
+      <div class="flex items-center justify-between px-1">
+        <div class="space-y-3">
+          <div class="h-8 w-44 animate-pulse rounded bg-slate-200 dark:bg-slate-800"></div>
+          <div class="h-4 w-32 animate-pulse rounded bg-slate-200 dark:bg-slate-800"></div>
+        </div>
+      </div>
+      <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+        ${Array.from({ length: 4 }).map(() => `
+          <div class="glass-panel rounded-3xl border border-slate-200 bg-white/85 p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900/70">
+            <div class="h-5 w-2/3 animate-pulse rounded bg-slate-200 dark:bg-slate-800"></div>
+            <div class="mt-3 h-4 w-1/3 animate-pulse rounded bg-slate-200 dark:bg-slate-800"></div>
+          </div>
+        `).join('')}
+      </div>
+    </div>
+  `;
+}
+
+function renderBettingEmpty(message) {
+  const root = getBettingRoot();
+  if (!root) return;
+
+  root.innerHTML = `
+    <div class="glass-panel rounded-3xl border border-slate-200 bg-white/90 p-8 text-center shadow-sm dark:border-pink-500/10 dark:bg-slate-900/70">
+      <p class="text-sm font-black uppercase tracking-[0.22em] text-slate-500 dark:text-slate-400">${escapeHtml(message)}</p>
+    </div>
+  `;
+}
+
+function renderBettingHeader(actionsMarkup = '') {
+  return `
+    <div class="flex flex-col gap-4 px-1 md:flex-row md:items-start md:justify-between">
+      <div class="space-y-3">
+        <h2 class="text-3xl font-black uppercase italic tracking-tight">${escapeHtml(getBettingWeekLabel())}</h2>
+        <div class="flex flex-wrap gap-3 text-xs font-black uppercase tracking-[0.18em]">
+          <span class="rounded-full border border-slate-200 bg-white px-4 py-2 text-slate-700 shadow-sm dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200">${escapeHtml(formatTimestamp(bettingData?.updatedAt))}</span>
+          ${bettingData?.resultsPosted ? '<span class="rounded-full bg-emerald-500 px-4 py-2 text-white shadow-lg shadow-emerald-500/20">Finalized</span>' : '<span class="rounded-full bg-pink-500 px-4 py-2 text-white shadow-lg shadow-pink-500/20">Open</span>'}
+        </div>
+      </div>
+      <div class="flex items-center gap-3">
+        ${actionsMarkup}
+        <button type="button" data-betting-refresh class="rounded-full border border-slate-200 bg-white p-3 shadow-sm transition hover:border-pink-500 dark:border-slate-800 dark:bg-slate-900" aria-label="Refresh betting data">
+          <svg class="h-4 w-4 text-pink-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+        </button>
+      </div>
+    </div>
+  `;
+}
+
+function renderBettingMemberPicker() {
+  const root = getBettingRoot();
+  if (!root || !bettingData) return;
+
+  if (!bettingData.members.length) {
+    renderBettingEmpty('No betting members are available yet.');
+    return;
+  }
+
+  const memberCards = bettingData.members.map((member) => `
+    <button type="button" data-betting-member-row="${member.row}" class="glass-panel group rounded-3xl border border-slate-200 bg-white/90 p-5 text-left shadow-sm transition hover:border-pink-500/40 hover:shadow-xl dark:border-slate-800 dark:bg-slate-900/70">
+      <div class="flex items-start justify-between gap-4">
+        <div class="min-w-0">
+          <p class="truncate text-lg font-black italic uppercase leading-tight tracking-tight text-slate-900 group-hover:text-pink-500 dark:text-white">${escapeHtml(member.name)}</p>
+          <p class="mt-2 text-xs font-black uppercase tracking-[0.18em] text-slate-400">${member.submitted ? 'Submitted' : 'Open'}</p>
+        </div>
+        <span class="${member.submitted ? 'bg-emerald-500 text-white' : 'border border-slate-200 bg-white text-slate-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300'} shrink-0 rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-[0.16em]">${member.submitted ? 'In' : 'Pick'}</span>
+      </div>
+    </button>
+  `).join('');
+
+  root.innerHTML = `
+    <div class="space-y-6">
+      ${renderBettingHeader()}
+      ${getBettingStatusMarkup()}
+      ${bettingData.warnings?.length ? `
+        <div class="${getBettingStatusClass('warning')}">${bettingData.warnings.map(escapeHtml).join(' ')}</div>
+      ` : ''}
+      <div class="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+        ${memberCards}
+      </div>
+    </div>
+  `;
+}
+
+function getBettingOptionButtonMarkup(bet, option, value, disabled) {
+  const active = option === value;
+  return `
+    <button type="button" class="betting-choice-button" data-bet-option data-value="${escapeHtml(option)}" aria-pressed="${active ? 'true' : 'false'}"${disabled ? ' disabled' : ''}>
+      ${escapeHtml(option)}
+    </button>
+  `;
+}
+
+function getBettingInputMarkup(bet, value, disabled) {
+  const disabledAttr = disabled ? ' disabled' : '';
+  const fieldName = `bet-${bet.index}`;
+  const safeValue = escapeHtml(value || '');
+
+  if (bet.inputType === 'select') {
+    const options = (bet.options || []).map((option) => `
+      <option value="${escapeHtml(option)}"${option === value ? ' selected' : ''}>${escapeHtml(option)}</option>
+    `).join('');
+    return `
+      <select name="${fieldName}" class="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-900 shadow-sm outline-none transition focus:border-pink-500 focus:ring-2 focus:ring-pink-500/20 disabled:cursor-not-allowed disabled:opacity-70 dark:border-slate-800 dark:bg-slate-950 dark:text-white"${disabledAttr}>
+        <option value="">Select</option>
+        ${options}
+      </select>
+    `;
+  }
+
+  if (bet.inputType === 'pill') {
+    return `
+      <div class="flex flex-wrap gap-2" data-bet-field data-bet-index="${bet.index}" data-value="${safeValue}">
+        ${(bet.options || []).map((option) => getBettingOptionButtonMarkup(bet, option, value, disabled)).join('')}
+      </div>
+    `;
+  }
+
+  return `
+    <input name="${fieldName}" type="text" maxlength="120" value="${safeValue}" class="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-900 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-pink-500 focus:ring-2 focus:ring-pink-500/20 disabled:cursor-not-allowed disabled:opacity-70 dark:border-slate-800 dark:bg-slate-950 dark:text-white" placeholder="Enter pick"${disabledAttr}>
+  `;
+}
+
+function renderBettingForm() {
+  const root = getBettingRoot();
+  const member = getCurrentBettingMember();
+  if (!root || !bettingData || !member) {
+    renderBettingMemberPicker();
+    return;
+  }
+
+  const finalized = bettingData.resultsPosted === true;
+  const picks = Array.isArray(member.picks) ? member.picks : [];
+  const backButton = `
+    <button type="button" data-betting-back class="rounded-full border border-slate-200 bg-white px-4 py-3 text-xs font-black uppercase tracking-[0.18em] text-slate-700 shadow-sm transition hover:border-pink-500 hover:text-pink-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200">
+      Back
+    </button>
+  `;
+
+  const betCards = bettingData.bets.map((bet, index) => {
+    const value = picks[index] || '';
+    const result = bettingData.results?.[index] || '';
+    return `
+      <article class="glass-panel rounded-3xl border border-slate-200 bg-white/90 p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900/70">
+        <div class="mb-4 flex items-start justify-between gap-4">
+          <div>
+            <p class="text-[10px] font-black uppercase tracking-[0.22em] text-pink-500">Bet ${index + 1}</p>
+            <h3 class="mt-2 text-base font-black leading-snug text-slate-950 dark:text-white">${escapeHtml(bet.prompt || `Bet ${index + 1}`)}</h3>
+          </div>
+        </div>
+        <div data-bet-card data-bet-index="${index}">
+          ${getBettingInputMarkup(bet, value, finalized)}
+        </div>
+        ${result ? `<p class="mt-4 rounded-2xl bg-emerald-50 px-4 py-3 text-xs font-black uppercase tracking-[0.16em] text-emerald-900 dark:bg-emerald-500/10 dark:text-emerald-100">Result: ${escapeHtml(result)}</p>` : ''}
+      </article>
+    `;
+  }).join('');
+
+  root.innerHTML = `
+    <div class="space-y-6">
+      ${renderBettingHeader(backButton)}
+      ${getBettingStatusMarkup()}
+      <div class="glass-panel rounded-3xl border border-slate-200 bg-white/90 p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900/70">
+        <p class="text-[10px] font-black uppercase tracking-[0.22em] text-slate-400">Selected Team</p>
+        <div class="mt-2 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+          <h3 class="text-2xl font-black italic uppercase tracking-tight text-slate-950 dark:text-white">${escapeHtml(member.name)}</h3>
+          <span class="${member.submitted ? 'bg-emerald-500 text-white' : 'bg-pink-500 text-white'} w-fit rounded-full px-4 py-2 text-xs font-black uppercase tracking-[0.18em]">${member.submitted ? 'Submitted' : 'Open'}</span>
+        </div>
+      </div>
+      <form id="betting-form" class="space-y-5">
+        <div class="grid grid-cols-1 gap-5 lg:grid-cols-2">
+          ${betCards}
+        </div>
+        <button type="submit" class="w-full rounded-2xl bg-pink-500 px-5 py-4 text-sm font-black uppercase tracking-[0.22em] text-white shadow-lg shadow-pink-500/20 transition hover:bg-pink-400 disabled:cursor-not-allowed disabled:bg-slate-400 disabled:shadow-none dark:disabled:bg-slate-700"${finalized ? ' disabled' : ''}>
+          ${finalized ? 'Results Posted' : 'Submit Picks'}
+        </button>
+      </form>
+    </div>
+  `;
+}
+
+function renderBetting() {
+  if (!bettingData) {
+    renderBettingSkeleton();
+    return;
+  }
+
+  if (selectedBettingMemberRow && getCurrentBettingMember()) {
+    renderBettingForm();
+    return;
+  }
+
+  selectedBettingMemberRow = null;
+  renderBettingMemberPicker();
+}
+
+async function loadBettingData() {
+  if (!getBettingRoot()) return;
+  renderBettingSkeleton();
+
+  try {
+    const payload = await fetchJsonp('api/betting-data');
+    if (!payload || payload.ok !== true) {
+      throw new Error(payload?.error || 'Betting data could not be loaded.');
+    }
+    bettingData = payload;
+    if (selectedBettingMemberRow && !getCurrentBettingMember()) {
+      selectedBettingMemberRow = null;
+    }
+    renderBetting();
+  } catch (error) {
+    console.error(error);
+    bettingData = null;
+    renderBettingEmpty('Betting data could not be loaded.');
+    setBanner('Betting data could not be loaded from Apps Script.', 'error');
+  }
+}
+
+function updateBettingOptionSelection(button) {
+  const field = button.closest('[data-bet-field]');
+  if (!field) return;
+
+  const selectedValue = button.dataset.value || '';
+  field.dataset.value = selectedValue;
+  field.querySelectorAll('[data-bet-option]').forEach((optionButton) => {
+    optionButton.setAttribute('aria-pressed', optionButton.dataset.value === selectedValue ? 'true' : 'false');
+  });
+}
+
+function collectBettingPicks() {
+  const form = document.getElementById('betting-form');
+  if (!form || !bettingData) return [];
+
+  return bettingData.bets.map((bet) => {
+    if (bet.inputType === 'pill') {
+      const field = form.querySelector(`[data-bet-field][data-bet-index="${bet.index}"]`);
+      return field?.dataset.value || '';
+    }
+    return form.elements[`bet-${bet.index}`]?.value?.trim() || '';
+  });
+}
+
+async function submitBettingForm() {
+  const member = getCurrentBettingMember();
+  if (!member || !bettingData) return;
+  if (bettingData.resultsPosted) {
+    setBettingStatus('This betting week is finalized. Results have already been posted.', 'error');
+    return;
+  }
+
+  const values = collectBettingPicks();
+  if (values.length !== BETTING_BET_COUNT || values.some((value) => !value)) {
+    setBettingStatus(`Finish all ${BETTING_BET_COUNT} picks before submitting.`, 'error');
+    return;
+  }
+
+  if (member.submitted && !window.confirm(`Overwrite picks for ${member.name}?`)) {
+    return;
+  }
+
+  const submitButton = document.querySelector('#betting-form button[type="submit"]');
+  if (submitButton) submitButton.disabled = true;
+  setBettingStatus(`Saving picks for ${member.name}...`);
+
+  try {
+    const payload = await fetchJsonp('api/submit-bets', {
+      memberRow: member.row,
+      memberName: member.name,
+      picks: JSON.stringify(values)
+    });
+    if (!payload || payload.ok !== true) {
+      throw new Error(payload?.error || 'Submit failed.');
+    }
+    bettingStatusMessage = `Picks saved for ${member.name}.`;
+    bettingStatusTone = 'success';
+    await loadBettingData();
+  } catch (error) {
+    console.error(error);
+    setBettingStatus(`Submit failed: ${error.message || error}`, 'error');
+    if (submitButton) submitButton.disabled = false;
+  }
+}
+
+function setupBettingControls() {
+  const root = getBettingRoot();
+  if (!root || root.dataset.bettingBound === 'true') return;
+
+  root.dataset.bettingBound = 'true';
+  root.addEventListener('click', (event) => {
+    const refresh = event.target.closest('[data-betting-refresh]');
+    if (refresh) {
+      loadBettingData();
+      return;
+    }
+
+    const back = event.target.closest('[data-betting-back]');
+    if (back) {
+      selectedBettingMemberRow = null;
+      setBettingStatus('');
+      renderBettingMemberPicker();
+      return;
+    }
+
+    const optionButton = event.target.closest('[data-bet-option]');
+    if (optionButton) {
+      updateBettingOptionSelection(optionButton);
+      return;
+    }
+
+    const memberButton = event.target.closest('[data-betting-member-row]');
+    if (memberButton) {
+      selectedBettingMemberRow = Number(memberButton.dataset.bettingMemberRow);
+      setBettingStatus('');
+      renderBettingForm();
+    }
+  });
+
+  root.addEventListener('submit', (event) => {
+    if (event.target.id !== 'betting-form') return;
+    event.preventDefault();
+    submitBettingForm();
+  });
+}
+
 function setupInstallPrompt() {
   const installPanel = document.getElementById('install-panel');
   const installButton = document.getElementById('install-button');
@@ -619,6 +1002,10 @@ function setActiveTab(tabName, shouldScroll = false) {
       main.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
   }
+
+  if (activeTab === 'betting' && !bettingData) {
+    loadBettingData();
+  }
 }
 
 function setupAppTabs() {
@@ -660,6 +1047,7 @@ async function bootstrap() {
   setupInstallPrompt();
   setupScrollBehavior();
   setupAppTabs();
+  setupBettingControls();
   setupStandingsAccordion();
   setupAdminEditing();
   await registerServiceWorker();

@@ -51,6 +51,18 @@ const APP_SHORT_NAME = 'Always Smooth';
 const APP_THEME_COLOR = '#ec4899';
 const APP_BACKGROUND_COLOR = '#020617';
 
+const BETTING_SHEET = 'App Data Collection';
+const BETTING_PROMPT_ROW = 1;
+const BETTING_MEMBER_START_ROW = 2;
+const BETTING_MEMBER_COUNT = 10;
+const BETTING_RESULTS_ROW = 12;
+const BETTING_MAPPING_ROW = 13;
+const BETTING_FIRST_BET_COL = 2; // Column B (1-based)
+const BETTING_BET_COUNT = 6;
+const BETTING_OPTION_BANK_FIRST_COL = 8; // Column H (1-based)
+const BETTING_OPTION_BANK_COLS = 4; // H:K
+const BETTING_MAX_PICK_LENGTH = 120;
+
 /** Sheet tab written by fetchLeagueMembersData / updateRostersAndRecordsData */
 const ROSTERS_RECORDS_SHEET = 'Rosters & Records';
 /** 0-based column index when "Streak" header is missing (column G) */
@@ -790,6 +802,385 @@ function updateTeamField_(spreadsheet, params) {
 }
 
 /**
+ * @param {*} value
+ * @return {boolean}
+ */
+function isBlankDisplayValue_(value) {
+  return value === '' || value === null || value === undefined || String(value).trim() === '';
+}
+
+/**
+ * Normalizes option-bank and mapping labels so sheet-friendly names like
+ * "Choice 1", "choice_1", and "choice1" all match.
+ * @param {*} value
+ * @return {string}
+ */
+function normalizeBettingOptionKey_(value) {
+  return String(value || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+
+/**
+ * @param {string} mapping
+ * @param {Object<string, {key: string, label: string, options: string[]}>} banksByKey
+ * @return {{inputType: string, optionBankKey: string, optionBankLabel: string, options: string[], warning: string}}
+ */
+function resolveBettingInputConfig_(mapping, banksByKey) {
+  var raw = String(mapping || '').trim();
+  var key = normalizeBettingOptionKey_(raw);
+  if (!key || key === 'text' || key === 'textfield' || key === 'freeform' || key === 'freeanswer') {
+    return {
+      inputType: 'text',
+      optionBankKey: '',
+      optionBankLabel: raw || 'Text',
+      options: [],
+      warning: ''
+    };
+  }
+
+  var bank = banksByKey[key];
+  if (!bank) {
+    return {
+      inputType: 'text',
+      optionBankKey: key,
+      optionBankLabel: raw,
+      options: [],
+      warning: 'Input mapping "' + raw + '" does not match an option bank header in H1:K1.'
+    };
+  }
+
+  if (!bank.options.length) {
+    return {
+      inputType: 'text',
+      optionBankKey: bank.key,
+      optionBankLabel: bank.label,
+      options: [],
+      warning: 'Option bank "' + bank.label + '" has no values.'
+    };
+  }
+
+  return {
+    inputType: bank.options.length > 2 ? 'select' : 'pill',
+    optionBankKey: bank.key,
+    optionBankLabel: bank.label,
+    options: bank.options,
+    warning: ''
+  };
+}
+
+/**
+ * Reads reusable betting option banks from H1:K on App Data Collection.
+ * @param {GoogleAppsScript.Spreadsheet.Sheet} sheet
+ * @return {{list: Array<{key: string, label: string, options: string[]}>, byKey: Object<string, {key: string, label: string, options: string[]}>}}
+ */
+function buildBettingOptionBanks_(sheet) {
+  var rowCount = Math.max(sheet.getLastRow(), 6);
+  var values = sheet
+    .getRange(1, BETTING_OPTION_BANK_FIRST_COL, rowCount, BETTING_OPTION_BANK_COLS)
+    .getDisplayValues();
+  var list = [];
+  var byKey = {};
+
+  for (var c = 0; c < BETTING_OPTION_BANK_COLS; c++) {
+    var label = String(values[0][c] || '').trim();
+    if (!label) continue;
+
+    var options = [];
+    for (var r = 1; r < values.length; r++) {
+      var option = String(values[r][c] || '').trim();
+      if (option) options.push(option);
+    }
+
+    var key = normalizeBettingOptionKey_(label);
+    var bank = {
+      key: key,
+      label: label,
+      options: options
+    };
+    list.push(bank);
+    byKey[key] = bank;
+  }
+
+  return {
+    list: list,
+    byKey: byKey
+  };
+}
+
+/**
+ * @param {GoogleAppsScript.Spreadsheet.Sheet} sheet
+ * @return {{bets: Array, warnings: string[]}}
+ */
+function buildWeeklyBetConfigs_(sheet) {
+  var prompts = sheet
+    .getRange(BETTING_PROMPT_ROW, BETTING_FIRST_BET_COL, 1, BETTING_BET_COUNT)
+    .getDisplayValues()[0];
+  var mappings = sheet
+    .getRange(BETTING_MAPPING_ROW, BETTING_FIRST_BET_COL, 1, BETTING_BET_COUNT)
+    .getDisplayValues()[0];
+  var optionBanks = buildBettingOptionBanks_(sheet);
+  var bets = [];
+  var warnings = [];
+
+  for (var i = 0; i < BETTING_BET_COUNT; i++) {
+    var mapping = String(mappings[i] || '').trim();
+    var inputConfig = resolveBettingInputConfig_(mapping, optionBanks.byKey);
+    if (inputConfig.warning) warnings.push('Bet ' + (i + 1) + ': ' + inputConfig.warning);
+    bets.push({
+      id: 'bet-' + (i + 1),
+      index: i,
+      column: columnIndexToA1Letter_(BETTING_FIRST_BET_COL - 1 + i),
+      prompt: String(prompts[i] || '').trim(),
+      mapping: mapping,
+      inputType: inputConfig.inputType,
+      optionBankKey: inputConfig.optionBankKey,
+      optionBankLabel: inputConfig.optionBankLabel,
+      options: inputConfig.options
+    });
+  }
+
+  return {
+    bets: bets,
+    warnings: warnings
+  };
+}
+
+/**
+ * @param {GoogleAppsScript.Spreadsheet.Spreadsheet} spreadsheet
+ * @return {Object}
+ */
+function getBettingData_(spreadsheet) {
+  var fail = function (message) {
+    return {
+      ok: false,
+      error: message,
+      updatedAt: new Date().toISOString()
+    };
+  };
+
+  if (!spreadsheet) return fail('No spreadsheet is available.');
+
+  var sheet = spreadsheet.getSheetByName(BETTING_SHEET);
+  if (!sheet) return fail('Sheet "' + BETTING_SHEET + '" was not found.');
+
+  try {
+    var config = buildWeeklyBetConfigs_(sheet);
+    var membersRaw = sheet
+      .getRange(BETTING_MEMBER_START_ROW, 1, BETTING_MEMBER_COUNT, 1)
+      .getDisplayValues();
+    var picksRaw = sheet
+      .getRange(BETTING_MEMBER_START_ROW, BETTING_FIRST_BET_COL, BETTING_MEMBER_COUNT, BETTING_BET_COUNT)
+      .getDisplayValues();
+    var results = sheet
+      .getRange(BETTING_RESULTS_ROW, BETTING_FIRST_BET_COL, 1, BETTING_BET_COUNT)
+      .getDisplayValues()[0]
+      .map(function (value) {
+        return String(value || '').trim();
+      });
+    var members = [];
+
+    for (var r = 0; r < BETTING_MEMBER_COUNT; r++) {
+      var name = String(membersRaw[r][0] || '').trim();
+      if (!name) continue;
+      var picks = picksRaw[r].map(function (value) {
+        return String(value || '').trim();
+      });
+      members.push({
+        row: BETTING_MEMBER_START_ROW + r,
+        name: name,
+        picks: picks,
+        submitted: picks.some(function (value) {
+          return !isBlankDisplayValue_(value);
+        })
+      });
+    }
+
+    return {
+      ok: true,
+      sheetName: BETTING_SHEET,
+      week: getLeagueWeek_(spreadsheet),
+      bets: config.bets,
+      members: members,
+      results: results,
+      resultsPosted: results.some(function (value) {
+        return !isBlankDisplayValue_(value);
+      }),
+      optionBanks: buildBettingOptionBanks_(sheet).list,
+      warnings: config.warnings,
+      updatedAt: new Date().toISOString()
+    };
+  } catch (err) {
+    return fail(err.message || String(err));
+  }
+}
+
+/**
+ * @param {Object} params
+ * @return {Array}
+ */
+function parseBettingPickValues_(params) {
+  var raw = params.picks || params.values || params.entries || '';
+  if (raw) {
+    try {
+      var parsed = JSON.parse(String(raw));
+      if (Array.isArray(parsed)) return parsed;
+      if (parsed && Array.isArray(parsed.values)) return parsed.values;
+      if (parsed && Array.isArray(parsed.picks)) return parsed.picks;
+    } catch (err) {
+      return [];
+    }
+  }
+
+  var values = [];
+  var found = false;
+  for (var i = 1; i <= BETTING_BET_COUNT; i++) {
+    var value =
+      params['pick' + i] !== undefined
+        ? params['pick' + i]
+        : params['bet' + i] !== undefined
+          ? params['bet' + i]
+          : params['value' + i];
+    if (value !== undefined) found = true;
+    values.push(value === undefined ? '' : value);
+  }
+  return found ? values : [];
+}
+
+/**
+ * @param {*} raw
+ * @param {Object} bet
+ * @return {{value: string, error: string}}
+ */
+function sanitizeBettingPickValue_(raw, bet) {
+  var value = raw === null || raw === undefined ? '' : String(raw).trim();
+  if (!value) return { value: '', error: 'Enter a pick.' };
+  if (value.length > BETTING_MAX_PICK_LENGTH) {
+    return {
+      value: '',
+      error: 'Pick must be ' + BETTING_MAX_PICK_LENGTH + ' characters or fewer.'
+    };
+  }
+  if (/^=/.test(value)) {
+    return {
+      value: '',
+      error: 'Pick cannot start with "=".'
+    };
+  }
+
+  if (bet.options && bet.options.length) {
+    var valueKey = normalizeBettingOptionKey_(value);
+    for (var i = 0; i < bet.options.length; i++) {
+      if (normalizeBettingOptionKey_(bet.options[i]) === valueKey) {
+        return {
+          value: bet.options[i],
+          error: ''
+        };
+      }
+    }
+    return {
+      value: '',
+      error: 'Choose one of the configured options.'
+    };
+  }
+
+  return {
+    value: value,
+    error: ''
+  };
+}
+
+/**
+ * Public league-member bet submission route. Writes only B2:G11 on the
+ * App Data Collection sheet and validates against B13:G13/H1:K option banks.
+ * @param {GoogleAppsScript.Spreadsheet.Spreadsheet} spreadsheet
+ * @param {Object} params
+ * @return {Object}
+ */
+function submitBettingPicks_(spreadsheet, params) {
+  var fail = function (message, extra) {
+    var payload = {
+      ok: false,
+      error: message,
+      updatedAt: new Date().toISOString()
+    };
+    if (extra) {
+      Object.keys(extra).forEach(function (key) {
+        payload[key] = extra[key];
+      });
+    }
+    return payload;
+  };
+
+  if (!spreadsheet) return fail('No spreadsheet is available.');
+
+  var sheet = spreadsheet.getSheetByName(BETTING_SHEET);
+  if (!sheet) return fail('Sheet "' + BETTING_SHEET + '" was not found.');
+
+  var results = sheet
+    .getRange(BETTING_RESULTS_ROW, BETTING_FIRST_BET_COL, 1, BETTING_BET_COUNT)
+    .getDisplayValues()[0];
+  if (results.some(function (value) { return !isBlankDisplayValue_(value); })) {
+    return fail('This betting week is finalized. Results have already been posted.', {
+      finalized: true
+    });
+  }
+
+  var memberRow = Number(params.memberRow || params.row || 0);
+  if (
+    !memberRow ||
+    Math.floor(memberRow) !== memberRow ||
+    memberRow < BETTING_MEMBER_START_ROW ||
+    memberRow >= BETTING_MEMBER_START_ROW + BETTING_MEMBER_COUNT
+  ) {
+    return fail('Invalid member row.');
+  }
+
+  var sheetMemberName = String(sheet.getRange(memberRow, 1).getDisplayValue() || '').trim();
+  if (!sheetMemberName) return fail('No member exists on that row.');
+
+  var providedMemberName = String(params.memberName || params.member || '').trim();
+  if (providedMemberName && normalizeTeamNameKey_(providedMemberName) !== normalizeTeamNameKey_(sheetMemberName)) {
+    return fail('Member row and member name do not match.');
+  }
+
+  var submittedValues = parseBettingPickValues_(params);
+  if (!submittedValues || submittedValues.length !== BETTING_BET_COUNT) {
+    return fail('Expected exactly ' + BETTING_BET_COUNT + ' picks.');
+  }
+
+  var config = buildWeeklyBetConfigs_(sheet);
+  var sanitized = [];
+  for (var i = 0; i < BETTING_BET_COUNT; i++) {
+    var result = sanitizeBettingPickValue_(submittedValues[i], config.bets[i]);
+    if (result.error) {
+      return fail('Bet ' + (i + 1) + ': ' + result.error);
+    }
+    sanitized.push(result.value);
+  }
+
+  var lock = LockService.getScriptLock();
+  var hasLock = false;
+  try {
+    lock.waitLock(5000);
+    hasLock = true;
+    sheet.getRange(memberRow, BETTING_FIRST_BET_COL, 1, BETTING_BET_COUNT).setValues([sanitized]);
+    SpreadsheetApp.flush();
+    return {
+      ok: true,
+      member: {
+        row: memberRow,
+        name: sheetMemberName
+      },
+      picks: sanitized,
+      updatedAt: new Date().toISOString()
+    };
+  } catch (err) {
+    return fail(err.message || String(err));
+  } finally {
+    if (hasLock) lock.releaseLock();
+  }
+}
+
+/**
  * Serves the league dashboard HTML as a Web App.
  * @param {Object} e Request parameters (unused; present for Web App signature).
  * @return {GoogleAppsScript.HTML.HtmlOutput}
@@ -816,8 +1207,16 @@ function doGet(e) {
     return createApiOutput_(getLeagueData(debug), callbackName);
   }
 
+  if (path === 'betting-data' || path === 'api/betting-data' || apiName === 'betting-data') {
+    return createApiOutput_(getBettingData_(spreadsheet), callbackName);
+  }
+
   if (path === 'update-team-field' || path === 'api/update-team-field' || apiName === 'update-team-field') {
     return createApiOutput_(updateTeamField_(spreadsheet, params), callbackName);
+  }
+
+  if (path === 'submit-bets' || path === 'api/submit-bets' || apiName === 'submit-bets') {
+    return createApiOutput_(submitBettingPicks_(spreadsheet, params), callbackName);
   }
 
   var raw = HEADER_IMAGE_URL || '';

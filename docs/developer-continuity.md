@@ -76,6 +76,7 @@ Admin writes from the GitHub Pages app use a simple admin-code gate because the 
 * `.claspignore` excludes `docs/**`; pushing Apps Script with clasp will not deploy the GitHub Pages frontend.
 * Admin write access depends on Apps Script Script Property `ALWAYS_SMOOTH_ADMIN_CODE`; without it, write routes should fail closed.
 * Admin write routes use the existing JSONP/GET pattern for simplicity, so keep them limited to low-risk, whitelisted league-maintenance fields.
+* Betting submissions also use JSONP/GET for the public GitHub Pages app. Keep server-side validation strict because the frontend is not authenticated.
 * `Settings` tab must provide values in `B2:B5` for season, week, league ID, and app icon URL. Season/week intentionally fall back to blank placeholders in the frontend, while league ID and app icon retain backend defaults.
 * `Rosters & Records` must include `Team Name`, `W-L Record`, and `Fpts (Total)` headers for the frontend payload.
 * `Rosters & Records` `Streak` falls back to column G if the header is missing.
@@ -90,7 +91,9 @@ Admin writes from the GitHub Pages app use a simple admin-code gate because the 
 * Expanded team-card detail styling is split between `docs/index.html` CSS overlays/row glass and `docs/app.js` rendered Tailwind text classes; update both when changing light/dark treatment.
 * `docs/service-worker.js` caches app shell files; update `CACHE_NAME` when changing cached assets in a way that must invalidate old clients.
 * Root `index.html` and `docs/index.html` are separate frontends and can drift.
-* The GitHub Pages frontend has a fixed bottom tab overlay in `docs/index.html`; `docs/app.js#setActiveTab` toggles `[data-tab-panel]` views. The `Betting` panel is intentionally blank until a Google Sheets/API data contract exists.
+* The GitHub Pages frontend has a fixed bottom tab overlay in `docs/index.html`; `docs/app.js#setActiveTab` toggles `[data-tab-panel]` views and lazy-loads Betting data the first time the Betting tab is opened.
+* `App Data Collection` powers Betting. `B1:G1` are weekly prompts, `A2:A11` are members, `B2:G11` are submissions, `B12:G12` are results/finalization cells, `B13:G13` maps input types, and `H1:K6` holds reusable option banks.
+* The app should only write Betting submissions to `App Data Collection!B2:G11`. Do not let app-originated writes touch prompt, results, mapping, or option-bank ranges.
 
 ## Don't Do This
 
@@ -107,8 +110,8 @@ Admin writes from the GitHub Pages app use a simple admin-code gate because the 
 ## Handoff Notes
 
 * The continuity system is now bootstrapped; future skill maintenance should tighten existing artifacts rather than expanding volume by default.
-* The newest visible work is the bottom `Home`/`Betting` tab overlay in the GitHub Pages frontend. Home contains the existing standings dashboard; Betting is a blank starter panel.
-* The next product-shaping feature is the Google Sheets-backed weekly betting contract and first Betting tab render.
+* The newest visible work is Betting tab v1: member selection, weekly prompt rendering, option-bank inputs, public submission, overwrite confirmation, and results-row lockout.
+* The next product-shaping task is live deployment verification against the real `App Data Collection` sheet.
 * When adding a new frontend feature, first decide whether its data should be part of `league-data` or exposed by a new Apps Script `api` route.
 * For betting, prefer a Google Sheets-backed schema that can be audited and edited by the league manager.
 * Use defensive UI for missing/empty sheet values because league spreadsheets will be manually maintained.
@@ -129,5 +132,5 @@ Admin writes from the GitHub Pages app use a simple admin-code gate because the 
 * League-specific language and visuals are acceptable and useful.
 * Prefer clarity over generic configurability.
 * Weekly betting should be easy to understand, hard to accidentally misuse, and auditable in Google Sheets.
-* Keep the Betting tab blank until the sheet schema and Apps Script route are explicit; avoid hardcoding sample bets that could be mistaken for real league data.
+* Public member-based betting submissions are an intentional trust-model match for the prior Glide app; avoid adding login/PIN friction unless the league workflow changes.
 * Standings, matchup, and betting views should make Sleeper data and supplemental league rules feel like one coherent league hub.
