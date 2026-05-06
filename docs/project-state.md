@@ -114,7 +114,7 @@ Apps Script Script Properties:
 * `A2:A11`: 10 member/team rows.
 * `B2:G11`: member submissions; these are the only betting cells written by the app.
 * `A12:G12`: weekly results row; any value in `B12:G12` locks submissions.
-* `B13:G13`: input mapping for each prompt. Blank or `text` renders a text input; `team_choice` renders a dropdown from `A2:A11`; otherwise values match normalized option-bank headers.
+* `B13:G13`: input mapping for each prompt. Blank or `text` renders a text input; `team_choice` renders an avatar dropdown from `A2:A11` plus `N2:N11`; otherwise values match normalized option-bank headers.
 * `H1:K1`: option-bank headers.
 * `H2:K6`: option values. Two-option banks render as pill buttons; larger banks render as dropdowns.
 * `N2:N11`: league member profile photos for Betting member cards and selected-member form headers.

@@ -602,10 +602,22 @@ function getMemberInitials(name) {
   return `${words[0][0]}${words[words.length - 1][0]}`.toUpperCase();
 }
 
+function normalizeMemberNameKey(name) {
+  return String(name || '').trim().toLowerCase();
+}
+
+function getBettingMemberByName(name) {
+  if (!bettingData || !Array.isArray(bettingData.members)) return null;
+  const key = normalizeMemberNameKey(name);
+  return bettingData.members.find((member) => normalizeMemberNameKey(member.name) === key) || null;
+}
+
 function getBettingMemberAvatarMarkup(member, size = 'default') {
   const isLarge = size === 'large';
-  const initialsClass = `betting-member-initials${isLarge ? ' betting-member-initials--large' : ''}`;
-  const imageClass = `betting-member-photo${isLarge ? ' betting-member-photo--large' : ''}`;
+  const isTiny = size === 'tiny';
+  const sizeClass = isLarge ? 'large' : isTiny ? 'tiny' : '';
+  const initialsClass = `betting-member-initials${sizeClass ? ` betting-member-initials--${sizeClass}` : ''}`;
+  const imageClass = `betting-member-photo${sizeClass ? ` betting-member-photo--${sizeClass}` : ''}`;
   const initials = escapeHtml(getMemberInitials(member?.name));
   const fallback = `<span class="${initialsClass}" aria-hidden="true">${initials}</span>`;
   if (!member?.photoUrl) return fallback;
@@ -614,6 +626,21 @@ function getBettingMemberAvatarMarkup(member, size = 'default') {
     <span class="relative shrink-0">
       <img src="${escapeHtml(member.photoUrl)}" class="${imageClass}" alt="${escapeHtml(member.name)} profile photo" onerror="this.classList.add('hidden');this.nextElementSibling.classList.remove('hidden');">
       <span class="${initialsClass} hidden" aria-hidden="true">${initials}</span>
+    </span>
+  `;
+}
+
+function getTeamChoiceLabelMarkup(value) {
+  const label = String(value || '').trim();
+  if (!label) {
+    return '<span class="text-slate-400 dark:text-slate-500">Select team</span>';
+  }
+
+  const member = getBettingMemberByName(label) || { name: label, photoUrl: '' };
+  return `
+    <span class="flex min-w-0 items-center gap-3">
+      ${getBettingMemberAvatarMarkup(member, 'tiny')}
+      <span class="truncate">${escapeHtml(label)}</span>
     </span>
   `;
 }
@@ -725,10 +752,42 @@ function getBettingOptionButtonMarkup(bet, option, value, disabled) {
   `;
 }
 
+function getBettingTeamSelectMarkup(bet, value, disabled) {
+  const fieldName = `bet-${bet.index}`;
+  const safeValue = escapeHtml(value || '');
+  const disabledAttr = disabled ? ' disabled' : '';
+  const optionButtons = (bet.options || []).map((option) => {
+    const member = getBettingMemberByName(option) || { name: option, photoUrl: '' };
+    return `
+      <button type="button" class="betting-team-option" data-team-select-option data-value="${escapeHtml(option)}"${disabledAttr}>
+        ${getBettingMemberAvatarMarkup(member, 'tiny')}
+        <span class="min-w-0 truncate">${escapeHtml(option)}</span>
+      </button>
+    `;
+  }).join('');
+
+  return `
+    <div class="betting-team-select" data-team-select data-bet-index="${bet.index}" data-value="${safeValue}">
+      <input type="hidden" name="${fieldName}" value="${safeValue}">
+      <button type="button" class="betting-team-select-trigger" data-team-select-toggle aria-expanded="false"${disabledAttr}>
+        <span class="min-w-0 flex-1" data-team-select-label>${getTeamChoiceLabelMarkup(value)}</span>
+        <svg class="h-4 w-4 shrink-0 text-pink-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 9l6 6 6-6"></path></svg>
+      </button>
+      <div class="betting-team-select-menu" data-team-select-menu hidden>
+        ${optionButtons}
+      </div>
+    </div>
+  `;
+}
+
 function getBettingInputMarkup(bet, value, disabled) {
   const disabledAttr = disabled ? ' disabled' : '';
   const fieldName = `bet-${bet.index}`;
   const safeValue = escapeHtml(value || '');
+
+  if (bet.optionBankKey === 'teamchoice') {
+    return getBettingTeamSelectMarkup(bet, value, disabled);
+  }
 
   if (bet.inputType === 'select') {
     const options = (bet.options || []).map((option) => `
@@ -881,6 +940,40 @@ function updateBettingOptionSelection(button) {
   });
 }
 
+function closeBettingTeamSelects(exceptSelect = null) {
+  document.querySelectorAll('[data-team-select]').forEach((select) => {
+    if (select === exceptSelect) return;
+    const toggle = select.querySelector('[data-team-select-toggle]');
+    const menu = select.querySelector('[data-team-select-menu]');
+    if (toggle) toggle.setAttribute('aria-expanded', 'false');
+    if (menu) menu.hidden = true;
+  });
+}
+
+function toggleBettingTeamSelect(button) {
+  const select = button.closest('[data-team-select]');
+  const menu = select?.querySelector('[data-team-select-menu]');
+  if (!select || !menu) return;
+
+  const shouldOpen = menu.hidden;
+  closeBettingTeamSelects(select);
+  menu.hidden = !shouldOpen;
+  button.setAttribute('aria-expanded', shouldOpen ? 'true' : 'false');
+}
+
+function selectBettingTeamOption(button) {
+  const select = button.closest('[data-team-select]');
+  if (!select) return;
+
+  const value = button.dataset.value || '';
+  const input = select.querySelector('input[type="hidden"]');
+  const label = select.querySelector('[data-team-select-label]');
+  select.dataset.value = value;
+  if (input) input.value = value;
+  if (label) label.innerHTML = getTeamChoiceLabelMarkup(value);
+  closeBettingTeamSelects();
+}
+
 function collectBettingPicks() {
   const form = document.getElementById('betting-form');
   if (!form || !bettingData) return [];
@@ -966,11 +1059,28 @@ function setupBettingControls() {
       return;
     }
 
+    const teamToggle = event.target.closest('[data-team-select-toggle]');
+    if (teamToggle) {
+      toggleBettingTeamSelect(teamToggle);
+      return;
+    }
+
+    const teamOption = event.target.closest('[data-team-select-option]');
+    if (teamOption) {
+      selectBettingTeamOption(teamOption);
+      return;
+    }
+
     const memberButton = event.target.closest('[data-betting-member-row]');
     if (memberButton) {
       selectedBettingMemberRow = Number(memberButton.dataset.bettingMemberRow);
       setBettingStatus('');
       renderBettingForm();
+      return;
+    }
+
+    if (!event.target.closest('[data-team-select]')) {
+      closeBettingTeamSelects();
     }
   });
 
