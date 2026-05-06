@@ -824,9 +824,10 @@ function normalizeBettingOptionKey_(value) {
 /**
  * @param {string} mapping
  * @param {Object<string, {key: string, label: string, options: string[]}>} banksByKey
+ * @param {Object<string, {key: string, label: string, options: string[]}>} dynamicOptionsByKey
  * @return {{inputType: string, optionBankKey: string, optionBankLabel: string, options: string[], warning: string}}
  */
-function resolveBettingInputConfig_(mapping, banksByKey) {
+function resolveBettingInputConfig_(mapping, banksByKey, dynamicOptionsByKey) {
   var raw = String(mapping || '').trim();
   var key = normalizeBettingOptionKey_(raw);
   if (!key || key === 'text' || key === 'textfield' || key === 'freeform' || key === 'freeanswer') {
@@ -835,6 +836,26 @@ function resolveBettingInputConfig_(mapping, banksByKey) {
       optionBankKey: '',
       optionBankLabel: raw || 'Text',
       options: [],
+      warning: ''
+    };
+  }
+
+  var dynamicBank = dynamicOptionsByKey && dynamicOptionsByKey[key];
+  if (dynamicBank) {
+    if (!dynamicBank.options.length) {
+      return {
+        inputType: 'text',
+        optionBankKey: dynamicBank.key,
+        optionBankLabel: dynamicBank.label,
+        options: [],
+        warning: 'Dynamic option bank "' + dynamicBank.label + '" has no values.'
+      };
+    }
+    return {
+      inputType: 'select',
+      optionBankKey: dynamicBank.key,
+      optionBankLabel: dynamicBank.label,
+      options: dynamicBank.options,
       warning: ''
     };
   }
@@ -867,6 +888,19 @@ function resolveBettingInputConfig_(mapping, banksByKey) {
     options: bank.options,
     warning: ''
   };
+}
+
+/**
+ * @param {Array} membersRaw App Data Collection A2:A11 display values
+ * @return {Array<string>}
+ */
+function extractBettingMemberNames_(membersRaw) {
+  var names = [];
+  for (var i = 0; i < membersRaw.length; i++) {
+    var name = String(membersRaw[i][0] || '').trim();
+    if (name) names.push(name);
+  }
+  return names;
 }
 
 /**
@@ -909,9 +943,10 @@ function buildBettingOptionBanks_(sheet) {
 
 /**
  * @param {GoogleAppsScript.Spreadsheet.Sheet} sheet
+ * @param {Array<string>} memberNames
  * @return {{bets: Array, warnings: string[]}}
  */
-function buildWeeklyBetConfigs_(sheet) {
+function buildWeeklyBetConfigs_(sheet, memberNames) {
   var prompts = sheet
     .getRange(BETTING_PROMPT_ROW, BETTING_FIRST_BET_COL, 1, BETTING_BET_COUNT)
     .getDisplayValues()[0];
@@ -919,12 +954,20 @@ function buildWeeklyBetConfigs_(sheet) {
     .getRange(BETTING_MAPPING_ROW, BETTING_FIRST_BET_COL, 1, BETTING_BET_COUNT)
     .getDisplayValues()[0];
   var optionBanks = buildBettingOptionBanks_(sheet);
+  var teamChoiceBank = {
+    key: 'teamchoice',
+    label: 'Team Choice',
+    options: Array.isArray(memberNames) ? memberNames : []
+  };
+  var dynamicOptionsByKey = {
+    teamchoice: teamChoiceBank
+  };
   var bets = [];
   var warnings = [];
 
   for (var i = 0; i < BETTING_BET_COUNT; i++) {
     var mapping = String(mappings[i] || '').trim();
-    var inputConfig = resolveBettingInputConfig_(mapping, optionBanks.byKey);
+    var inputConfig = resolveBettingInputConfig_(mapping, optionBanks.byKey, dynamicOptionsByKey);
     if (inputConfig.warning) warnings.push('Bet ' + (i + 1) + ': ' + inputConfig.warning);
     bets.push({
       id: 'bet-' + (i + 1),
@@ -965,10 +1008,11 @@ function getBettingData_(spreadsheet) {
   if (!sheet) return fail('Sheet "' + BETTING_SHEET + '" was not found.');
 
   try {
-    var config = buildWeeklyBetConfigs_(sheet);
     var membersRaw = sheet
       .getRange(BETTING_MEMBER_START_ROW, 1, BETTING_MEMBER_COUNT, 1)
       .getDisplayValues();
+    var memberNames = extractBettingMemberNames_(membersRaw);
+    var config = buildWeeklyBetConfigs_(sheet, memberNames);
     var memberPhotosRaw = sheet
       .getRange(BETTING_MEMBER_START_ROW, BETTING_MEMBER_PHOTO_COL, BETTING_MEMBER_COUNT, 1)
       .getValues();
@@ -1155,7 +1199,10 @@ function submitBettingPicks_(spreadsheet, params) {
     return fail('Expected exactly ' + BETTING_BET_COUNT + ' picks.');
   }
 
-  var config = buildWeeklyBetConfigs_(sheet);
+  var membersRaw = sheet
+    .getRange(BETTING_MEMBER_START_ROW, 1, BETTING_MEMBER_COUNT, 1)
+    .getDisplayValues();
+  var config = buildWeeklyBetConfigs_(sheet, extractBettingMemberNames_(membersRaw));
   var sanitized = [];
   for (var i = 0; i < BETTING_BET_COUNT; i++) {
     var result = sanitizeBettingPickValue_(submittedValues[i], config.bets[i]);

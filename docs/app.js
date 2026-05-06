@@ -755,6 +755,21 @@ function getBettingInputMarkup(bet, value, disabled) {
   `;
 }
 
+function getBettingPromptMarkup(prompt, fallback) {
+  const lines = String(prompt || fallback || '')
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+  const [headline, ...details] = lines.length ? lines : [fallback || 'Bet'];
+
+  return `
+    <div class="mt-2 space-y-1 leading-snug">
+      <p class="text-base font-black text-slate-950 dark:text-white">${escapeHtml(headline)}</p>
+      ${details.map((line) => `<p class="text-sm font-normal leading-relaxed text-slate-600 dark:text-slate-300">${escapeHtml(line)}</p>`).join('')}
+    </div>
+  `;
+}
+
 function renderBettingForm() {
   const root = getBettingRoot();
   const member = getCurrentBettingMember();
@@ -779,7 +794,7 @@ function renderBettingForm() {
         <div class="mb-4 flex items-start justify-between gap-4">
           <div>
             <p class="text-[10px] font-black uppercase tracking-[0.22em] text-pink-500">Bet ${index + 1}</p>
-            <h3 class="mt-2 text-base font-black leading-snug text-slate-950 dark:text-white">${escapeHtml(bet.prompt || `Bet ${index + 1}`)}</h3>
+            ${getBettingPromptMarkup(bet.prompt, `Bet ${index + 1}`)}
           </div>
         </div>
         <div data-bet-card data-bet-index="${index}">
