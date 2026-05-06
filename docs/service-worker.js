@@ -1,4 +1,4 @@
-const CACHE_NAME = 'always-smooth-shell-v16';
+const CACHE_NAME = 'always-smooth-shell-v17';
 const APP_SHELL = [
   './',
   './index.html',
@@ -11,6 +11,7 @@ const APP_SHELL = [
 const NETWORK_FIRST_PATHS = new Set([
   '/always-smooth-fantasy-football-app/',
   '/always-smooth-fantasy-football-app/index.html',
+  '/always-smooth-fantasy-football-app/app.js',
   '/always-smooth-fantasy-football-app/manifest.webmanifest'
 ]);
 

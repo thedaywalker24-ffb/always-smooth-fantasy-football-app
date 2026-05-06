@@ -90,11 +90,11 @@ Admin writes from the GitHub Pages app use a simple admin-code gate because the 
 * `fetchAndPopulateRosters` depends on `Sleeper Players` having `Player ID` and `Full Name` headers.
 * `fetchDraftPicksData` hardcodes Sleeper draft IDs for 2023, 2024, and 2025.
 * Expanded team-card detail styling is split between `docs/index.html` CSS overlays/row glass and `docs/app.js` rendered Tailwind text classes; update both when changing light/dark treatment.
-* `docs/service-worker.js` caches app shell files; update `CACHE_NAME` when changing cached assets in a way that must invalidate old clients.
+* `docs/service-worker.js` caches app shell files; update `CACHE_NAME` when changing cached assets in a way that must invalidate old clients. The GitHub Pages route, `index.html`, `app.js`, and manifest are network-first to reduce stale mobile PWA behavior.
 * Root `index.html` and `docs/index.html` are separate frontends and can drift.
 * The GitHub Pages frontend has a fixed bottom tab overlay in `docs/index.html`; `docs/app.js#setActiveTab` toggles `[data-tab-panel]` views and lazy-loads Betting data the first time the Betting tab is opened.
 * `App Data Collection` powers Betting. `B1:G1` are weekly prompts, `A2:A11` are members, `B2:G11` are submissions, `B12:G12` are results/finalization cells, `B13:G13` maps input types, `H1:K6` holds reusable option banks, and `N2:N11` holds member profile photos.
-* The initial Betting member picker is intentionally compact: two columns on mobile and five columns on large screens, separate from the full betting form card layout.
+* The initial Betting member picker is intentionally compact: two columns on mobile and five columns on large screens, separate from the full betting form card layout. Keep the core grid in named CSS so mobile behavior does not depend on Tailwind classes emitted from JS template strings.
 * Betting mappings `team_choice`, `team_options`, and manager/team aliases are dynamic and render a custom avatar dropdown from `App Data Collection!A2:A11` plus `N2:N11`, not from the static `H1:K6` option banks.
 * Betting custom avatar dropdowns render their expanded menu through a body-level fixed portal so later glass-panel cards do not cover the menu on mobile browsers.
 * Betting option-bank reads should stay limited to `H1:K6`; avoid using `getLastRow()` for those banks because unrelated sheet content can make Apps Script reads unnecessarily slow.

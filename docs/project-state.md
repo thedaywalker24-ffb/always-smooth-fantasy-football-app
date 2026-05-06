@@ -2,7 +2,7 @@
 
 ## Current Status
 
-* Last completed section: Betting member picker compact mobile layout; initial Betting screen now uses two-column compact member tiles on phones.
+* Last completed section: Betting member picker compact mobile layout; initial Betting screen now uses explicit CSS grid rules for two-column compact member tiles on phones.
 * Current section in progress: Betting workflow verification against the live `App Data Collection` sheet and GitHub Pages deployment.
 * Next recommended task: Push GitHub Pages and verify the compact Android member picker plus team-option dropdown behavior.
 * Open risks: Hardcoded Apps Script deployment URL, simple JSONP/GET admin and betting write flows, public trust-based bet submission, fragile Google Sheets tab/column dependencies, fixed matchup sheet row offsets, no automated tests, and duplicated/legacy Apps Script paths.
@@ -135,7 +135,7 @@ Apps Script Script Properties:
 * Press-and-hold admin edit for `Beer Trophies`, writing to `Teams` column S after Apps Script admin-code validation.
 * Fixed bottom tab overlay for `Home` and `Betting`; Home wraps the current standings dashboard and Betting renders the weekly betting workflow.
 * Betting tab reads `App Data Collection`, lets a league member select their team, renders member profile photos from `N2:N11`, renders six weekly prompts from `B1:G1`, maps input types through `B13:G13`, `team_choice`, and `H1:K6`, confirms overwrites, and submits picks to that member's row in `B2:G11`.
-* Betting member picker uses compact two-column mobile tiles so all 10 league profiles are faster to scan before entering the betting form.
+* Betting member picker uses compact two-column mobile tiles so all 10 league profiles are faster to scan before entering the betting form; the grid uses a named CSS class instead of dynamic Tailwind-only column utilities.
 * Betting team/manager avatar dropdowns use a fixed body-level menu portal so expanded lists can overlap lower bet cards on Android and other mobile browsers.
 * Betting submissions use the submit response to refresh the selected member form instead of immediately making a second sheet read.
 * Apps Script spreadsheet menu for league data operations.

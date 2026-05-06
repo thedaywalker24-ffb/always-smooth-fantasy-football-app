@@ -756,7 +756,7 @@ function renderBettingMemberPicker() {
       ${bettingData.warnings?.length ? `
         <div class="${getBettingStatusClass('warning')}">${bettingData.warnings.map(escapeHtml).join(' ')}</div>
       ` : ''}
-      <div class="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3 lg:grid-cols-5">
+      <div class="betting-member-grid">
         ${memberCards}
       </div>
     </div>
