@@ -555,16 +555,16 @@
             overflow: hidden;
         }
 
-        .betting-member-tile::before {
-            content: "";
+        .betting-member-tile-accent {
             position: absolute;
             inset-inline: 0;
             top: 0;
             height: 0.25rem;
             background: linear-gradient(90deg, #ec4899, #fb7185, #fdba74);
+            pointer-events: none;
         }
 
-        .betting-member-tile > * {
+        .betting-member-tile-content {
             position: relative;
             z-index: 1;
         }
