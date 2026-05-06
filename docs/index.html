@@ -550,6 +550,25 @@
             gap: 0.75rem;
         }
 
+        .betting-member-tile {
+            position: relative;
+            overflow: hidden;
+        }
+
+        .betting-member-tile::before {
+            content: "";
+            position: absolute;
+            inset-inline: 0;
+            top: 0;
+            height: 0.25rem;
+            background: linear-gradient(90deg, #ec4899, #fb7185, #fdba74);
+        }
+
+        .betting-member-tile > * {
+            position: relative;
+            z-index: 1;
+        }
+
         @media (min-width: 640px) {
             .betting-member-grid {
                 gap: 1rem;
