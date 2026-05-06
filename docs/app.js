@@ -592,6 +592,32 @@ function getBettingWeekLabel() {
   return `Week ${bettingData?.week || '--'} Bets`;
 }
 
+function getMemberInitials(name) {
+  const words = String(name || '')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+  if (!words.length) return 'AS';
+  if (words.length === 1) return words[0].slice(0, 2).toUpperCase();
+  return `${words[0][0]}${words[words.length - 1][0]}`.toUpperCase();
+}
+
+function getBettingMemberAvatarMarkup(member, size = 'default') {
+  const isLarge = size === 'large';
+  const initialsClass = `betting-member-initials${isLarge ? ' betting-member-initials--large' : ''}`;
+  const imageClass = `betting-member-photo${isLarge ? ' betting-member-photo--large' : ''}`;
+  const initials = escapeHtml(getMemberInitials(member?.name));
+  const fallback = `<span class="${initialsClass}" aria-hidden="true">${initials}</span>`;
+  if (!member?.photoUrl) return fallback;
+
+  return `
+    <span class="relative shrink-0">
+      <img src="${escapeHtml(member.photoUrl)}" class="${imageClass}" alt="${escapeHtml(member.name)} profile photo" onerror="this.classList.add('hidden');this.nextElementSibling.classList.remove('hidden');">
+      <span class="${initialsClass} hidden" aria-hidden="true">${initials}</span>
+    </span>
+  `;
+}
+
 function getCurrentBettingMember() {
   if (!bettingData || !selectedBettingMemberRow) return null;
   return bettingData.members.find((member) => Number(member.row) === Number(selectedBettingMemberRow)) || null;
@@ -663,10 +689,13 @@ function renderBettingMemberPicker() {
 
   const memberCards = bettingData.members.map((member) => `
     <button type="button" data-betting-member-row="${member.row}" class="glass-panel group rounded-3xl border border-slate-200 bg-white/90 p-5 text-left shadow-sm transition hover:border-pink-500/40 hover:shadow-xl dark:border-slate-800 dark:bg-slate-900/70">
-      <div class="flex items-start justify-between gap-4">
-        <div class="min-w-0">
-          <p class="truncate text-lg font-black italic uppercase leading-tight tracking-tight text-slate-900 group-hover:text-pink-500 dark:text-white">${escapeHtml(member.name)}</p>
-          <p class="mt-2 text-xs font-black uppercase tracking-[0.18em] text-slate-400">${member.submitted ? 'Submitted' : 'Open'}</p>
+      <div class="flex items-center justify-between gap-4">
+        <div class="flex min-w-0 items-center gap-4">
+          ${getBettingMemberAvatarMarkup(member)}
+          <div class="min-w-0">
+            <p class="truncate text-lg font-black italic uppercase leading-tight tracking-tight text-slate-900 group-hover:text-pink-500 dark:text-white">${escapeHtml(member.name)}</p>
+            <p class="mt-2 text-xs font-black uppercase tracking-[0.18em] text-slate-400">${member.submitted ? 'Submitted' : 'Open'}</p>
+          </div>
         </div>
         <span class="${member.submitted ? 'bg-emerald-500 text-white' : 'border border-slate-200 bg-white text-slate-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300'} shrink-0 rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-[0.16em]">${member.submitted ? 'In' : 'Pick'}</span>
       </div>
@@ -766,9 +795,14 @@ function renderBettingForm() {
       ${renderBettingHeader(backButton)}
       ${getBettingStatusMarkup()}
       <div class="glass-panel rounded-3xl border border-slate-200 bg-white/90 p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900/70">
-        <p class="text-[10px] font-black uppercase tracking-[0.22em] text-slate-400">Selected Team</p>
-        <div class="mt-2 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-          <h3 class="text-2xl font-black italic uppercase tracking-tight text-slate-950 dark:text-white">${escapeHtml(member.name)}</h3>
+        <div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+          <div class="flex min-w-0 items-center gap-4">
+            ${getBettingMemberAvatarMarkup(member, 'large')}
+            <div class="min-w-0">
+              <p class="text-[10px] font-black uppercase tracking-[0.22em] text-slate-400">Selected Team</p>
+              <h3 class="mt-2 truncate text-2xl font-black italic uppercase tracking-tight text-slate-950 dark:text-white">${escapeHtml(member.name)}</h3>
+            </div>
+          </div>
           <span class="${member.submitted ? 'bg-emerald-500 text-white' : 'bg-pink-500 text-white'} w-fit rounded-full px-4 py-2 text-xs font-black uppercase tracking-[0.18em]">${member.submitted ? 'Submitted' : 'Open'}</span>
         </div>
       </div>

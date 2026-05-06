@@ -55,6 +55,7 @@ const BETTING_SHEET = 'App Data Collection';
 const BETTING_PROMPT_ROW = 1;
 const BETTING_MEMBER_START_ROW = 2;
 const BETTING_MEMBER_COUNT = 10;
+const BETTING_MEMBER_PHOTO_COL = 14; // Column N (1-based)
 const BETTING_RESULTS_ROW = 12;
 const BETTING_MAPPING_ROW = 13;
 const BETTING_FIRST_BET_COL = 2; // Column B (1-based)
@@ -968,6 +969,9 @@ function getBettingData_(spreadsheet) {
     var membersRaw = sheet
       .getRange(BETTING_MEMBER_START_ROW, 1, BETTING_MEMBER_COUNT, 1)
       .getDisplayValues();
+    var memberPhotosRaw = sheet
+      .getRange(BETTING_MEMBER_START_ROW, BETTING_MEMBER_PHOTO_COL, BETTING_MEMBER_COUNT, 1)
+      .getValues();
     var picksRaw = sheet
       .getRange(BETTING_MEMBER_START_ROW, BETTING_FIRST_BET_COL, BETTING_MEMBER_COUNT, BETTING_BET_COUNT)
       .getDisplayValues();
@@ -985,9 +989,12 @@ function getBettingData_(spreadsheet) {
       var picks = picksRaw[r].map(function (value) {
         return String(value || '').trim();
       });
+      var rawPhoto = memberPhotosRaw[r][0];
+      var photoUrl = looksLikePhotoUrl_(rawPhoto) ? formatDriveUrl(String(rawPhoto).trim()) : '';
       members.push({
         row: BETTING_MEMBER_START_ROW + r,
         name: name,
+        photoUrl: photoUrl,
         picks: picks,
         submitted: picks.some(function (value) {
           return !isBlankDisplayValue_(value);

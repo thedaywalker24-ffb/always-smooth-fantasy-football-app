@@ -117,6 +117,7 @@ Apps Script Script Properties:
 * `B13:G13`: input mapping for each prompt. Blank or `text` renders a text input; otherwise values match normalized option-bank headers.
 * `H1:K1`: option-bank headers.
 * `H2:K6`: option values. Two-option banks render as pill buttons; larger banks render as dropdowns.
+* `N2:N11`: league member profile photos for Betting member cards and selected-member form headers.
 
 ## Completed Sections / Implemented Features
 
@@ -133,7 +134,7 @@ Apps Script Script Properties:
 * Expanded team-card detail panels use a light glass overlay in light mode and a darker cinematic overlay in dark mode.
 * Press-and-hold admin edit for `Beer Trophies`, writing to `Teams` column S after Apps Script admin-code validation.
 * Fixed bottom tab overlay for `Home` and `Betting`; Home wraps the current standings dashboard and Betting renders the weekly betting workflow.
-* Betting tab reads `App Data Collection`, lets a league member select their team, renders six weekly prompts from `B1:G1`, maps input types through `B13:G13` and `H1:K6`, confirms overwrites, and submits picks to that member's row in `B2:G11`.
+* Betting tab reads `App Data Collection`, lets a league member select their team, renders member profile photos from `N2:N11`, renders six weekly prompts from `B1:G1`, maps input types through `B13:G13` and `H1:K6`, confirms overwrites, and submits picks to that member's row in `B2:G11`.
 * Betting submissions use the submit response to refresh the selected member form instead of immediately making a second sheet read.
 * Apps Script spreadsheet menu for league data operations.
 * Sleeper sync functions for members, records, rosters, players, matchups, and draft picks.
