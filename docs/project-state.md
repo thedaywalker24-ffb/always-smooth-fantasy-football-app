@@ -27,7 +27,7 @@ The app should complement Sleeper, not replace it. Sleeper remains the place for
 * `docs/` is the current GitHub Pages frontend.
 * `docs/index.html` contains the app shell, Tailwind CDN setup, custom CSS, splash/install UI, standings container, and secondary informational cards.
 * `docs/app.js` is vanilla JS that fetches Apps Script data via JSONP, caches config/data in `localStorage`, renders standings cards, and controls theming/install behavior.
-* `docs/service-worker.js` caches the static app shell and uses network-first behavior for the GitHub Pages route and manifest.
+* `docs/service-worker.js` caches the static app shell and uses network-first behavior for the GitHub Pages route, `index.html`, `app.js`, and manifest.
 * `Code.js` is the primary Apps Script backend and spreadsheet automation file.
 * `index.html` at repo root is an Apps Script HTML template version of the dashboard that uses `google.script.run`; it appears older than the GitHub Pages frontend but remains part of the Apps Script deployment.
 * `Code2.gs.js` contains an older/simple Sleeper players import function and may be legacy.
@@ -145,9 +145,9 @@ Apps Script Script Properties:
 
 ## In-Progress Work
 
-* Recent work is focused on the standings team-card accordion, including mode-aware expanded-panel styling.
+* Recent work is focused on the Betting tab v1, including mobile member-picker polish, avatar dropdown behavior, and Google Sheets-backed submissions.
 * Weekly matchups are represented in spreadsheet import logic but not yet surfaced as a real frontend feature.
-* Weekly betting v1 is implemented but still needs live Apps Script deployment and sheet verification.
+* Weekly betting v1 is implemented and has had live phone testing; latest changes are frontend-only polish that need GitHub Pages/PWA verification.
 * Draft capital/draft results are imported in Apps Script but only represented by placeholder/static UI in the frontend.
 
 ## Known Issues
@@ -164,16 +164,16 @@ Apps Script Script Properties:
 
 ## Likely Current Priorities
 
-* Keep polishing the standings/team-card experience because that is the visible foundation.
+* Finish verifying and publishing the current Betting tab polish on GitHub Pages/PWA.
 * Build weekly matchups in the GitHub Pages frontend from existing Apps Script/spreadsheet data.
-* Add the weekly betting workflow in a way that fits the existing Google Sheets database rather than adding a separate backend.
+* Continue expanding the weekly betting workflow only within the existing Google Sheets-backed contract.
 * Reduce fragile sheet assumptions where practical and document the rest.
 
 ## Recommended Next 3 Steps
 
-1. Deploy Apps Script, update the Web App version, and verify `?api=betting-data` returns the expected sheet payload.
-2. Publish GitHub Pages and test selecting a member, submitting picks, overwrite confirmation, and results-row lockout.
-3. Clean up legacy/duplicated Apps Script paths only after current deployed behavior is confirmed.
+1. Publish GitHub Pages and verify the Android PWA picks up the latest service worker/cache version.
+2. Test the compact Betting member picker, tile accent, team-option avatar dropdown, and a normal submission flow on phone.
+3. Build the next frontend section, likely weekly matchups, using existing Apps Script/spreadsheet data.
 
 ## Notes For Future Sessions
 

@@ -115,8 +115,8 @@ Admin writes from the GitHub Pages app use a simple admin-code gate because the 
 ## Handoff Notes
 
 * The continuity system is now bootstrapped; future skill maintenance should tighten existing artifacts rather than expanding volume by default.
-* The newest visible work is Betting tab v1: member selection, weekly prompt rendering, option-bank inputs, public submission, overwrite confirmation, and results-row lockout.
-* The next product-shaping task is live deployment verification against the real `App Data Collection` sheet.
+* The newest visible work is Betting tab v1 plus polish: compact mobile member picker, home-style tile accent, avatar team dropdowns, public submission, overwrite confirmation, and results-row lockout.
+* The next product-shaping task is verifying the latest GitHub Pages/PWA frontend polish, then building the next section such as weekly matchups.
 * When adding a new frontend feature, first decide whether its data should be part of `league-data` or exposed by a new Apps Script `api` route.
 * For betting, prefer a Google Sheets-backed schema that can be audited and edited by the league manager.
 * Use defensive UI for missing/empty sheet values because league spreadsheets will be manually maintained.
