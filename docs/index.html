@@ -455,10 +455,12 @@
 
         .draft-round-heading {
             display: flex;
+            width: 100%;
             align-items: center;
             justify-content: space-between;
             gap: 1rem;
             margin-bottom: 1rem;
+            text-align: left;
         }
 
         .draft-round-heading h3 {
@@ -473,7 +475,14 @@
             color: #ffffff;
         }
 
-        .draft-round-heading span {
+        .draft-round-heading-meta {
+            display: flex;
+            flex: 0 0 auto;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .draft-round-heading-meta span {
             flex: 0 0 auto;
             border-radius: 9999px;
             background: rgba(236, 72, 153, 0.1);
@@ -483,6 +492,28 @@
             font-weight: 900;
             letter-spacing: 0.12em;
             text-transform: uppercase;
+        }
+
+        .draft-round-chevron {
+            width: 1rem;
+            height: 1rem;
+            flex: 0 0 auto;
+            color: #ec4899;
+            transition: transform 0.2s ease;
+        }
+
+        .draft-round-card[data-collapsed="true"] .draft-round-chevron {
+            transform: rotate(-90deg);
+        }
+
+        @media (max-width: 767px) {
+            .draft-round-card[data-collapsed="true"] .draft-round-body {
+                display: none;
+            }
+
+            .draft-round-card[data-collapsed="true"] .draft-round-heading {
+                margin-bottom: 0;
+            }
         }
 
         .draft-pick-card {

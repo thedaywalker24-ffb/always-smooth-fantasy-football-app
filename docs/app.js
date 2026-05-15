@@ -699,13 +699,20 @@ function renderDraftBoard(payload, isStale = false) {
       ${isStale ? `<div class="${getBettingStatusClass('warning')}">Showing the most recent cached draft board because the live Sleeper request failed.</div>` : ''}
       ${payload?.warnings?.length ? `<div class="${getBettingStatusClass('warning')}">${payload.warnings.map(escapeHtml).join(' ')}</div>` : ''}
       <div class="draft-board-shell">
-        ${rounds.map((round) => `
-          <section class="draft-round-card glass-panel" aria-label="Round ${round.round}">
-            <div class="draft-round-heading">
+        ${rounds.map((round, roundIndex) => {
+          const mobileRoundsCollapse = window.matchMedia('(max-width: 767px)').matches;
+          const collapsed = mobileRoundsCollapse && roundIndex > 0;
+          const roundId = `draft-round-${round.round}`;
+          return `
+          <section class="draft-round-card glass-panel" aria-label="Round ${round.round}" data-draft-round data-collapsed="${collapsed ? 'true' : 'false'}">
+            <button type="button" class="draft-round-heading" data-draft-round-toggle aria-expanded="${collapsed ? 'false' : 'true'}" aria-controls="${roundId}">
               <h3>Round ${escapeHtml(round.round)}</h3>
-              <span>${Array.isArray(round.picks) ? round.picks.length : 0} picks</span>
-            </div>
-            <div class="space-y-3">
+              <span class="draft-round-heading-meta">
+                <span>${Array.isArray(round.picks) ? round.picks.length : 0} picks</span>
+                <svg class="draft-round-chevron" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 9l6 6 6-6"></path></svg>
+              </span>
+            </button>
+            <div id="${roundId}" class="space-y-3 draft-round-body">
               ${(round.picks || []).map((pick) => {
                 const originalOwner = pick.originalOwner || {};
                 const currentOwner = pick.currentOwner || {};
@@ -716,12 +723,19 @@ function renderDraftBoard(payload, isStale = false) {
                   ? `From ${previousOwner?.teamName || originalOwner?.teamName || 'original owner'}`
                   : unresolved
                     ? 'Order still to be determined'
-                    : 'Original pick';
+                    : '';
                 const cardClass = [
                   'draft-pick-card',
                   traded ? 'draft-pick-card--traded' : '',
                   unresolved ? 'draft-pick-card--tbd' : ''
                 ].filter(Boolean).join(' ');
+                const metaMarkup = traded || unresolved
+                  ? `<div class="draft-pick-meta">
+                      ${traded ? '<span class="draft-trade-badge">Traded</span>' : ''}
+                      ${unresolved ? '<span class="draft-tbd-badge">TBD</span>' : ''}
+                      ${tradeLabel ? `<span>${escapeHtml(tradeLabel)}</span>` : ''}
+                    </div>`
+                  : '';
                 return `
                   <article class="${cardClass}">
                     <div class="draft-pick-number">${escapeHtml(pick.pickLabel || '')}</div>
@@ -731,11 +745,7 @@ function renderDraftBoard(payload, isStale = false) {
                         ? '<div class="min-w-0"><p class="truncate text-sm font-black italic uppercase leading-tight text-slate-950 dark:text-white">To Be Determined</p><p class="mt-1 truncate text-xs font-bold text-slate-500 dark:text-slate-400">One of the remaining teams</p></div>'
                         : renderDraftOwnerLine(currentOwner)}
                     </div>
-                    <div class="draft-pick-meta">
-                      ${traded ? '<span class="draft-trade-badge">Traded</span>' : ''}
-                      ${unresolved ? '<span class="draft-tbd-badge">TBD</span>' : ''}
-                      <span>${escapeHtml(tradeLabel)}</span>
-                    </div>
+                    ${metaMarkup}
                     ${unresolved ? renderDraftUnresolvedCandidates(pick.unresolvedCandidates) : ''}
                     ${renderSelectedPlayer(pick.selectedPlayer)}
                   </article>
@@ -743,10 +753,29 @@ function renderDraftBoard(payload, isStale = false) {
               }).join('')}
             </div>
           </section>
-        `).join('')}
+        `;
+        }).join('')}
       </div>
     </div>
   `;
+}
+
+function setupDraftBoardControls() {
+  const root = getDraftBoardRoot();
+  if (!root || root.dataset.draftBoardBound === 'true') return;
+
+  root.dataset.draftBoardBound = 'true';
+  root.addEventListener('click', (event) => {
+    const toggle = event.target.closest('[data-draft-round-toggle]');
+    if (!toggle) return;
+
+    const round = toggle.closest('[data-draft-round]');
+    if (!round) return;
+
+    const collapsed = round.dataset.collapsed === 'true';
+    round.dataset.collapsed = collapsed ? 'false' : 'true';
+    toggle.setAttribute('aria-expanded', collapsed ? 'true' : 'false');
+  });
 }
 
 async function loadDraftBoardData() {
@@ -1572,6 +1601,7 @@ async function bootstrap() {
   setupScrollBehavior();
   setupAppTabs();
   setupBettingControls();
+  setupDraftBoardControls();
   setupStandingsAccordion();
   setupAdminEditing();
   await registerServiceWorker();

@@ -101,6 +101,7 @@ Admin writes from the GitHub Pages app use a simple admin-code gate because the 
 * The app should only write Betting submissions to `App Data Collection!B2:G11`. Do not let app-originated writes touch prompt, results, mapping, or option-bank ranges.
 * The upcoming rookie draft board should read its draft ID from `Settings!B6`, fetch Sleeper `/v1/draft/{draft_id}`, and build pre-draft pick slots from `slot_to_roster_id`. The `/picks` endpoint can be empty before selections are made, so use it only as optional selected-player enrichment. Apply `/traded_picks` entries by matching `round` plus original `roster_id`; `owner_id` is the current owner roster and `previous_owner_id` is the prior owner. Resolve those roster IDs through the `Rosters & Records` `Roster ID` column to display league team and manager names.
 * A partial Sleeper `draft_order` is intentional for the 2026 rookie draft because some pick slots are still to be determined. When `draft_order` omits slots that are present in `slot_to_roster_id`, keep those picks unresolved in the UI and show the candidate teams from the missing slots instead of assigning a final owner.
+* The Home-page draft board uses mobile-only round collapsing: Round 1 starts expanded, later rounds start collapsed, and desktop/tablet CSS keeps all round bodies visible for scanability.
 * If Sleeper draft metadata does not expose a round count, the draft board backend falls back to the max round found in `/picks` or `/traded_picks`, then to `DEFAULT_UPCOMING_DRAFT_ROUNDS` in `Code.js`.
 
 ## Don't Do This
