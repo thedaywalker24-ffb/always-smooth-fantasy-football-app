@@ -4,6 +4,7 @@ const THEME_KEY = 'theme';
 const CONFIG_CACHE_KEY = 'always-smooth-config';
 const DATA_CACHE_KEY = 'always-smooth-league-data';
 const DRAFT_BOARD_CACHE_KEY = 'always-smooth-draft-board';
+const MATCHUPS_CACHE_KEY = 'always-smooth-matchups-data';
 const BETTING_BET_COUNT = 6;
 const DEFAULT_CONFIG = {
   appName: 'Always Smooth',
@@ -25,6 +26,7 @@ let adminEditStart = null;
 let adminCodeCache = '';
 let bettingData = null;
 let draftBoardData = null;
+let matchupsData = null;
 let selectedBettingMemberRow = null;
 let bettingStatusMessage = '';
 let bettingStatusTone = 'warning';
@@ -78,6 +80,7 @@ function fetchJsonp(path, params = {}) {
       'api/league-data': 'league-data',
       'api/betting-data': 'betting-data',
       'api/draft-board': 'draft-board',
+      'api/matchups-data': 'matchups-data',
       'api/update-team-field': 'update-team-field',
       'api/submit-bets': 'submit-bets'
     };
@@ -86,6 +89,7 @@ function fetchJsonp(path, params = {}) {
     const timeoutMsByRoute = {
       'betting-data': 30000,
       'draft-board': 30000,
+      'matchups-data': 30000,
       'submit-bets': 45000,
       'update-team-field': 45000
     };
@@ -804,6 +808,162 @@ async function loadDraftBoardData() {
       return;
     }
     renderDraftBoardEmpty('Draft board could not be loaded.');
+  }
+}
+
+function getMatchupsRoot() {
+  return document.getElementById('matchups-root');
+}
+
+function getMatchupInitials(team) {
+  return getMemberInitials(team?.teamName || team?.managerName || 'AS');
+}
+
+function getMatchupBackdropStyle(team) {
+  if (!team?.photoUrl) return '';
+  return `style="background-image: url('${String(team.photoUrl).replace(/'/g, '%27')}');"`;
+}
+
+function renderMatchupsSkeleton() {
+  const root = getMatchupsRoot();
+  if (!root) return;
+
+  root.innerHTML = `
+    <div class="grid grid-cols-1 gap-4 lg:grid-cols-2">
+      ${Array.from({ length: 2 }).map(() => `
+        <article class="matchup-card glass-panel">
+          <div class="grid grid-cols-2 gap-2">
+            ${Array.from({ length: 2 }).map(() => `
+              <div class="matchup-team-panel">
+                <div class="h-14 w-14 animate-pulse rounded-full bg-slate-200 dark:bg-slate-800"></div>
+                <div class="mt-4 h-4 w-3/4 animate-pulse rounded bg-slate-200 dark:bg-slate-800"></div>
+                <div class="mt-3 h-8 w-20 animate-pulse rounded bg-slate-200 dark:bg-slate-800"></div>
+              </div>
+            `).join('')}
+          </div>
+        </article>
+      `).join('')}
+    </div>
+  `;
+}
+
+function renderMatchupsEmpty(message) {
+  const root = getMatchupsRoot();
+  if (!root) return;
+
+  root.innerHTML = `
+    <div class="glass-panel rounded-3xl border border-slate-200 bg-white/90 p-8 text-center shadow-sm dark:border-slate-800 dark:bg-slate-900/70">
+      <p class="text-sm font-black uppercase tracking-[0.22em] text-slate-500 dark:text-slate-400">${escapeHtml(message)}</p>
+    </div>
+  `;
+}
+
+function updateMatchupsHeader(payload) {
+  const updated = document.getElementById('matchups-updated');
+  const summary = document.getElementById('matchups-summary');
+  const count = Array.isArray(payload?.matchups) ? payload.matchups.length : 0;
+  if (updated) updated.textContent = formatTimestamp(payload?.updatedAt);
+  if (summary) {
+    summary.textContent = count
+      ? `${count} matchup${count === 1 ? '' : 's'} loaded`
+      : 'No active matchups';
+  }
+}
+
+function renderMatchupTeam(team, side) {
+  const score = String(team?.weekPoints || '').trim() || '--';
+  const record = String(team?.record || '').trim() || '--';
+  const label = String(team?.teamName || 'Unknown').trim();
+  return `
+    <div class="matchup-team-panel matchup-team-panel--${side}" ${getMatchupBackdropStyle(team)}>
+      <div class="matchup-team-overlay">
+        <div class="matchup-team-photo-wrap">
+          ${team?.photoUrl
+            ? `<img src="${escapeHtml(team.photoUrl)}" class="matchup-team-photo" alt="${escapeHtml(label)} photo" onerror="this.classList.add('hidden');this.nextElementSibling.classList.remove('hidden');">`
+            : ''}
+          <span class="matchup-team-initials${team?.photoUrl ? ' hidden' : ''}" aria-hidden="true">${escapeHtml(getMatchupInitials(team))}</span>
+        </div>
+        <div class="min-w-0">
+          <p class="truncate text-sm font-black italic uppercase leading-tight text-white">${escapeHtml(label)}</p>
+          ${team?.managerName ? `<p class="mt-1 truncate text-xs font-bold text-white/72">${escapeHtml(team.managerName)}</p>` : ''}
+        </div>
+        <div class="mt-auto grid grid-cols-2 gap-2 text-center">
+          <div class="matchup-stat-pill">
+            <span>Record</span>
+            <strong>${escapeHtml(record)}</strong>
+          </div>
+          <div class="matchup-stat-pill">
+            <span>Score</span>
+            <strong>${escapeHtml(score)}</strong>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function renderMatchups(payload, isStale = false) {
+  const root = getMatchupsRoot();
+  const matchups = Array.isArray(payload?.matchups) ? payload.matchups : [];
+  if (!root) return;
+
+  updateMatchupsHeader(payload);
+
+  if (!matchups.length) {
+    renderMatchupsEmpty('No active matchups are available yet.');
+    return;
+  }
+
+  root.innerHTML = `
+    <div class="space-y-4">
+      ${isStale ? `<div class="${getBettingStatusClass('warning')}">Showing the most recent cached matchups because the live sheet request failed.</div>` : ''}
+      <div class="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        ${matchups.map((matchup) => {
+          const teams = matchup.teams || [];
+          return `
+            <article class="matchup-card glass-panel" aria-label="Matchup ${escapeHtml(matchup.matchupId)}">
+              <div class="matchup-card-heading">
+                <span>Matchup ${escapeHtml(matchup.matchupId)}</span>
+              </div>
+              <div class="matchup-versus-grid">
+                ${renderMatchupTeam(teams[0], 'left')}
+                <div class="matchup-vs-badge" aria-hidden="true">VS</div>
+                ${renderMatchupTeam(teams[1], 'right')}
+              </div>
+            </article>
+          `;
+        }).join('')}
+      </div>
+    </div>
+  `;
+}
+
+async function loadMatchupsData() {
+  if (!getMatchupsRoot()) return;
+  const cached = getCachedJson(MATCHUPS_CACHE_KEY);
+  if (cached) {
+    matchupsData = cached;
+    renderMatchups(cached, true);
+  } else {
+    renderMatchupsSkeleton();
+  }
+
+  try {
+    const payload = await fetchJsonp('api/matchups-data');
+    if (!payload || payload.ok !== true) {
+      throw new Error(payload?.error || 'Matchups could not be loaded.');
+    }
+    matchupsData = payload;
+    setCachedJson(MATCHUPS_CACHE_KEY, payload);
+    renderMatchups(payload);
+  } catch (error) {
+    console.error(error);
+    if (cached) {
+      matchupsData = cached;
+      renderMatchups(cached, true);
+      return;
+    }
+    renderMatchupsEmpty('Matchups could not be loaded.');
   }
 }
 
@@ -1548,7 +1708,7 @@ function setupHomeShortcuts() {
 }
 
 function setActiveTab(tabName, shouldScroll = false) {
-  const activeTab = tabName === 'betting' ? 'betting' : 'home';
+  const activeTab = ['home', 'matchups', 'betting'].includes(tabName) ? tabName : 'home';
   document.querySelectorAll('[data-tab-panel]').forEach((panel) => {
     panel.hidden = panel.dataset.tabPanel !== activeTab;
   });
@@ -1568,6 +1728,9 @@ function setActiveTab(tabName, shouldScroll = false) {
 
   if (activeTab === 'betting' && !bettingData) {
     loadBettingData();
+  }
+  if (activeTab === 'matchups' && !matchupsData) {
+    loadMatchupsData();
   }
 }
 

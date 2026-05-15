@@ -55,7 +55,7 @@ Use this order for changes that touch both Apps Script data/routes and the GitHu
 2. Commit locally as a checkpoint, but do not push GitHub Pages yet if the frontend depends on new Apps Script behavior.
 3. Push Apps Script source with `clasp push`. This updates root Apps Script files only; `docs/**` is ignored by `.claspignore`.
 4. In Apps Script, update the Web App deployment to a new version and keep the same public deployment URL unless intentionally changing it.
-5. Verify the Apps Script URL still serves the relevant read routes, usually `api=config`, `api=league-data`, and `api=draft-board`; use `debug=1` when diagnostics are useful.
+5. Verify the Apps Script URL still serves the relevant read routes, usually `api=config`, `api=league-data`, `api=draft-board`, and `api=matchups-data`; use `debug=1` when diagnostics are useful.
 6. Push the git branch with `git push origin master`; GitHub Pages publishes the `docs/` frontend from the repo.
 7. Verify the live GitHub Pages app, especially after service-worker cache bumps.
 

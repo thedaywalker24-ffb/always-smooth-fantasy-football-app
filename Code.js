@@ -71,6 +71,8 @@ const BETTING_MAX_PICK_LENGTH = 120;
 
 /** Sheet tab written by fetchLeagueMembersData / updateRostersAndRecordsData */
 const ROSTERS_RECORDS_SHEET = 'Rosters & Records';
+/** Sheet tab compiled by the league sheet for frontend matchup display */
+const ALL_MATCHUPS_SHEET = 'All Matchups';
 /** Sheet tab written by buildUpcomingDraftBoardSheet */
 const UPCOMING_DRAFT_BOARD_SHEET = 'Upcoming Draft Board';
 /** 0-based column index when "Streak" header is missing (column G) */
@@ -1786,6 +1788,157 @@ function buildUpcomingDraftBoardSheet() {
 }
 
 /**
+ * @param {Array} normalizedHeaders
+ * @param {Array<string>} candidates
+ * @return {number}
+ */
+function findNormalizedHeaderIndex_(normalizedHeaders, candidates) {
+  for (var i = 0; i < candidates.length; i++) {
+    var index = normalizedHeaders.indexOf(normalizeBettingOptionKey_(candidates[i]));
+    if (index !== -1) return index;
+  }
+  return -1;
+}
+
+/**
+ * @param {Array} row
+ * @param {number} index
+ * @return {string}
+ */
+function getDisplayCell_(row, index) {
+  if (index < 0 || index >= row.length) return '';
+  return String(row[index] || '').trim();
+}
+
+/**
+ * Reads the compiled All Matchups sheet and groups rows by Matchup ID.
+ * Groups without exactly two teams are excluded for playoff/offseason edge cases.
+ * @param {GoogleAppsScript.Spreadsheet.Spreadsheet} spreadsheet
+ * @return {Object}
+ */
+function getMatchupsData_(spreadsheet) {
+  var fail = function (message) {
+    return {
+      ok: false,
+      error: message,
+      updatedAt: new Date().toISOString()
+    };
+  };
+
+  if (!spreadsheet) return fail('No spreadsheet is available.');
+
+  var sheet = spreadsheet.getSheetByName(ALL_MATCHUPS_SHEET);
+  if (!sheet) return fail('Sheet "' + ALL_MATCHUPS_SHEET + '" was not found.');
+
+  var lastRow = sheet.getLastRow();
+  var lastCol = sheet.getLastColumn();
+  if (lastRow < 2 || lastCol < 1) {
+    return {
+      ok: true,
+      sheetName: ALL_MATCHUPS_SHEET,
+      matchups: [],
+      excludedGroupCount: 0,
+      updatedAt: new Date().toISOString()
+    };
+  }
+
+  var headers = sheet.getRange(1, 1, 1, lastCol).getDisplayValues()[0];
+  var normalizedHeaders = headers.map(normalizeBettingOptionKey_);
+  var matchupIdCol = findNormalizedHeaderIndex_(normalizedHeaders, [
+    'Matchup ID',
+    'Matchup',
+    'MatchupID'
+  ]);
+  var teamNameCol = findNormalizedHeaderIndex_(normalizedHeaders, [
+    'Team Name',
+    'Team',
+    'Roster',
+    'Franchise'
+  ]);
+  var managerCol = findNormalizedHeaderIndex_(normalizedHeaders, [
+    'Display Name',
+    'Manager',
+    'Manager Name',
+    'Owner',
+    'Owner Name'
+  ]);
+  var photoCol = findNormalizedHeaderIndex_(normalizedHeaders, [
+    'Photo',
+    'Manager Photo',
+    'Team Photo',
+    'Avatar',
+    'Image'
+  ]);
+  var recordCol = findNormalizedHeaderIndex_(normalizedHeaders, [
+    'Record',
+    'W-L Record',
+    'WL Record'
+  ]);
+  var weekPointsCol = findNormalizedHeaderIndex_(normalizedHeaders, [
+    'Week Points',
+    'Weekly Points',
+    'Points',
+    'Score',
+    'Week Score'
+  ]);
+  var rosterIdCol = findNormalizedHeaderIndex_(normalizedHeaders, [
+    'Roster ID',
+    'RosterID'
+  ]);
+
+  if (matchupIdCol === -1) return fail('Missing expected "Matchup ID" header on All Matchups.');
+  if (teamNameCol === -1) return fail('Missing expected team-name header on All Matchups.');
+
+  var rows = sheet.getRange(2, 1, lastRow - 1, lastCol).getDisplayValues();
+  var groups = {};
+  rows.forEach(function (row) {
+    var matchupId = getDisplayCell_(row, matchupIdCol);
+    var teamName = getDisplayCell_(row, teamNameCol);
+    if (!matchupId || !teamName) return;
+    var rawPhoto = getDisplayCell_(row, photoCol);
+    var team = {
+      teamName: teamName,
+      managerName: getDisplayCell_(row, managerCol),
+      photoUrl: rawPhoto && looksLikePhotoUrl_(rawPhoto) ? formatDriveUrl(rawPhoto) : rawPhoto,
+      record: getDisplayCell_(row, recordCol),
+      weekPoints: getDisplayCell_(row, weekPointsCol),
+      rosterId: getDisplayCell_(row, rosterIdCol)
+    };
+    if (!groups[matchupId]) groups[matchupId] = [];
+    groups[matchupId].push(team);
+  });
+
+  var matchups = [];
+  var excludedGroupCount = 0;
+  Object.keys(groups).sort(function (a, b) {
+    var aNum = Number(a);
+    var bNum = Number(b);
+    if (!isNaN(aNum) && !isNaN(bNum)) return aNum - bNum;
+    return String(a).localeCompare(String(b));
+  }).forEach(function (matchupId) {
+    var teams = groups[matchupId].filter(function (team) {
+      return !!team.teamName;
+    });
+    if (teams.length !== 2) {
+      excludedGroupCount++;
+      return;
+    }
+    matchups.push({
+      matchupId: matchupId,
+      teams: teams
+    });
+  });
+
+  return {
+    ok: true,
+    sheetName: ALL_MATCHUPS_SHEET,
+    matchups: matchups,
+    excludedGroupCount: excludedGroupCount,
+    updatedAt: new Date().toISOString()
+  };
+}
+
+/**
  * Serves the league dashboard HTML as a Web App.
  * @param {Object} e Request parameters (unused; present for Web App signature).
  * @return {GoogleAppsScript.HTML.HtmlOutput}
@@ -1818,6 +1971,10 @@ function doGet(e) {
 
   if (path === 'draft-board' || path === 'api/draft-board' || apiName === 'draft-board') {
     return createApiOutput_(getDraftBoardData_(spreadsheet), callbackName);
+  }
+
+  if (path === 'matchups-data' || path === 'api/matchups-data' || apiName === 'matchups-data') {
+    return createApiOutput_(getMatchupsData_(spreadsheet), callbackName);
   }
 
   if (path === 'update-team-field' || path === 'api/update-team-field' || apiName === 'update-team-field') {

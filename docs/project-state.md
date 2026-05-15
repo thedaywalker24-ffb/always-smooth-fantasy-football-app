@@ -50,6 +50,7 @@ Current routes handled by `Code.js#doGet`:
 * `api=league-data` / `league-data`: standings/team cards payload.
 * `api=betting-data` / `betting-data`: weekly betting prompts, members, current picks, results, and input option metadata from `App Data Collection`.
 * `api=draft-board` / `draft-board`: upcoming rookie draft board payload compiled from Sleeper draft metadata, traded picks, optional selected picks, and `Rosters & Records` roster ID mappings.
+* `api=matchups-data` / `matchups-data`: matchup tile payload grouped from the `All Matchups` sheet by `Matchup ID`; incomplete groups are excluded.
 * `api=submit-bets` / `submit-bets`: public league-member betting write route limited to `App Data Collection!B2:G11`.
 * `api=update-team-field` / `update-team-field`: admin-code-protected write route for whitelisted Teams-sheet fields.
 * `manifest.json`: Apps Script-served manifest payload for the Apps Script-hosted version.
@@ -64,6 +65,7 @@ Known tabs and dependencies:
 * `Settings`: app config.
 * `Rosters & Records`: primary frontend standings source.
 * `Teams`: supplemental team fields matched by team name.
+* `All Matchups`: compiled matchup display source for the Matchups tab; rows are grouped by `Matchup ID`.
 * `API Data`: current matchup import uses week number from `A19` and writes to a fixed starting row.
 * `Sleeper Players`: player lookup data for roster population.
 * `Team Rosters`: generated roster output.
@@ -182,6 +184,7 @@ Draft-board roster ID resolution:
 * Betting member picker uses compact two-column mobile tiles so all 10 league profiles are faster to scan before entering the betting form; the grid uses a named CSS class instead of dynamic Tailwind-only column utilities, and member tiles reuse the home-page pink/rose/orange top accent.
 * Betting team/manager avatar dropdowns use a fixed body-level menu portal so expanded lists can overlap lower bet cards on Android and other mobile browsers.
 * Betting submissions use the submit response to refresh the selected member form instead of immediately making a second sheet read.
+* Matchups tab v1 reads the `All Matchups` sheet, groups rows by `Matchup ID`, excludes incomplete groups, and renders each active matchup as a side-by-side photo-backed tile with `Photo`, `Record`, and `Week Points`.
 * Upcoming rookie draft board v1 appears on Home below League Standings during the offseason; it reads `Settings!B6`, builds linear pre-draft pick slots from Sleeper `slot_to_roster_id`, applies `traded_picks`, highlights intentionally unresolved draft-order slots as TBD with candidate teams, maps roster IDs through `Rosters & Records`, caches the payload locally, and displays optional selected-player data when `/picks` is populated. The League Standings header includes a Draft Board shortcut. On mobile, Round 1 is expanded by default and later rounds are collapsed by default; tablet/desktop keeps all rounds visible.
 * Removed the original GitHub Pages explainer tiles (`Install Friendly` and `Live Sheet Data`) from the bottom of Home so the page stays focused on league content.
 * Apps Script menu action `Build Upcoming Draft Board` creates/refreshes a normalized `Upcoming Draft Board` sheet snapshot using the same compiled draft-board payload.
