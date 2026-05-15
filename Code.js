@@ -26,7 +26,7 @@ function onOpen(e) {
   if (!e) console.log(`New "Update Records" menu was added in the spreadsheet's menu bar.`);
 }
 
-const GLOBAL_LEAGUE_ID = '1256670617722163200'; // 2025 Season
+const GLOBAL_LEAGUE_ID = '1344465518089748480'; // 2026 Season
 
 /**
  * Banner image: any https URL, or a Google Drive share / file link. Drive file ids
