@@ -3,6 +3,7 @@ const FALLBACK_PHOTO = 'https://images.unsplash.com/photo-1540747913346-19e32dc3
 const THEME_KEY = 'theme';
 const CONFIG_CACHE_KEY = 'always-smooth-config';
 const DATA_CACHE_KEY = 'always-smooth-league-data';
+const DRAFT_BOARD_CACHE_KEY = 'always-smooth-draft-board';
 const BETTING_BET_COUNT = 6;
 const DEFAULT_CONFIG = {
   appName: 'Always Smooth',
@@ -23,6 +24,7 @@ let adminEditActivated = false;
 let adminEditStart = null;
 let adminCodeCache = '';
 let bettingData = null;
+let draftBoardData = null;
 let selectedBettingMemberRow = null;
 let bettingStatusMessage = '';
 let bettingStatusTone = 'warning';
@@ -75,6 +77,7 @@ function fetchJsonp(path, params = {}) {
       'api/config': 'config',
       'api/league-data': 'league-data',
       'api/betting-data': 'betting-data',
+      'api/draft-board': 'draft-board',
       'api/update-team-field': 'update-team-field',
       'api/submit-bets': 'submit-bets'
     };
@@ -82,6 +85,7 @@ function fetchJsonp(path, params = {}) {
     const url = buildApiUrl(route, { ...params, callback: callbackName });
     const timeoutMsByRoute = {
       'betting-data': 30000,
+      'draft-board': 30000,
       'submit-bets': 45000,
       'update-team-field': 45000
     };
@@ -549,6 +553,228 @@ async function loadStandings() {
     }
     setBanner('Live standings could not be loaded from Apps Script. Double-check that the web app deployment is still live and shared for public access.', 'error');
     renderTeams({ teams: [], updatedAt: '' });
+  }
+}
+
+function getDraftBoardRoot() {
+  return document.getElementById('draft-board-root');
+}
+
+function getDraftOwnerInitials(owner) {
+  const label = String(owner?.teamName || owner?.managerName || owner?.rosterId || 'AS').trim();
+  const words = label.split(/\s+/).filter(Boolean);
+  if (!words.length) return 'AS';
+  if (words.length === 1) return words[0].slice(0, 2).toUpperCase();
+  return `${words[0][0]}${words[words.length - 1][0]}`.toUpperCase();
+}
+
+function getDraftOwnerAvatarMarkup(owner) {
+  const initials = escapeHtml(getDraftOwnerInitials(owner));
+  if (!owner?.photoUrl) {
+    return `<span class="draft-owner-initials" aria-hidden="true">${initials}</span>`;
+  }
+
+  return `
+    <span class="relative shrink-0">
+      <img src="${escapeHtml(owner.photoUrl)}" class="draft-owner-photo" alt="${escapeHtml(owner.teamName || 'Draft owner')} logo" onerror="this.classList.add('hidden');this.nextElementSibling.classList.remove('hidden');">
+      <span class="draft-owner-initials hidden" aria-hidden="true">${initials}</span>
+    </span>
+  `;
+}
+
+function formatDraftStatus(status) {
+  const normalized = String(status || '').replace(/_/g, ' ').trim();
+  if (!normalized) return 'Draft';
+  return normalized.replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+function renderDraftBoardSkeleton() {
+  const root = getDraftBoardRoot();
+  if (!root) return;
+
+  root.innerHTML = `
+    <div class="draft-board-shell">
+      ${Array.from({ length: 3 }).map((_, roundIndex) => `
+        <section class="draft-round-card glass-panel">
+          <div class="mb-4 flex items-center justify-between">
+            <div class="h-5 w-24 animate-pulse rounded bg-slate-200 dark:bg-slate-800"></div>
+            <div class="h-4 w-12 animate-pulse rounded-full bg-slate-200 dark:bg-slate-800"></div>
+          </div>
+          <div class="space-y-3">
+            ${Array.from({ length: roundIndex === 0 ? 5 : 4 }).map(() => `
+              <div class="draft-pick-card">
+                <div class="h-9 w-12 animate-pulse rounded-xl bg-slate-200 dark:bg-slate-800"></div>
+                <div class="min-w-0 flex-1 space-y-2">
+                  <div class="h-4 w-2/3 animate-pulse rounded bg-slate-200 dark:bg-slate-800"></div>
+                  <div class="h-3 w-1/2 animate-pulse rounded bg-slate-200 dark:bg-slate-800"></div>
+                </div>
+              </div>
+            `).join('')}
+          </div>
+        </section>
+      `).join('')}
+    </div>
+  `;
+}
+
+function renderDraftBoardEmpty(message) {
+  const root = getDraftBoardRoot();
+  if (!root) return;
+
+  root.innerHTML = `
+    <div class="glass-panel rounded-3xl border border-slate-200 bg-white/90 p-6 text-center shadow-sm dark:border-slate-800 dark:bg-slate-900/70">
+      <p class="text-sm font-black uppercase tracking-[0.22em] text-slate-500 dark:text-slate-400">${escapeHtml(message)}</p>
+    </div>
+  `;
+}
+
+function updateDraftBoardHeader(payload) {
+  const status = document.getElementById('draft-board-status');
+  const updated = document.getElementById('draft-board-updated');
+  const summary = document.getElementById('draft-board-summary');
+
+  if (status) status.textContent = formatDraftStatus(payload?.status);
+  if (updated) updated.textContent = formatTimestamp(payload?.updatedAt);
+  if (summary) {
+    const roundCount = Number(payload?.roundCount || 0);
+    const teamCount = Number(payload?.teamCount || 0);
+    const tradedCount = Number(payload?.tradedPickCount || 0);
+    const pieces = [];
+    if (roundCount && teamCount) pieces.push(`${roundCount} rounds, ${teamCount} teams`);
+    if (tradedCount) pieces.push(`${tradedCount} traded pick${tradedCount === 1 ? '' : 's'}`);
+    summary.textContent = pieces.length ? pieces.join(' / ') : 'Board loading';
+  }
+}
+
+function renderDraftOwnerLine(owner) {
+  const manager = String(owner?.managerName || '').trim();
+  return `
+    <div class="min-w-0">
+      <p class="truncate text-sm font-black italic uppercase leading-tight text-slate-950 dark:text-white">${escapeHtml(owner?.teamName || 'Unknown')}</p>
+      ${manager ? `<p class="mt-1 truncate text-xs font-bold text-slate-500 dark:text-slate-400">${escapeHtml(manager)}</p>` : ''}
+    </div>
+  `;
+}
+
+function renderSelectedPlayer(player) {
+  if (!player) return '';
+  const details = [player.position, player.team].filter(Boolean).join(' / ');
+  return `
+    <div class="mt-3 rounded-2xl bg-emerald-50 px-3 py-2 text-xs font-black uppercase tracking-[0.12em] text-emerald-900 dark:bg-emerald-500/10 dark:text-emerald-100">
+      ${escapeHtml(player.name)}${details ? ` <span class="font-bold opacity-75">${escapeHtml(details)}</span>` : ''}
+    </div>
+  `;
+}
+
+function renderDraftUnresolvedCandidates(candidates) {
+  const list = Array.isArray(candidates) ? candidates : [];
+  if (!list.length) return '';
+
+  return `
+    <div class="draft-tbd-candidates" aria-label="Possible teams for this unresolved pick">
+      ${list.map((candidate) => `
+        <span class="draft-tbd-candidate">
+          ${getDraftOwnerAvatarMarkup(candidate)}
+          <span class="min-w-0 truncate">${escapeHtml(candidate.teamName || 'Unknown')}</span>
+        </span>
+      `).join('')}
+    </div>
+  `;
+}
+
+function renderDraftBoard(payload, isStale = false) {
+  const root = getDraftBoardRoot();
+  const rounds = Array.isArray(payload?.rounds) ? payload.rounds : [];
+  if (!root) return;
+
+  updateDraftBoardHeader(payload);
+
+  if (!rounds.length) {
+    renderDraftBoardEmpty('No draft board is available yet.');
+    return;
+  }
+
+  root.innerHTML = `
+    <div class="space-y-4">
+      ${isStale ? `<div class="${getBettingStatusClass('warning')}">Showing the most recent cached draft board because the live Sleeper request failed.</div>` : ''}
+      ${payload?.warnings?.length ? `<div class="${getBettingStatusClass('warning')}">${payload.warnings.map(escapeHtml).join(' ')}</div>` : ''}
+      <div class="draft-board-shell">
+        ${rounds.map((round) => `
+          <section class="draft-round-card glass-panel" aria-label="Round ${round.round}">
+            <div class="draft-round-heading">
+              <h3>Round ${escapeHtml(round.round)}</h3>
+              <span>${Array.isArray(round.picks) ? round.picks.length : 0} picks</span>
+            </div>
+            <div class="space-y-3">
+              ${(round.picks || []).map((pick) => {
+                const originalOwner = pick.originalOwner || {};
+                const currentOwner = pick.currentOwner || {};
+                const previousOwner = pick.previousOwner || originalOwner;
+                const traded = pick.traded === true;
+                const unresolved = pick.unresolved === true;
+                const tradeLabel = traded
+                  ? `From ${previousOwner?.teamName || originalOwner?.teamName || 'original owner'}`
+                  : unresolved
+                    ? 'Order still to be determined'
+                    : 'Original pick';
+                const cardClass = [
+                  'draft-pick-card',
+                  traded ? 'draft-pick-card--traded' : '',
+                  unresolved ? 'draft-pick-card--tbd' : ''
+                ].filter(Boolean).join(' ');
+                return `
+                  <article class="${cardClass}">
+                    <div class="draft-pick-number">${escapeHtml(pick.pickLabel || '')}</div>
+                    <div class="flex min-w-0 flex-1 items-center gap-3">
+                      ${unresolved ? '<span class="draft-tbd-icon" aria-hidden="true">?</span>' : getDraftOwnerAvatarMarkup(currentOwner)}
+                      ${unresolved
+                        ? '<div class="min-w-0"><p class="truncate text-sm font-black italic uppercase leading-tight text-slate-950 dark:text-white">To Be Determined</p><p class="mt-1 truncate text-xs font-bold text-slate-500 dark:text-slate-400">One of the remaining teams</p></div>'
+                        : renderDraftOwnerLine(currentOwner)}
+                    </div>
+                    <div class="draft-pick-meta">
+                      ${traded ? '<span class="draft-trade-badge">Traded</span>' : ''}
+                      ${unresolved ? '<span class="draft-tbd-badge">TBD</span>' : ''}
+                      <span>${escapeHtml(tradeLabel)}</span>
+                    </div>
+                    ${unresolved ? renderDraftUnresolvedCandidates(pick.unresolvedCandidates) : ''}
+                    ${renderSelectedPlayer(pick.selectedPlayer)}
+                  </article>
+                `;
+              }).join('')}
+            </div>
+          </section>
+        `).join('')}
+      </div>
+    </div>
+  `;
+}
+
+async function loadDraftBoardData() {
+  if (!getDraftBoardRoot()) return;
+  const cached = getCachedJson(DRAFT_BOARD_CACHE_KEY);
+  if (cached) {
+    draftBoardData = cached;
+    renderDraftBoard(cached, true);
+  } else {
+    renderDraftBoardSkeleton();
+  }
+
+  try {
+    const payload = await fetchJsonp('api/draft-board');
+    if (!payload || payload.ok !== true) {
+      throw new Error(payload?.error || 'Draft board could not be loaded.');
+    }
+    draftBoardData = payload;
+    setCachedJson(DRAFT_BOARD_CACHE_KEY, payload);
+    renderDraftBoard(payload);
+  } catch (error) {
+    console.error(error);
+    if (cached) {
+      draftBoardData = cached;
+      renderDraftBoard(cached, true);
+      return;
+    }
+    renderDraftBoardEmpty('Draft board could not be loaded.');
   }
 }
 
@@ -1360,6 +1586,7 @@ async function bootstrap() {
   }
 
   await loadStandings();
+  loadDraftBoardData();
   await dismissSplash();
 }
 

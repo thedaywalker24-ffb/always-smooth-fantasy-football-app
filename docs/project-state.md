@@ -2,9 +2,9 @@
 
 ## Current Status
 
-* Last completed section: Betting member picker compact mobile layout and home-style top accent; initial Betting screen now uses explicit CSS grid rules plus a data-attribute accent fallback for compact member tiles on phones.
-* Current section in progress: 2026 offseason prep, starting with the Sleeper league ID transition before building the upcoming rookie draft board.
-* Next recommended task: Update the live Google Sheet `Settings!B4` to the 2026 Sleeper league ID (`1344465518089748480`), deploy Apps Script, then build the Home-page upcoming draft board section.
+* Last completed section: Upcoming rookie draft board v1; Home now renders a mobile-first offseason draft board below standings using Sleeper draft metadata, traded picks, optional selected picks, and roster/team names from `Rosters & Records`.
+* Current section in progress: Apps Script/GitHub Pages deployment verification for the 2026 league ID and upcoming rookie draft board.
+* Next recommended task: Deploy Apps Script so `api=draft-board` is live, then publish GitHub Pages and verify the Home-page draft board on mobile.
 * Open risks: Hardcoded Apps Script deployment URL, simple JSONP/GET admin and betting write flows, public trust-based bet submission, fragile Google Sheets tab/column dependencies, fixed matchup sheet row offsets, no automated tests, and duplicated/legacy Apps Script paths.
 * Most relevant files: `SKILL.md`, `docs/index.html`, `docs/app.js`, `docs/service-worker.js`, `docs/manifest.webmanifest`, `Code.js`, `index.html`, `.clasp.json`, `.claspignore`.
 
@@ -49,6 +49,7 @@ Current routes handled by `Code.js#doGet`:
 * `api=config` / `config`: frontend branding, season, week, header image, icon URL.
 * `api=league-data` / `league-data`: standings/team cards payload.
 * `api=betting-data` / `betting-data`: weekly betting prompts, members, current picks, results, and input option metadata from `App Data Collection`.
+* `api=draft-board` / `draft-board`: upcoming rookie draft board payload compiled from Sleeper draft metadata, traded picks, optional selected picks, and `Rosters & Records` roster ID mappings.
 * `api=submit-bets` / `submit-bets`: public league-member betting write route limited to `App Data Collection!B2:G11`.
 * `api=update-team-field` / `update-team-field`: admin-code-protected write route for whitelisted Teams-sheet fields.
 * `manifest.json`: Apps Script-served manifest payload for the Apps Script-hosted version.
@@ -75,10 +76,21 @@ Known tabs and dependencies:
 * `B3`: week, rendered in the home `Week` pill.
 * `B4`: Sleeper league ID.
 * `B5`: app icon URL.
+* `B6`: upcoming Sleeper draft ID for the offseason rookie draft board.
 
 Current 2026 Sleeper league ID:
 
 * `1344465518089748480`
+
+Upcoming rookie draft board config:
+
+* Read the Sleeper draft ID from `Settings!B6`.
+* Draft metadata should come from Sleeper `/v1/draft/{draft_id}`.
+* Pre-draft boards may have an empty `/v1/draft/{draft_id}/picks` response; treat picks as optional player-selection enrichment, not as the board source.
+* Current pick ownership should be compiled from `/v1/draft/{draft_id}/traded_picks`, matching each trade by `round` plus original `roster_id`; `owner_id` is the current roster owner for that pick and `previous_owner_id` is the prior owner.
+* For a linear draft, build each round from `slot_to_roster_id` in the draft metadata, then apply traded-pick ownership overrides.
+* If `draft_order` contains fewer teams than `slot_to_roster_id`, treat the missing draft slots as intentionally unresolved. Display those picks as TBD and show the unresolved candidate teams from the missing slots.
+* Resolve all Sleeper roster IDs from `slot_to_roster_id`, `owner_id`, and `previous_owner_id` through the `Rosters & Records` tab `Roster ID` column to display league team/manager names.
 
 Apps Script Script Properties:
 
@@ -96,6 +108,10 @@ Apps Script Script Properties:
 * `Roster ID`
 * `Fpts (Total)`
 * `Display Name`
+
+Draft-board roster ID resolution:
+
+* Use `Roster ID` to map Sleeper draft ownership IDs back to the `Rosters & Records` row, then display `Team Name` and `Display Name` as available.
 
 `Teams` supplemental columns:
 
@@ -142,6 +158,7 @@ Apps Script Script Properties:
 * Betting member picker uses compact two-column mobile tiles so all 10 league profiles are faster to scan before entering the betting form; the grid uses a named CSS class instead of dynamic Tailwind-only column utilities, and member tiles reuse the home-page pink/rose/orange top accent.
 * Betting team/manager avatar dropdowns use a fixed body-level menu portal so expanded lists can overlap lower bet cards on Android and other mobile browsers.
 * Betting submissions use the submit response to refresh the selected member form instead of immediately making a second sheet read.
+* Upcoming rookie draft board v1 appears on Home below League Standings during the offseason; it reads `Settings!B6`, builds linear pre-draft pick slots from Sleeper `slot_to_roster_id`, applies `traded_picks`, highlights intentionally unresolved draft-order slots as TBD with candidate teams, maps roster IDs through `Rosters & Records`, caches the payload locally, and displays optional selected-player data when `/picks` is populated.
 * Apps Script spreadsheet menu for league data operations.
 * Sleeper sync functions for members, records, rosters, players, matchups, and draft picks.
 * Defensive helpers for Google Drive image URLs and missing settings.
@@ -149,10 +166,10 @@ Apps Script Script Properties:
 
 ## In-Progress Work
 
-* Recent work is focused on the Betting tab v1, including mobile member-picker polish, avatar dropdown behavior, and Google Sheets-backed submissions.
+* Recent work is focused on 2026 offseason setup and the Home-page upcoming rookie draft board.
 * Weekly matchups are represented in spreadsheet import logic but not yet surfaced as a real frontend feature.
-* Weekly betting v1 is implemented and has had live phone testing; latest changes are frontend-only polish that need GitHub Pages/PWA verification.
-* Draft capital/draft results are imported in Apps Script but only represented by placeholder/static UI in the frontend.
+* Weekly betting v1 is implemented and has had live phone testing.
+* Draft capital/draft results are imported in Apps Script; upcoming rookie draft board v1 is now surfaced on Home and needs live deployment verification.
 
 ## Known Issues
 

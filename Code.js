@@ -42,14 +42,17 @@ const SETTINGS_SEASON_CELL = 'B2';
 const SETTINGS_WEEK_CELL = 'B3';
 const SETTINGS_LEAGUE_ID_CELL = 'B4';
 const SETTINGS_APP_ICON_CELL = 'B5';
+const SETTINGS_UPCOMING_DRAFT_ID_CELL = 'B6';
 const DEFAULT_LEAGUE_SEASON = '';
 const DEFAULT_LEAGUE_WEEK = '';
 const DEFAULT_LEAGUE_ID = GLOBAL_LEAGUE_ID;
 const DEFAULT_APP_ICON_URL = 'https://drive.google.com/file/d/1M-Q8iesdrChF0Nf4U7_d0doV2esUaov2/view?usp=drive_link';
+const DEFAULT_UPCOMING_DRAFT_ID = '';
 const APP_NAME = 'Always Smooth League';
 const APP_SHORT_NAME = 'Always Smooth';
 const APP_THEME_COLOR = '#ec4899';
 const APP_BACKGROUND_COLOR = '#020617';
+const DEFAULT_UPCOMING_DRAFT_ROUNDS = 3;
 
 const BETTING_SHEET = 'App Data Collection';
 const BETTING_PROMPT_ROW = 1;
@@ -186,6 +189,15 @@ function getAppIconUrl_(spreadsheet) {
 }
 
 /**
+ * Reads the upcoming Sleeper draft id from the Settings sheet.
+ * @param {GoogleAppsScript.Spreadsheet.Spreadsheet} spreadsheet
+ * @return {string}
+ */
+function getUpcomingDraftId_(spreadsheet) {
+  return getSettingsValue_(spreadsheet, SETTINGS_UPCOMING_DRAFT_ID_CELL, DEFAULT_UPCOMING_DRAFT_ID);
+}
+
+/**
  * Creates the Settings sheet with default values if it does not exist yet.
  */
 function ensureSettingsSheet() {
@@ -197,12 +209,13 @@ function ensureSettingsSheet() {
     sheet = spreadsheet.insertSheet(SETTINGS_SHEET);
   }
 
-  sheet.getRange('A1:B5').setValues([
+  sheet.getRange('A1:B6').setValues([
     ['Setting', 'Value'],
     ['Season', getLeagueSeason_(spreadsheet)],
     ['Week', getLeagueWeek_(spreadsheet)],
     ['League ID', getLeagueId_(spreadsheet)],
-    ['App Icon URL', getAppIconUrl_(spreadsheet)]
+    ['App Icon URL', getAppIconUrl_(spreadsheet)],
+    ['Upcoming Draft ID', getUpcomingDraftId_(spreadsheet)]
   ]);
   sheet.getRange('A1:B1').setFontWeight('bold');
   sheet.autoResizeColumns(1, 2);
@@ -1264,6 +1277,363 @@ function submitBettingPicks_(spreadsheet, params) {
 }
 
 /**
+ * @param {*} value
+ * @return {string}
+ */
+function normalizeSleeperRosterId_(value) {
+  if (value === '' || value === null || value === undefined) return '';
+  var raw = String(value).trim();
+  if (!raw) return '';
+  var numeric = Number(raw);
+  if (isFinite(numeric) && Math.floor(numeric) === numeric) return String(numeric);
+  return raw;
+}
+
+/**
+ * @param {string} url
+ * @return {*}
+ */
+function fetchSleeperJson_(url) {
+  var response = UrlFetchApp.fetch(url, {
+    method: 'get',
+    muteHttpExceptions: true
+  });
+  var status = response.getResponseCode();
+  var body = response.getContentText();
+  if (status < 200 || status >= 300) {
+    throw new Error('Sleeper request failed with status ' + status + '.');
+  }
+  return body ? JSON.parse(body) : null;
+}
+
+/**
+ * @param {GoogleAppsScript.Spreadsheet.Spreadsheet} spreadsheet
+ * @return {{byRosterId: Object<string, Object>, diagnostics: Object}}
+ */
+function buildRosterIdDisplayLookup_(spreadsheet) {
+  var byRosterId = {};
+  var diagnostics = {
+    sheetFound: false,
+    rosterRows: 0,
+    mappedRosterIds: 0,
+    missingRosterIdHeader: false
+  };
+
+  if (!spreadsheet) return { byRosterId: byRosterId, diagnostics: diagnostics };
+
+  var sheet = spreadsheet.getSheetByName(ROSTERS_RECORDS_SHEET);
+  if (!sheet) return { byRosterId: byRosterId, diagnostics: diagnostics };
+  diagnostics.sheetFound = true;
+
+  var lastRow = sheet.getLastRow();
+  var lastCol = sheet.getLastColumn();
+  if (lastRow < 2 || lastCol < 1) return { byRosterId: byRosterId, diagnostics: diagnostics };
+
+  var headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
+  var rosterIdCol = headers.indexOf('Roster ID');
+  var teamNameCol = headers.indexOf('Team Name');
+  var displayNameCol = findRostersDisplayNameColumn_(headers);
+  var userAvatarCol = headers.indexOf('User Avatar URL');
+  var teamAvatarCol = headers.indexOf('Team Avatar URL');
+
+  if (rosterIdCol === -1) {
+    diagnostics.missingRosterIdHeader = true;
+    return { byRosterId: byRosterId, diagnostics: diagnostics };
+  }
+
+  var teamsSheetData = buildTeamsSheetDataMap_(spreadsheet).map;
+  var rows = sheet.getRange(2, 1, lastRow - 1, lastCol).getValues();
+  diagnostics.rosterRows = rows.length;
+
+  for (var r = 0; r < rows.length; r++) {
+    var row = rows[r];
+    var rosterId = normalizeSleeperRosterId_(row[rosterIdCol]);
+    if (!rosterId) continue;
+
+    var teamName = teamNameCol >= 0 ? String(row[teamNameCol] || '').trim() : '';
+    var managerName = displayNameCol >= 0 ? String(row[displayNameCol] || '').trim() : '';
+    var teamKey = normalizeTeamNameKey_(teamName);
+    var teamSheetData = teamKey ? teamsSheetData[teamKey] : null;
+    var rawPhoto =
+      teamSheetData && teamSheetData.managerPhotoUrl
+        ? teamSheetData.managerPhotoUrl
+        : teamAvatarCol >= 0 && looksLikePhotoUrl_(row[teamAvatarCol])
+          ? String(row[teamAvatarCol]).trim()
+          : userAvatarCol >= 0 && looksLikePhotoUrl_(row[userAvatarCol])
+            ? String(row[userAvatarCol]).trim()
+            : '';
+
+    byRosterId[rosterId] = {
+      rosterId: rosterId,
+      teamName: teamName || 'Roster ' + rosterId,
+      managerName: managerName,
+      photoUrl: rawPhoto ? formatDriveUrl(rawPhoto) : ''
+    };
+  }
+
+  diagnostics.mappedRosterIds = Object.keys(byRosterId).length;
+  return { byRosterId: byRosterId, diagnostics: diagnostics };
+}
+
+/**
+ * @param {Object<string, Object>} lookup
+ * @param {*} rosterId
+ * @return {Object}
+ */
+function resolveDraftOwner_(lookup, rosterId) {
+  var key = normalizeSleeperRosterId_(rosterId);
+  if (key && lookup[key]) return lookup[key];
+  return {
+    rosterId: key,
+    teamName: key ? 'Roster ' + key : 'Unknown',
+    managerName: '',
+    photoUrl: ''
+  };
+}
+
+/**
+ * @param {*} pick
+ * @return {Object|null}
+ */
+function buildDraftSelectedPlayer_(pick) {
+  if (!pick || !pick.player_id) return null;
+  var metadata = pick.metadata || {};
+  var firstName = String(metadata.first_name || '').trim();
+  var lastName = String(metadata.last_name || '').trim();
+  var fullName = (firstName + ' ' + lastName).trim() || String(pick.player_id || '').trim();
+  return {
+    playerId: String(pick.player_id || '').trim(),
+    name: fullName,
+    position: String(metadata.position || '').trim(),
+    team: String(metadata.team || metadata.team_abbr || '').trim()
+  };
+}
+
+/**
+ * @param {Array} picks
+ * @return {Object<string, Object>}
+ */
+function buildDraftPicksBySlot_(picks) {
+  var bySlot = {};
+  if (!Array.isArray(picks)) return bySlot;
+
+  for (var i = 0; i < picks.length; i++) {
+    var pick = picks[i];
+    if (!pick) continue;
+    var round = Number(pick.round || 0);
+    var rosterId = normalizeSleeperRosterId_(pick.roster_id);
+    if (round && rosterId) bySlot[round + ':' + rosterId] = pick;
+  }
+  return bySlot;
+}
+
+/**
+ * @param {Array} tradedPicks
+ * @return {Object<string, Object>}
+ */
+function buildTradedPicksByOriginalSlot_(tradedPicks) {
+  var bySlot = {};
+  if (!Array.isArray(tradedPicks)) return bySlot;
+
+  for (var i = 0; i < tradedPicks.length; i++) {
+    var trade = tradedPicks[i];
+    if (!trade) continue;
+    var round = Number(trade.round || 0);
+    var originalRosterId = normalizeSleeperRosterId_(trade.roster_id);
+    if (round && originalRosterId) bySlot[round + ':' + originalRosterId] = trade;
+  }
+  return bySlot;
+}
+
+/**
+ * @param {Object} draft
+ * @param {Array} picks
+ * @param {Array} tradedPicks
+ * @return {number}
+ */
+function getDraftRoundCount_(draft, picks, tradedPicks) {
+  var settingsRounds =
+    draft && draft.settings && draft.settings.rounds !== undefined
+      ? Number(draft.settings.rounds)
+      : 0;
+  if (settingsRounds && settingsRounds > 0) return settingsRounds;
+
+  var maxRound = 0;
+  [picks, tradedPicks].forEach(function (items) {
+    if (!Array.isArray(items)) return;
+    items.forEach(function (item) {
+      var round = Number(item && item.round ? item.round : 0);
+      if (round > maxRound) maxRound = round;
+    });
+  });
+  return Math.max(maxRound, DEFAULT_UPCOMING_DRAFT_ROUNDS);
+}
+
+/**
+ * @param {GoogleAppsScript.Spreadsheet.Spreadsheet} spreadsheet
+ * @return {Object}
+ */
+function getDraftBoardData_(spreadsheet) {
+  var fail = function (message) {
+    return {
+      ok: false,
+      error: message,
+      updatedAt: new Date().toISOString()
+    };
+  };
+
+  if (!spreadsheet) return fail('No spreadsheet is available.');
+
+  var draftId = getUpcomingDraftId_(spreadsheet);
+  if (!draftId) return fail('No upcoming draft ID is configured in Settings!B6.');
+
+  var baseUrl = 'https://api.sleeper.app/v1/draft/' + encodeURIComponent(draftId);
+  var warnings = [];
+  var draft;
+  try {
+    draft = fetchSleeperJson_(baseUrl);
+  } catch (err) {
+    return fail('Draft metadata could not be loaded: ' + (err.message || String(err)));
+  }
+  if (!draft || !draft.draft_id) return fail('Sleeper draft metadata was empty.');
+
+  var tradedPicks = [];
+  var picks = [];
+  try {
+    tradedPicks = fetchSleeperJson_(baseUrl + '/traded_picks') || [];
+  } catch (err) {
+    warnings.push('Traded picks could not be loaded: ' + (err.message || String(err)));
+  }
+  try {
+    picks = fetchSleeperJson_(baseUrl + '/picks') || [];
+  } catch (err) {
+    warnings.push('Draft selections could not be loaded: ' + (err.message || String(err)));
+  }
+
+  var rosterLookup = buildRosterIdDisplayLookup_(spreadsheet);
+  var ownersByRosterId = rosterLookup.byRosterId;
+  var tradedBySlot = buildTradedPicksByOriginalSlot_(tradedPicks);
+  var picksBySlot = buildDraftPicksBySlot_(picks);
+  var slotToRosterId = draft.slot_to_roster_id || {};
+  var assignedDraftSlots = {};
+  var draftOrder = draft.draft_order || {};
+  Object.keys(draftOrder).forEach(function (key) {
+    var assignedSlot = Number(draftOrder[key]);
+    if (assignedSlot > 0) assignedDraftSlots[String(assignedSlot)] = true;
+  });
+  var slots = Object.keys(slotToRosterId)
+    .map(function (slot) {
+      return {
+        slot: Number(slot),
+        rosterId: normalizeSleeperRosterId_(slotToRosterId[slot]),
+        unresolved: Object.keys(draftOrder).length > 0 && assignedDraftSlots[String(Number(slot))] !== true
+      };
+    })
+    .filter(function (slot) {
+      return slot.slot > 0 && slot.rosterId;
+    })
+    .sort(function (a, b) {
+      return a.slot - b.slot;
+    });
+
+  if (!slots.length) return fail('Sleeper draft metadata does not include slot_to_roster_id.');
+
+  var roundCount = getDraftRoundCount_(draft, picks, tradedPicks);
+  var unresolvedCandidateRosterIds = slots
+    .filter(function (slot) {
+      return slot.unresolved;
+    })
+    .map(function (slot) {
+      return slot.rosterId;
+    });
+  var unresolvedCandidates = unresolvedCandidateRosterIds.map(function (rosterId) {
+    return resolveDraftOwner_(ownersByRosterId, rosterId);
+  });
+  var rounds = [];
+  var tradedPickCount = 0;
+  var selectedPickCount = 0;
+
+  for (var round = 1; round <= roundCount; round++) {
+    var roundSlots = slots.slice();
+    if (String(draft.type || '').toLowerCase() === 'snake' && round % 2 === 0) {
+      roundSlots.reverse();
+    }
+
+    var roundPicks = [];
+    for (var i = 0; i < roundSlots.length; i++) {
+      var slot = roundSlots[i];
+      var originalRosterId = slot.rosterId;
+      var trade = tradedBySlot[round + ':' + originalRosterId] || null;
+      var currentRosterId = trade ? normalizeSleeperRosterId_(trade.owner_id) : originalRosterId;
+      var previousRosterId = trade ? normalizeSleeperRosterId_(trade.previous_owner_id) : '';
+      var unresolved = slot.unresolved && !trade;
+      var selectedPick = picksBySlot[round + ':' + originalRosterId] || null;
+      var pickNo = ((round - 1) * slots.length) + i + 1;
+      var pickInRound = i + 1;
+      var selectedPlayer = buildDraftSelectedPlayer_(selectedPick);
+
+      if (trade) tradedPickCount++;
+      if (selectedPlayer) selectedPickCount++;
+
+      roundPicks.push({
+        round: round,
+        pickNo: pickNo,
+        pickInRound: pickInRound,
+        pickLabel: round + '.' + (pickInRound < 10 ? '0' + pickInRound : String(pickInRound)),
+        draftSlot: slot.slot,
+        originalRosterId: originalRosterId,
+        currentRosterId: currentRosterId,
+        previousRosterId: previousRosterId,
+        originalOwner: resolveDraftOwner_(ownersByRosterId, originalRosterId),
+        currentOwner: unresolved
+          ? {
+              rosterId: '',
+              teamName: 'To Be Determined',
+              managerName: '',
+              photoUrl: ''
+            }
+          : resolveDraftOwner_(ownersByRosterId, currentRosterId),
+        previousOwner: previousRosterId ? resolveDraftOwner_(ownersByRosterId, previousRosterId) : null,
+        traded: !!trade && currentRosterId !== originalRosterId,
+        unresolved: unresolved,
+        unresolvedCandidateRosterIds: unresolved ? unresolvedCandidateRosterIds : [],
+        unresolvedCandidates: unresolved ? unresolvedCandidates : [],
+        selectedPlayer: selectedPlayer
+      });
+    }
+
+    rounds.push({
+      round: round,
+      picks: roundPicks
+    });
+  }
+
+  return {
+    ok: true,
+    draftId: String(draft.draft_id || draftId),
+    leagueId: String(draft.league_id || getLeagueId_(spreadsheet)),
+    season: String(draft.season || getLeagueSeason_(spreadsheet) || ''),
+    name: draft.metadata && draft.metadata.name ? String(draft.metadata.name) : 'Upcoming Rookie Draft',
+    status: String(draft.status || ''),
+    type: String(draft.type || ''),
+    rounds: rounds,
+    teamCount: slots.length,
+    roundCount: roundCount,
+    tradedPickCount: tradedPickCount,
+    selectedPickCount: selectedPickCount,
+    unresolvedPickCount: unresolvedCandidateRosterIds.length * roundCount,
+    unresolvedCandidates: unresolvedCandidates,
+    warnings: warnings,
+    diagnostics: {
+      rosterLookup: rosterLookup.diagnostics,
+      rawTradedPickCount: Array.isArray(tradedPicks) ? tradedPicks.length : 0,
+      rawSelectedPickCount: Array.isArray(picks) ? picks.length : 0
+    },
+    updatedAt: new Date().toISOString()
+  };
+}
+
+/**
  * Serves the league dashboard HTML as a Web App.
  * @param {Object} e Request parameters (unused; present for Web App signature).
  * @return {GoogleAppsScript.HTML.HtmlOutput}
@@ -1292,6 +1662,10 @@ function doGet(e) {
 
   if (path === 'betting-data' || path === 'api/betting-data' || apiName === 'betting-data') {
     return createApiOutput_(getBettingData_(spreadsheet), callbackName);
+  }
+
+  if (path === 'draft-board' || path === 'api/draft-board' || apiName === 'draft-board') {
+    return createApiOutput_(getDraftBoardData_(spreadsheet), callbackName);
   }
 
   if (path === 'update-team-field' || path === 'api/update-team-field' || apiName === 'update-team-field') {

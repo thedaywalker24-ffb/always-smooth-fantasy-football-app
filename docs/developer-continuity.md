@@ -78,7 +78,7 @@ Admin writes from the GitHub Pages app use a simple admin-code gate because the 
 * Admin write routes use the existing JSONP/GET pattern for simplicity, so keep them limited to low-risk, whitelisted league-maintenance fields.
 * Betting submissions also use JSONP/GET for the public GitHub Pages app. Keep server-side validation strict because the frontend is not authenticated.
 * Apps Script write routes can be slow on cold starts. `docs/app.js#fetchJsonp` uses longer timeouts for `submit-bets` and `update-team-field` than for normal read routes.
-* `Settings` tab must provide values in `B2:B5` for season, week, league ID, and app icon URL. Season/week intentionally fall back to blank placeholders in the frontend, while league ID and app icon retain backend defaults. The current 2026 Sleeper league ID is `1344465518089748480`; set `Settings!B4` to this value before relying on live Sleeper-backed backend data for the upcoming season.
+* `Settings` tab must provide values in `B2:B6` for season, week, league ID, app icon URL, and upcoming draft ID. Season/week intentionally fall back to blank placeholders in the frontend, while league ID and app icon retain backend defaults. The current 2026 Sleeper league ID is `1344465518089748480`; set `Settings!B4` to this value before relying on live Sleeper-backed backend data for the upcoming season. The upcoming rookie draft board should read the Sleeper draft ID from `Settings!B6`.
 * `Rosters & Records` must include `Team Name`, `W-L Record`, and `Fpts (Total)` headers for the frontend payload.
 * `Rosters & Records` `Streak` falls back to column G if the header is missing.
 * `Rosters & Records` display/real name resolution prefers headers like `Display Name`, then falls back to column J.
@@ -99,6 +99,9 @@ Admin writes from the GitHub Pages app use a simple admin-code gate because the 
 * Betting custom avatar dropdowns render their expanded menu through a body-level fixed portal so later glass-panel cards do not cover the menu on mobile browsers.
 * Betting option-bank reads should stay limited to `H1:K6`; avoid using `getLastRow()` for those banks because unrelated sheet content can make Apps Script reads unnecessarily slow.
 * The app should only write Betting submissions to `App Data Collection!B2:G11`. Do not let app-originated writes touch prompt, results, mapping, or option-bank ranges.
+* The upcoming rookie draft board should read its draft ID from `Settings!B6`, fetch Sleeper `/v1/draft/{draft_id}`, and build pre-draft pick slots from `slot_to_roster_id`. The `/picks` endpoint can be empty before selections are made, so use it only as optional selected-player enrichment. Apply `/traded_picks` entries by matching `round` plus original `roster_id`; `owner_id` is the current owner roster and `previous_owner_id` is the prior owner. Resolve those roster IDs through the `Rosters & Records` `Roster ID` column to display league team and manager names.
+* A partial Sleeper `draft_order` is intentional for the 2026 rookie draft because some pick slots are still to be determined. When `draft_order` omits slots that are present in `slot_to_roster_id`, keep those picks unresolved in the UI and show the candidate teams from the missing slots instead of assigning a final owner.
+* If Sleeper draft metadata does not expose a round count, the draft board backend falls back to the max round found in `/picks` or `/traded_picks`, then to `DEFAULT_UPCOMING_DRAFT_ROUNDS` in `Code.js`.
 
 ## Don't Do This
 

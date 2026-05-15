@@ -433,6 +433,247 @@
             }
         }
 
+        .draft-board-shell {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr);
+            gap: 1rem;
+        }
+
+        .draft-round-card {
+            border: 1px solid rgba(226, 232, 240, 0.95);
+            border-radius: 1.5rem;
+            background: rgba(255, 255, 255, 0.9);
+            padding: 1rem;
+            box-shadow: 0 12px 36px rgba(15, 23, 42, 0.08);
+        }
+
+        .dark .draft-round-card {
+            border-color: rgba(51, 65, 85, 0.95);
+            background: rgba(15, 23, 42, 0.72);
+            box-shadow: none;
+        }
+
+        .draft-round-heading {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+
+        .draft-round-heading h3 {
+            font-size: 1rem;
+            font-weight: 950;
+            font-style: italic;
+            text-transform: uppercase;
+            color: #0f172a;
+        }
+
+        .dark .draft-round-heading h3 {
+            color: #ffffff;
+        }
+
+        .draft-round-heading span {
+            flex: 0 0 auto;
+            border-radius: 9999px;
+            background: rgba(236, 72, 153, 0.1);
+            padding: 0.35rem 0.7rem;
+            color: #ec4899;
+            font-size: 0.65rem;
+            font-weight: 900;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+        }
+
+        .draft-pick-card {
+            position: relative;
+            overflow: hidden;
+            border: 1px solid rgba(226, 232, 240, 0.95);
+            border-radius: 1.15rem;
+            background:
+                linear-gradient(90deg, rgba(236, 72, 153, 0.12), transparent 38%),
+                rgba(255, 255, 255, 0.82);
+            padding: 0.85rem;
+        }
+
+        .draft-pick-card--traded {
+            border-color: rgba(236, 72, 153, 0.4);
+            background:
+                linear-gradient(90deg, rgba(236, 72, 153, 0.18), rgba(251, 146, 60, 0.08) 46%, transparent),
+                rgba(255, 255, 255, 0.9);
+        }
+
+        .draft-pick-card--tbd {
+            border-color: rgba(251, 146, 60, 0.58);
+            background:
+                linear-gradient(90deg, rgba(251, 146, 60, 0.2), rgba(236, 72, 153, 0.08) 48%, transparent),
+                rgba(255, 255, 255, 0.92);
+        }
+
+        .dark .draft-pick-card {
+            border-color: rgba(51, 65, 85, 0.9);
+            background:
+                linear-gradient(90deg, rgba(236, 72, 153, 0.14), transparent 38%),
+                rgba(15, 23, 42, 0.86);
+        }
+
+        .dark .draft-pick-card--traded {
+            border-color: rgba(244, 114, 182, 0.42);
+            background:
+                linear-gradient(90deg, rgba(236, 72, 153, 0.2), rgba(251, 146, 60, 0.08) 48%, transparent),
+                rgba(15, 23, 42, 0.9);
+        }
+
+        .dark .draft-pick-card--tbd {
+            border-color: rgba(251, 146, 60, 0.52);
+            background:
+                linear-gradient(90deg, rgba(251, 146, 60, 0.2), rgba(236, 72, 153, 0.1) 48%, transparent),
+                rgba(15, 23, 42, 0.9);
+        }
+
+        .draft-pick-number {
+            float: left;
+            display: flex;
+            min-width: 3.1rem;
+            min-height: 2.7rem;
+            align-items: center;
+            justify-content: center;
+            margin-right: 0.8rem;
+            border-radius: 0.9rem;
+            background: #0f172a;
+            color: #ffffff;
+            font-size: 0.85rem;
+            font-weight: 950;
+            font-style: italic;
+        }
+
+        .dark .draft-pick-number {
+            background: #ec4899;
+        }
+
+        .draft-owner-photo,
+        .draft-owner-initials {
+            width: 2.35rem;
+            height: 2.35rem;
+            flex: 0 0 auto;
+            border-radius: 9999px;
+            border: 2px solid rgba(236, 72, 153, 0.62);
+            background: #0f172a;
+            color: #ffffff;
+            object-fit: cover;
+            box-shadow: 0 8px 18px rgba(236, 72, 153, 0.12);
+        }
+
+        .draft-owner-initials {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.68rem;
+            font-weight: 950;
+            font-style: italic;
+            letter-spacing: 0.05em;
+        }
+
+        .draft-pick-meta {
+            clear: both;
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 0.45rem;
+            margin-top: 0.75rem;
+            color: #64748b;
+            font-size: 0.68rem;
+            font-weight: 900;
+            letter-spacing: 0.11em;
+            text-transform: uppercase;
+        }
+
+        .dark .draft-pick-meta {
+            color: #cbd5e1;
+        }
+
+        .draft-trade-badge {
+            border-radius: 9999px;
+            background: #ec4899;
+            padding: 0.28rem 0.52rem;
+            color: #ffffff;
+            font-size: 0.62rem;
+            box-shadow: 0 8px 20px rgba(236, 72, 153, 0.18);
+        }
+
+        .draft-tbd-badge {
+            border-radius: 9999px;
+            background: #f97316;
+            padding: 0.28rem 0.52rem;
+            color: #ffffff;
+            font-size: 0.62rem;
+            box-shadow: 0 8px 20px rgba(249, 115, 22, 0.18);
+        }
+
+        .draft-tbd-icon {
+            display: flex;
+            width: 2.35rem;
+            height: 2.35rem;
+            flex: 0 0 auto;
+            align-items: center;
+            justify-content: center;
+            border-radius: 9999px;
+            border: 2px solid rgba(249, 115, 22, 0.72);
+            background: #f97316;
+            color: #ffffff;
+            font-size: 1rem;
+            font-weight: 950;
+            font-style: italic;
+            box-shadow: 0 8px 18px rgba(249, 115, 22, 0.16);
+        }
+
+        .draft-tbd-candidates {
+            clear: both;
+            display: grid;
+            grid-template-columns: minmax(0, 1fr);
+            gap: 0.45rem;
+            margin-top: 0.75rem;
+        }
+
+        .draft-tbd-candidate {
+            display: flex;
+            min-width: 0;
+            align-items: center;
+            gap: 0.55rem;
+            border-radius: 9999px;
+            border: 1px solid rgba(251, 146, 60, 0.28);
+            background: rgba(255, 247, 237, 0.82);
+            padding: 0.35rem 0.55rem;
+            color: #9a3412;
+            font-size: 0.72rem;
+            font-weight: 900;
+        }
+
+        .draft-tbd-candidate .draft-owner-photo,
+        .draft-tbd-candidate .draft-owner-initials {
+            width: 1.65rem;
+            height: 1.65rem;
+            font-size: 0.54rem;
+        }
+
+        .dark .draft-tbd-candidate {
+            border-color: rgba(251, 146, 60, 0.32);
+            background: rgba(67, 20, 7, 0.36);
+            color: #fed7aa;
+        }
+
+        @media (min-width: 768px) {
+            .draft-board-shell {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+        }
+
+        @media (min-width: 1180px) {
+            .draft-board-shell {
+                grid-template-columns: repeat(3, minmax(0, 1fr));
+            }
+        }
+
         .betting-choice-button {
             border: 1px solid rgba(226, 232, 240, 0.95);
             border-radius: 9999px;
@@ -769,6 +1010,20 @@
                         </div>
                     </div>
                     <div id="standings-grid" class="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3"></div>
+                </section>
+
+                <section id="draft-board-section" class="space-y-6">
+                    <div class="flex flex-col gap-4 px-1 md:flex-row md:items-start md:justify-between">
+                        <div class="space-y-4">
+                            <h2 class="text-3xl font-black uppercase italic tracking-tight">Upcoming Rookie Draft</h2>
+                            <p id="draft-board-summary" class="text-sm font-bold text-slate-500 dark:text-slate-400">Board loading</p>
+                        </div>
+                        <div class="flex flex-wrap items-center gap-3 text-xs font-black uppercase tracking-[0.18em]">
+                            <span id="draft-board-status" class="rounded-full bg-pink-500 px-4 py-2 text-white shadow-lg shadow-pink-500/20">Draft</span>
+                            <span id="draft-board-updated" class="rounded-full border border-slate-200 bg-white px-4 py-2 text-slate-500 shadow-sm dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300">Syncing</span>
+                        </div>
+                    </div>
+                    <div id="draft-board-root"></div>
                 </section>
 
                 <section class="grid grid-cols-1 gap-8 md:grid-cols-2">
