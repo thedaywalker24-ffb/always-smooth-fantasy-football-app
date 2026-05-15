@@ -19,6 +19,7 @@ function onOpen(e) {
     .addItem('Refresh Team Rosters', 'fetchAndPopulateRosters')
     .addItem('Refresh Matchups', 'fetchMatchupData')
     .addItem('Retrieve Draft Data', 'fetchDraftPicksData')
+    .addItem('Build Upcoming Draft Board', 'buildUpcomingDraftBoardSheet')
     .addItem('Fetch Player Data', 'fetchSleeperPlayers')
     .addItem('Clear Betting Sheet', 'clearRanges')
     .addItem('Clear App Data Sheet', 'clearAppDataRange')
@@ -70,6 +71,8 @@ const BETTING_MAX_PICK_LENGTH = 120;
 
 /** Sheet tab written by fetchLeagueMembersData / updateRostersAndRecordsData */
 const ROSTERS_RECORDS_SHEET = 'Rosters & Records';
+/** Sheet tab written by buildUpcomingDraftBoardSheet */
+const UPCOMING_DRAFT_BOARD_SHEET = 'Upcoming Draft Board';
 /** 0-based column index when "Streak" header is missing (column G) */
 const ROSTERS_STREAK_COL_FALLBACK = 6;
 /** 0-based column for manager display name when header "Display Name" is used (column J) */
@@ -1631,6 +1634,155 @@ function getDraftBoardData_(spreadsheet) {
     },
     updatedAt: new Date().toISOString()
   };
+}
+
+/**
+ * @param {Object|null} owner
+ * @return {string}
+ */
+function formatDraftBoardOwnerLabel_(owner) {
+  if (!owner) return '';
+  var teamName = String(owner.teamName || '').trim();
+  var managerName = String(owner.managerName || '').trim();
+  if (teamName && managerName) return teamName + ' (' + managerName + ')';
+  return teamName || managerName || '';
+}
+
+/**
+ * @param {Array<Object>} owners
+ * @return {string}
+ */
+function formatDraftBoardCandidateLabels_(owners) {
+  if (!Array.isArray(owners)) return '';
+  return owners
+    .map(function (owner) {
+      return formatDraftBoardOwnerLabel_(owner);
+    })
+    .filter(function (label) {
+      return !!label;
+    })
+    .join(' / ');
+}
+
+/**
+ * @param {Object|null} player
+ * @return {string}
+ */
+function formatDraftBoardSelectedPlayer_(player) {
+  if (!player) return '';
+  var name = String(player.name || '').trim();
+  var details = [player.position, player.team]
+    .map(function (value) {
+      return String(value || '').trim();
+    })
+    .filter(function (value) {
+      return !!value;
+    })
+    .join(' / ');
+  return details ? name + ' - ' + details : name;
+}
+
+/**
+ * @param {Object} pick
+ * @return {string}
+ */
+function getDraftBoardPickStatus_(pick) {
+  if (pick && pick.selectedPlayer) return 'Selected';
+  if (pick && pick.unresolved) return 'TBD';
+  if (pick && pick.traded) return 'Traded';
+  return 'Original';
+}
+
+/**
+ * Creates or refreshes the sheet-backed upcoming draft board snapshot.
+ * Run from the spreadsheet menu after Settings!B6 is configured.
+ */
+function buildUpcomingDraftBoardSheet() {
+  var spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+  if (!spreadsheet) {
+    Browser.msgBox('No spreadsheet is available.');
+    return;
+  }
+
+  var payload = getDraftBoardData_(spreadsheet);
+  if (!payload || payload.ok !== true) {
+    Browser.msgBox('Upcoming draft board could not be built: ' + (payload && payload.error ? payload.error : 'Unknown error.'));
+    return;
+  }
+
+  var sheet = spreadsheet.getSheetByName(UPCOMING_DRAFT_BOARD_SHEET);
+  if (!sheet) {
+    sheet = spreadsheet.insertSheet(UPCOMING_DRAFT_BOARD_SHEET);
+  }
+
+  var headers = [
+    'Round',
+    'Pick Label',
+    'Pick No',
+    'Pick In Round',
+    'Draft Slot',
+    'Original Roster ID',
+    'Original Team',
+    'Original Manager',
+    'Current Roster ID',
+    'Current Team',
+    'Current Manager',
+    'Previous Roster ID',
+    'Previous Team',
+    'Previous Manager',
+    'Status',
+    'Candidate Teams',
+    'Candidate Roster IDs',
+    'Selected Player',
+    'Selected Player ID',
+    'Updated At'
+  ];
+  var rows = [headers];
+
+  payload.rounds.forEach(function (round) {
+    (round.picks || []).forEach(function (pick) {
+      var originalOwner = pick.originalOwner || {};
+      var currentOwner = pick.currentOwner || {};
+      var previousOwner = pick.previousOwner || {};
+      var selectedPlayer = pick.selectedPlayer || null;
+      rows.push([
+        pick.round || '',
+        pick.pickLabel || '',
+        pick.pickNo || '',
+        pick.pickInRound || '',
+        pick.draftSlot || '',
+        pick.originalRosterId || '',
+        originalOwner.teamName || '',
+        originalOwner.managerName || '',
+        pick.currentRosterId || '',
+        currentOwner.teamName || '',
+        currentOwner.managerName || '',
+        pick.previousRosterId || '',
+        previousOwner.teamName || '',
+        previousOwner.managerName || '',
+        getDraftBoardPickStatus_(pick),
+        formatDraftBoardCandidateLabels_(pick.unresolvedCandidates),
+        Array.isArray(pick.unresolvedCandidateRosterIds) ? pick.unresolvedCandidateRosterIds.join(' / ') : '',
+        formatDraftBoardSelectedPlayer_(selectedPlayer),
+        selectedPlayer ? selectedPlayer.playerId || '' : '',
+        payload.updatedAt || ''
+      ]);
+    });
+  });
+
+  sheet.clear();
+  sheet.getRange(1, 1, rows.length, headers.length).setValues(rows);
+  sheet.getRange(1, 1, 1, headers.length).setFontWeight('bold');
+  sheet.setFrozenRows(1);
+  sheet.autoResizeColumns(1, headers.length);
+
+  Browser.msgBox(
+    'Upcoming Draft Board sheet updated with ' +
+      (rows.length - 1) +
+      ' picks for ' +
+      payload.season +
+      '.'
+  );
 }
 
 /**

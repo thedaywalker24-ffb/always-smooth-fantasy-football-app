@@ -68,6 +68,7 @@ Known tabs and dependencies:
 * `Sleeper Players`: player lookup data for roster population.
 * `Team Rosters`: generated roster output.
 * `Draft Results`: generated draft pick output.
+* `Upcoming Draft Board`: generated offseason rookie draft board snapshot written by the Apps Script menu action `Build Upcoming Draft Board`.
 * `App Data Collection`: weekly betting prompts, member picks, results, input mappings, option banks, and helper-cleared submission range.
 
 `Settings` cells:
@@ -112,6 +113,29 @@ Apps Script Script Properties:
 Draft-board roster ID resolution:
 
 * Use `Roster ID` to map Sleeper draft ownership IDs back to the `Rosters & Records` row, then display `Team Name` and `Display Name` as available.
+
+`Upcoming Draft Board` generated columns:
+
+* `Round`
+* `Pick Label`
+* `Pick No`
+* `Pick In Round`
+* `Draft Slot`
+* `Original Roster ID`
+* `Original Team`
+* `Original Manager`
+* `Current Roster ID`
+* `Current Team`
+* `Current Manager`
+* `Previous Roster ID`
+* `Previous Team`
+* `Previous Manager`
+* `Status`
+* `Candidate Teams`
+* `Candidate Roster IDs`
+* `Selected Player`
+* `Selected Player ID`
+* `Updated At`
 
 `Teams` supplemental columns:
 
@@ -159,6 +183,7 @@ Draft-board roster ID resolution:
 * Betting team/manager avatar dropdowns use a fixed body-level menu portal so expanded lists can overlap lower bet cards on Android and other mobile browsers.
 * Betting submissions use the submit response to refresh the selected member form instead of immediately making a second sheet read.
 * Upcoming rookie draft board v1 appears on Home below League Standings during the offseason; it reads `Settings!B6`, builds linear pre-draft pick slots from Sleeper `slot_to_roster_id`, applies `traded_picks`, highlights intentionally unresolved draft-order slots as TBD with candidate teams, maps roster IDs through `Rosters & Records`, caches the payload locally, and displays optional selected-player data when `/picks` is populated. The League Standings header includes a Draft Board shortcut. On mobile, Round 1 is expanded by default and later rounds are collapsed by default; tablet/desktop keeps all rounds visible.
+* Apps Script menu action `Build Upcoming Draft Board` creates/refreshes a normalized `Upcoming Draft Board` sheet snapshot using the same compiled draft-board payload.
 * Apps Script spreadsheet menu for league data operations.
 * Sleeper sync functions for members, records, rosters, players, matchups, and draft picks.
 * Defensive helpers for Google Drive image URLs and missing settings.

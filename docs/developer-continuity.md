@@ -103,6 +103,7 @@ Admin writes from the GitHub Pages app use a simple admin-code gate because the 
 * A partial Sleeper `draft_order` is intentional for the 2026 rookie draft because some pick slots are still to be determined. When `draft_order` omits slots that are present in `slot_to_roster_id`, keep those picks unresolved in the UI and show the candidate teams from the missing slots instead of assigning a final owner.
 * The Home-page draft board uses mobile-only round collapsing: Round 1 starts expanded, later rounds start collapsed, and desktop/tablet CSS keeps all round bodies visible for scanability.
 * If Sleeper draft metadata does not expose a round count, the draft board backend falls back to the max round found in `/picks` or `/traded_picks`, then to `DEFAULT_UPCOMING_DRAFT_ROUNDS` in `Code.js`.
+* The spreadsheet menu action `Build Upcoming Draft Board` writes the compiled draft-board payload to the `Upcoming Draft Board` tab. Treat that tab as a generated snapshot; rerun the menu action after draft-order or traded-pick changes instead of editing generated columns by hand.
 
 ## Don't Do This
 
