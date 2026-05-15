@@ -1537,6 +1537,16 @@ function setupScrollBehavior() {
   }, { passive: true });
 }
 
+function setupHomeShortcuts() {
+  document.querySelectorAll('[data-jump-to-draft]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const section = document.getElementById('draft-board-section');
+      if (!section) return;
+      section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  });
+}
+
 function setActiveTab(tabName, shouldScroll = false) {
   const activeTab = tabName === 'betting' ? 'betting' : 'home';
   document.querySelectorAll('[data-tab-panel]').forEach((panel) => {
@@ -1599,6 +1609,7 @@ async function bootstrap() {
   setupThemeControls();
   setupInstallPrompt();
   setupScrollBehavior();
+  setupHomeShortcuts();
   setupAppTabs();
   setupBettingControls();
   setupDraftBoardControls();
