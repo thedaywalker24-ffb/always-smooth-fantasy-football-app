@@ -1801,6 +1801,47 @@ function findNormalizedHeaderIndex_(normalizedHeaders, candidates) {
 }
 
 /**
+ * Finds the header row for the All Matchups sheet within the first few rows.
+ * @param {GoogleAppsScript.Spreadsheet.Sheet} sheet
+ * @param {number} lastRow
+ * @param {number} lastCol
+ * @return {{headerRow: number, headers: Array, normalizedHeaders: Array}}
+ */
+function findAllMatchupsHeaderRow_(sheet, lastRow, lastCol) {
+  var rowsToScan = Math.min(lastRow, 10);
+  var headerRows = sheet.getRange(1, 1, rowsToScan, lastCol).getDisplayValues();
+
+  for (var r = 0; r < headerRows.length; r++) {
+    var headers = headerRows[r];
+    var normalizedHeaders = headers.map(normalizeBettingOptionKey_);
+    var matchupIdCol = findNormalizedHeaderIndex_(normalizedHeaders, [
+      'Matchup ID',
+      'Matchup',
+      'MatchupID'
+    ]);
+    var teamNameCol = findNormalizedHeaderIndex_(normalizedHeaders, [
+      'Team Name',
+      'Team',
+      'Roster',
+      'Franchise'
+    ]);
+    if (matchupIdCol !== -1 && teamNameCol !== -1) {
+      return {
+        headerRow: r + 1,
+        headers: headers,
+        normalizedHeaders: normalizedHeaders
+      };
+    }
+  }
+
+  return {
+    headerRow: 0,
+    headers: headerRows.length ? headerRows[0] : [],
+    normalizedHeaders: headerRows.length ? headerRows[0].map(normalizeBettingOptionKey_) : []
+  };
+}
+
+/**
  * @param {Array} row
  * @param {number} index
  * @return {string}
@@ -1842,8 +1883,9 @@ function getMatchupsData_(spreadsheet) {
     };
   }
 
-  var headers = sheet.getRange(1, 1, 1, lastCol).getDisplayValues()[0];
-  var normalizedHeaders = headers.map(normalizeBettingOptionKey_);
+  var headerInfo = findAllMatchupsHeaderRow_(sheet, lastRow, lastCol);
+  var headers = headerInfo.headers;
+  var normalizedHeaders = headerInfo.normalizedHeaders;
   var matchupIdCol = findNormalizedHeaderIndex_(normalizedHeaders, [
     'Matchup ID',
     'Matchup',
@@ -1886,10 +1928,26 @@ function getMatchupsData_(spreadsheet) {
     'RosterID'
   ]);
 
-  if (matchupIdCol === -1) return fail('Missing expected "Matchup ID" header on All Matchups.');
-  if (teamNameCol === -1) return fail('Missing expected team-name header on All Matchups.');
+  if (matchupIdCol === -1 || teamNameCol === -1) {
+    return fail(
+      'Missing expected All Matchups headers. Need "Matchup ID" and a team-name header such as "Team Name". Found first-row headers: ' +
+        headers.filter(function (header) { return !!String(header || '').trim(); }).join(', ')
+    );
+  }
 
-  var rows = sheet.getRange(2, 1, lastRow - 1, lastCol).getDisplayValues();
+  var dataStartRow = headerInfo.headerRow + 1;
+  if (lastRow < dataStartRow) {
+    return {
+      ok: true,
+      sheetName: ALL_MATCHUPS_SHEET,
+      headerRow: headerInfo.headerRow,
+      matchups: [],
+      excludedGroupCount: 0,
+      updatedAt: new Date().toISOString()
+    };
+  }
+
+  var rows = sheet.getRange(dataStartRow, 1, lastRow - dataStartRow + 1, lastCol).getDisplayValues();
   var groups = {};
   rows.forEach(function (row) {
     var matchupId = getDisplayCell_(row, matchupIdCol);
@@ -1932,6 +1990,7 @@ function getMatchupsData_(spreadsheet) {
   return {
     ok: true,
     sheetName: ALL_MATCHUPS_SHEET,
+    headerRow: headerInfo.headerRow,
     matchups: matchups,
     excludedGroupCount: excludedGroupCount,
     updatedAt: new Date().toISOString()

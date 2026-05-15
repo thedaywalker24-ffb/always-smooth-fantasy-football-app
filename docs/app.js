@@ -862,7 +862,7 @@ function updateMatchupsHeader(payload) {
   const updated = document.getElementById('matchups-updated');
   const summary = document.getElementById('matchups-summary');
   const count = Array.isArray(payload?.matchups) ? payload.matchups.length : 0;
-  if (updated) updated.textContent = formatTimestamp(payload?.updatedAt);
+  if (updated) updated.textContent = payload?.updatedAt ? formatTimestamp(payload.updatedAt) : 'Sync failed';
   if (summary) {
     summary.textContent = count
       ? `${count} matchup${count === 1 ? '' : 's'} loaded`
@@ -963,7 +963,8 @@ async function loadMatchupsData() {
       renderMatchups(cached, true);
       return;
     }
-    renderMatchupsEmpty('Matchups could not be loaded.');
+    updateMatchupsHeader({ updatedAt: '' });
+    renderMatchupsEmpty(`Matchups could not be loaded: ${error.message || error}`);
   }
 }
 
