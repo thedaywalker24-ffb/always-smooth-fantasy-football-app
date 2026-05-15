@@ -183,6 +183,7 @@ Draft-board roster ID resolution:
 * Betting team/manager avatar dropdowns use a fixed body-level menu portal so expanded lists can overlap lower bet cards on Android and other mobile browsers.
 * Betting submissions use the submit response to refresh the selected member form instead of immediately making a second sheet read.
 * Upcoming rookie draft board v1 appears on Home below League Standings during the offseason; it reads `Settings!B6`, builds linear pre-draft pick slots from Sleeper `slot_to_roster_id`, applies `traded_picks`, highlights intentionally unresolved draft-order slots as TBD with candidate teams, maps roster IDs through `Rosters & Records`, caches the payload locally, and displays optional selected-player data when `/picks` is populated. The League Standings header includes a Draft Board shortcut. On mobile, Round 1 is expanded by default and later rounds are collapsed by default; tablet/desktop keeps all rounds visible.
+* Removed the original GitHub Pages explainer tiles (`Install Friendly` and `Live Sheet Data`) from the bottom of Home so the page stays focused on league content.
 * Apps Script menu action `Build Upcoming Draft Board` creates/refreshes a normalized `Upcoming Draft Board` sheet snapshot using the same compiled draft-board payload.
 * Apps Script spreadsheet menu for league data operations.
 * Sleeper sync functions for members, records, rosters, players, matchups, and draft picks.
