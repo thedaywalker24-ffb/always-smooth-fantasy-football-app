@@ -87,7 +87,7 @@ Admin writes from the GitHub Pages app use a simple admin-code gate because the 
 * `Teams` team-name matching is normalized lower-case string matching against `Rosters & Records` team names.
 * Google Drive image links are rewritten to `https://lh3.googleusercontent.com/d/...=w1920`; Drive sharing/permissions can still break images.
 * `fetchMatchupData` depends on `API Data!A19` and writes matchup data starting at row `278`.
-* The Matchups tab reads from `All Matchups`, not directly from Sleeper. The backend scans the first 10 rows for the header row. Required display headers are `Matchup ID` and a team-name column such as `Team Name`; `Photo`, `Record`, `Week Points`, manager, and roster ID columns are optional. Groups with anything other than exactly two teams are excluded so playoff/offseason partial matchup data does not show orphan teams.
+* The Matchups tab reads from `All Matchups`, not directly from Sleeper. The backend scans the first 10 rows for the header row. Required display headers are `Matchup ID` and a team-name column such as `Name` or `Team Name`; `Photo`, `Record`, `Week Points`, manager, and roster ID columns are optional. Groups with anything other than exactly two teams are excluded so playoff/offseason partial matchup data does not show orphan teams.
 * `fetchAndPopulateRosters` depends on `Sleeper Players` having `Player ID` and `Full Name` headers.
 * `fetchDraftPicksData` hardcodes Sleeper draft IDs for 2023, 2024, and 2025.
 * Expanded team-card detail styling is split between `docs/index.html` CSS overlays/row glass and `docs/app.js` rendered Tailwind text classes; update both when changing light/dark treatment.

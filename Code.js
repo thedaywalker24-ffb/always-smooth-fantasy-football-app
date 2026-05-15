@@ -1821,6 +1821,7 @@ function findAllMatchupsHeaderRow_(sheet, lastRow, lastCol) {
     ]);
     var teamNameCol = findNormalizedHeaderIndex_(normalizedHeaders, [
       'Team Name',
+      'Name',
       'Team',
       'Roster',
       'Franchise'
@@ -1893,6 +1894,7 @@ function getMatchupsData_(spreadsheet) {
   ]);
   var teamNameCol = findNormalizedHeaderIndex_(normalizedHeaders, [
     'Team Name',
+    'Name',
     'Team',
     'Roster',
     'Franchise'
@@ -1930,7 +1932,7 @@ function getMatchupsData_(spreadsheet) {
 
   if (matchupIdCol === -1 || teamNameCol === -1) {
     return fail(
-      'Missing expected All Matchups headers. Need "Matchup ID" and a team-name header such as "Team Name". Found first-row headers: ' +
+      'Missing expected All Matchups headers. Need "Matchup ID" and a team-name header such as "Team Name" or "Name". Found first-row headers: ' +
         headers.filter(function (header) { return !!String(header || '').trim(); }).join(', ')
     );
   }
