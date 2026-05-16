@@ -877,12 +877,6 @@ function renderMatchupTeam(team, side) {
   return `
     <div class="matchup-team-panel matchup-team-panel--${side}" ${getMatchupBackdropStyle(team)}>
       <div class="matchup-team-overlay">
-        <div class="matchup-team-photo-wrap">
-          ${team?.photoUrl
-            ? `<img src="${escapeHtml(team.photoUrl)}" class="matchup-team-photo" alt="${escapeHtml(label)} photo" onerror="this.classList.add('hidden');this.nextElementSibling.classList.remove('hidden');">`
-            : ''}
-          <span class="matchup-team-initials${team?.photoUrl ? ' hidden' : ''}" aria-hidden="true">${escapeHtml(getMatchupInitials(team))}</span>
-        </div>
         <div class="min-w-0">
           <p class="truncate text-sm font-black italic uppercase leading-tight text-white">${escapeHtml(label)}</p>
           ${team?.managerName ? `<p class="mt-1 truncate text-xs font-bold text-white/72">${escapeHtml(team.managerName)}</p>` : ''}
@@ -921,7 +915,8 @@ function renderMatchups(payload, isStale = false) {
         ${matchups.map((matchup) => {
           const teams = matchup.teams || [];
           return `
-            <article class="matchup-card glass-panel" aria-label="Matchup ${escapeHtml(matchup.matchupId)}">
+            <article class="matchup-card glass-panel group" aria-label="Matchup ${escapeHtml(matchup.matchupId)}">
+              <div class="matchup-card-accent" aria-hidden="true"></div>
               <div class="matchup-card-heading">
                 <span>Matchup ${escapeHtml(matchup.matchupId)}</span>
               </div>
