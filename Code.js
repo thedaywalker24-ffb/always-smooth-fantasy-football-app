@@ -54,7 +54,7 @@ const APP_SHORT_NAME = 'Always Smooth';
 const APP_THEME_COLOR = '#ec4899';
 const APP_BACKGROUND_COLOR = '#020617';
 const DEFAULT_UPCOMING_DRAFT_ROUNDS = 3;
-const ESPN_NFL_NEWS_URL = 'https://site.api.espn.com/apis/site/v2/sports/football/nfl/news?limit=25';
+const ROTOWORLD_NFL_NEWS_RSS_URL = 'https://www.nbcsports.com/edge/rss/player-news?source=football';
 const ESPN_NFL_SCOREBOARD_URL = 'https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard';
 const ESPN_NFL_SCOREBOARD_WEB_URL = 'https://www.espn.com/nfl/scoreboard';
 
@@ -2020,6 +2020,34 @@ function fetchEspnJson_(url) {
 }
 
 /**
+ * @param {GoogleAppsScript.XML_Service.Element} element
+ * @param {string} childName
+ * @return {string}
+ */
+function getXmlChildText_(element, childName) {
+  if (!element) return '';
+  var child = element.getChild(childName);
+  return child ? String(child.getText() || '').trim() : '';
+}
+
+/**
+ * @param {string} url
+ * @return {GoogleAppsScript.XML_Service.Document}
+ */
+function fetchRssXml_(url) {
+  var response = UrlFetchApp.fetch(url, {
+    method: 'get',
+    muteHttpExceptions: true
+  });
+  var status = response.getResponseCode();
+  var body = response.getContentText();
+  if (status < 200 || status >= 300) {
+    throw new Error('RSS request failed with status ' + status + '.');
+  }
+  return XmlService.parse(body);
+}
+
+/**
  * @param {Date} now
  * @return {boolean}
  */
@@ -2031,20 +2059,16 @@ function isNflOffseason_(now) {
 /**
  * @return {Array<{type: string, text: string, url: string}>}
  */
-function getEspnHeadlineTickerItems_() {
-  var payload = fetchEspnJson_(ESPN_NFL_NEWS_URL);
-  var articles = payload && Array.isArray(payload.articles) ? payload.articles : [];
+function getRotoworldHeadlineTickerItems_() {
+  var document = fetchRssXml_(ROTOWORLD_NFL_NEWS_RSS_URL);
+  var root = document.getRootElement();
+  var channel = root ? root.getChild('channel') : null;
+  var articles = channel ? channel.getChildren('item') : [];
   var items = [];
   articles.forEach(function (article) {
-    var headline = String(article && article.headline ? article.headline : '').trim();
+    var headline = getXmlChildText_(article, 'title');
     if (!headline) return;
-    var href =
-      article &&
-      article.links &&
-      article.links.web &&
-      article.links.web.href
-        ? String(article.links.web.href).trim()
-        : '';
+    var href = getXmlChildText_(article, 'link');
     items.push({
       type: 'headline',
       text: 'HOT: ' + headline,
@@ -2116,7 +2140,7 @@ function getTickerItems() {
   var scores = [];
 
   try {
-    headlines = getEspnHeadlineTickerItems_();
+    headlines = getRotoworldHeadlineTickerItems_();
   } catch (err) {
     warnings.push('NFL headlines could not be loaded: ' + (err.message || String(err)));
   }
