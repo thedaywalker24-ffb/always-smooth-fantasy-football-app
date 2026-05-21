@@ -447,6 +447,181 @@
             }
         }
 
+        .ticker {
+            position: relative;
+            overflow: hidden;
+            border: 1px solid rgba(226, 232, 240, 0.95);
+            border-radius: 9999px;
+            background: rgba(255, 255, 255, 0.9);
+            box-shadow: 0 12px 30px rgba(15, 23, 42, 0.08);
+        }
+
+        .dark .ticker {
+            border-color: rgba(236, 72, 153, 0.14);
+            background: rgba(15, 23, 42, 0.82);
+            box-shadow: none;
+        }
+
+        .ticker::before,
+        .ticker::after {
+            content: "";
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            z-index: 2;
+            width: 2.5rem;
+            pointer-events: none;
+        }
+
+        .ticker::before {
+            left: 0;
+            background: linear-gradient(90deg, rgba(255, 255, 255, 0.98), transparent);
+        }
+
+        .ticker::after {
+            right: 0;
+            background: linear-gradient(270deg, rgba(255, 255, 255, 0.98), transparent);
+        }
+
+        .dark .ticker::before {
+            background: linear-gradient(90deg, rgba(15, 23, 42, 0.98), transparent);
+        }
+
+        .dark .ticker::after {
+            background: linear-gradient(270deg, rgba(15, 23, 42, 0.98), transparent);
+        }
+
+        .ticker-meta {
+            position: absolute;
+            left: 0.45rem;
+            top: 50%;
+            z-index: 3;
+            display: flex;
+            transform: translateY(-50%);
+            gap: 0.35rem;
+        }
+
+        .ticker-meta span {
+            border-radius: 9999px;
+            background: #ec4899;
+            padding: 0.45rem 0.7rem;
+            color: #ffffff;
+            font-size: 0.62rem;
+            font-weight: 950;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+            box-shadow: 0 8px 20px rgba(236, 72, 153, 0.18);
+        }
+
+        .ticker-track {
+            display: flex;
+            width: max-content;
+            animation: ticker-scroll var(--ticker-duration, 48s) linear infinite;
+            will-change: transform;
+        }
+
+        .ticker:hover .ticker-track,
+        .ticker:focus-within .ticker-track {
+            animation-play-state: paused;
+        }
+
+        .ticker-segment {
+            display: flex;
+            flex: 0 0 auto;
+            align-items: center;
+            gap: 1.4rem;
+            min-width: max-content;
+            padding: 0.72rem 1.4rem 0.72rem 8.8rem;
+        }
+
+        .ticker-segment + .ticker-segment {
+            padding-left: 1.4rem;
+        }
+
+        .ticker-item {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.65rem;
+            color: #334155;
+            font-size: 0.82rem;
+            font-weight: 850;
+            white-space: nowrap;
+            text-decoration: none;
+            transition: color 0.18s ease;
+        }
+
+        .ticker-item:hover {
+            color: #ec4899;
+        }
+
+        .dark .ticker-item {
+            color: #e2e8f0;
+        }
+
+        .dark .ticker-item:hover {
+            color: #f9a8d4;
+        }
+
+        .ticker-dot {
+            width: 0.45rem;
+            height: 0.45rem;
+            flex: 0 0 auto;
+            border-radius: 9999px;
+            background: #ec4899;
+            box-shadow: 0 0 0 0.22rem rgba(236, 72, 153, 0.12);
+        }
+
+        .ticker-item--score .ticker-dot {
+            background: #22c55e;
+            box-shadow: 0 0 0 0.22rem rgba(34, 197, 94, 0.12);
+        }
+
+        .ticker-empty {
+            border: 1px solid rgba(226, 232, 240, 0.95);
+            border-radius: 9999px;
+            background: rgba(255, 255, 255, 0.9);
+            padding: 0.8rem 1rem;
+            color: #64748b;
+            font-size: 0.75rem;
+            font-weight: 900;
+            letter-spacing: 0.12em;
+            text-align: center;
+            text-transform: uppercase;
+        }
+
+        .dark .ticker-empty {
+            border-color: rgba(236, 72, 153, 0.14);
+            background: rgba(15, 23, 42, 0.82);
+            color: #cbd5e1;
+        }
+
+        @keyframes ticker-scroll {
+            from {
+                transform: translate3d(0, 0, 0);
+            }
+
+            to {
+                transform: translate3d(-50%, 0, 0);
+            }
+        }
+
+        @media (max-width: 520px) {
+            .ticker-meta span {
+                padding-inline: 0.58rem;
+                font-size: 0.56rem;
+                letter-spacing: 0.08em;
+            }
+
+            .ticker-segment {
+                gap: 1.05rem;
+                padding-left: 7.4rem;
+            }
+
+            .ticker-item {
+                font-size: 0.76rem;
+            }
+        }
+
         .matchup-card {
             position: relative;
             overflow: hidden;
@@ -1160,6 +1335,10 @@
                     <p class="font-black uppercase tracking-[0.22em]">Install Tip</p>
                     <p class="mt-2 leading-relaxed">On iPhone or iPad, tap Share and then Add to Home Screen to save this as an app-style shortcut.</p>
                 </div>
+
+                <section id="ticker-section" aria-label="NFL ticker">
+                    <div id="ticker-root"></div>
+                </section>
 
                 <section class="space-y-6">
                     <div class="flex flex-col gap-4 px-1 md:flex-row md:items-start md:justify-between">

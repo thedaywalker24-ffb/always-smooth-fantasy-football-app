@@ -54,6 +54,9 @@ const APP_SHORT_NAME = 'Always Smooth';
 const APP_THEME_COLOR = '#ec4899';
 const APP_BACKGROUND_COLOR = '#020617';
 const DEFAULT_UPCOMING_DRAFT_ROUNDS = 3;
+const ESPN_NFL_NEWS_URL = 'https://site.api.espn.com/apis/site/v2/sports/football/nfl/news?limit=25';
+const ESPN_NFL_SCOREBOARD_URL = 'https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard';
+const ESPN_NFL_SCOREBOARD_WEB_URL = 'https://www.espn.com/nfl/scoreboard';
 
 const BETTING_SHEET = 'App Data Collection';
 const BETTING_PROMPT_ROW = 1;
@@ -2000,6 +2003,166 @@ function getMatchupsData_(spreadsheet) {
 }
 
 /**
+ * @param {string} url
+ * @return {*}
+ */
+function fetchEspnJson_(url) {
+  var response = UrlFetchApp.fetch(url, {
+    method: 'get',
+    muteHttpExceptions: true
+  });
+  var status = response.getResponseCode();
+  var body = response.getContentText();
+  if (status < 200 || status >= 300) {
+    throw new Error('ESPN request failed with status ' + status + '.');
+  }
+  return body ? JSON.parse(body) : null;
+}
+
+/**
+ * @param {Date} now
+ * @return {boolean}
+ */
+function isNflOffseason_(now) {
+  var month = now.getMonth();
+  return month >= 1 && month <= 7;
+}
+
+/**
+ * @return {Array<{type: string, text: string, url: string}>}
+ */
+function getEspnHeadlineTickerItems_() {
+  var payload = fetchEspnJson_(ESPN_NFL_NEWS_URL);
+  var articles = payload && Array.isArray(payload.articles) ? payload.articles : [];
+  var items = [];
+  articles.forEach(function (article) {
+    var headline = String(article && article.headline ? article.headline : '').trim();
+    if (!headline) return;
+    var href =
+      article &&
+      article.links &&
+      article.links.web &&
+      article.links.web.href
+        ? String(article.links.web.href).trim()
+        : '';
+    items.push({
+      type: 'headline',
+      text: 'HOT: ' + headline,
+      url: href
+    });
+  });
+  return items;
+}
+
+/**
+ * @return {Array<{type: string, text: string, url: string}>}
+ */
+function getEspnScoreTickerItems_() {
+  var payload = fetchEspnJson_(ESPN_NFL_SCOREBOARD_URL);
+  var events = payload && Array.isArray(payload.events) ? payload.events : [];
+  var items = [];
+  events.forEach(function (event) {
+    var competition =
+      event &&
+      event.competitions &&
+      event.competitions[0]
+        ? event.competitions[0]
+        : null;
+    var competitors = competition && Array.isArray(competition.competitors) ? competition.competitors : [];
+    if (competitors.length < 2) return;
+
+    var home = competitors[0] || {};
+    var away = competitors[1] || {};
+    var homeTeam = home.team && home.team.abbreviation ? String(home.team.abbreviation).trim() : '';
+    var awayTeam = away.team && away.team.abbreviation ? String(away.team.abbreviation).trim() : '';
+    if (!homeTeam || !awayTeam) return;
+
+    var homeScore = home.score !== undefined && home.score !== null ? String(home.score).trim() : '0';
+    var awayScore = away.score !== undefined && away.score !== null ? String(away.score).trim() : '0';
+    var detail =
+      event &&
+      event.status &&
+      event.status.type &&
+      event.status.type.detail
+        ? String(event.status.type.detail).trim()
+        : 'Scheduled';
+    var eventUrl =
+      event &&
+      event.links &&
+      event.links[0] &&
+      event.links[0].href
+        ? String(event.links[0].href).trim()
+        : ESPN_NFL_SCOREBOARD_WEB_URL;
+
+    items.push({
+      type: 'score',
+      text: awayTeam + ' ' + awayScore + ' @ ' + homeTeam + ' ' + homeScore + ' (' + detail + ')',
+      url: eventUrl
+    });
+  });
+  return items;
+}
+
+/**
+ * Unified ticker feed. Offseason shows headlines only; in-season blends
+ * two score items followed by one headline item.
+ * @return {Object}
+ */
+function getTickerItems() {
+  var now = new Date();
+  var offseason = isNflOffseason_(now);
+  var warnings = [];
+  var headlines = [];
+  var scores = [];
+
+  try {
+    headlines = getEspnHeadlineTickerItems_();
+  } catch (err) {
+    warnings.push('NFL headlines could not be loaded: ' + (err.message || String(err)));
+  }
+
+  if (!offseason) {
+    try {
+      scores = getEspnScoreTickerItems_();
+    } catch (err) {
+      warnings.push('NFL scoreboard could not be loaded: ' + (err.message || String(err)));
+    }
+  }
+
+  var items = [];
+  if (offseason || !scores.length) {
+    items = headlines;
+  } else {
+    var scoreIndex = 0;
+    var headlineIndex = 0;
+    while (scoreIndex < scores.length || headlineIndex < headlines.length) {
+      for (var i = 0; i < 2 && scoreIndex < scores.length; i++) {
+        items.push(scores[scoreIndex]);
+        scoreIndex++;
+      }
+      if (headlineIndex < headlines.length) {
+        items.push(headlines[headlineIndex]);
+        headlineIndex++;
+      }
+      if (scoreIndex >= scores.length && headlineIndex < headlines.length) {
+        items.push(headlines[headlineIndex]);
+        headlineIndex++;
+      }
+    }
+  }
+
+  return {
+    ok: true,
+    mode: offseason ? 'offseason' : 'in-season',
+    items: items,
+    headlineCount: headlines.length,
+    scoreCount: scores.length,
+    warnings: warnings,
+    updatedAt: now.toISOString()
+  };
+}
+
+/**
  * Serves the league dashboard HTML as a Web App.
  * @param {Object} e Request parameters (unused; present for Web App signature).
  * @return {GoogleAppsScript.HTML.HtmlOutput}
@@ -2036,6 +2199,10 @@ function doGet(e) {
 
   if (path === 'matchups-data' || path === 'api/matchups-data' || apiName === 'matchups-data') {
     return createApiOutput_(getMatchupsData_(spreadsheet), callbackName);
+  }
+
+  if (path === 'ticker-data' || path === 'api/ticker-data' || apiName === 'ticker-data') {
+    return createApiOutput_(getTickerItems(), callbackName);
   }
 
   if (path === 'update-team-field' || path === 'api/update-team-field' || apiName === 'update-team-field') {

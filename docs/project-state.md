@@ -48,6 +48,7 @@ Current routes handled by `Code.js#doGet`:
 
 * `api=config` / `config`: frontend branding, season, week, header image, icon URL.
 * `api=league-data` / `league-data`: standings/team cards payload.
+* `api=ticker-data` / `ticker-data`: ESPN-backed ticker payload. Offseason uses NFL headlines; in-season interleaves NFL scores with headlines.
 * `api=betting-data` / `betting-data`: weekly betting prompts, members, current picks, results, and input option metadata from `App Data Collection`.
 * `api=draft-board` / `draft-board`: upcoming rookie draft board payload compiled from Sleeper draft metadata, traded picks, optional selected picks, and `Rosters & Records` roster ID mappings.
 * `api=matchups-data` / `matchups-data`: matchup tile payload grouped from the `All Matchups` sheet by `Matchup ID`; incomplete groups are excluded.
@@ -175,6 +176,7 @@ Draft-board roster ID resolution:
 * Live config load from Apps Script with fallback defaults.
 * Live standings load from Apps Script with local cached fallback.
 * Home standings header season/week pills are populated from the `Settings` tab via `api=config`; missing Settings values render as `--` instead of hardcoded season/week numbers.
+* Home ticker tape uses ESPN public NFL news/scoreboard endpoints through Apps Script; Feb-Aug renders headlines only, while Sep-Jan alternates two score items with one headline. The frontend duplicates ticker items in the marquee track for seamless CSS scrolling and pauses animation on hover/focus.
 * Team cards sorted by wins and points for.
 * Expandable standings cards with supplemental stats: team MVP, mulligan, turkey watch, beer trophies, background team image, and manager photo; trophies display inline with the manager name.
 * Expanded team-card detail panels use a light glass overlay in light mode and a darker cinematic overlay in dark mode.

@@ -3,6 +3,7 @@ const FALLBACK_PHOTO = 'https://images.unsplash.com/photo-1540747913346-19e32dc3
 const THEME_KEY = 'theme';
 const CONFIG_CACHE_KEY = 'always-smooth-config';
 const DATA_CACHE_KEY = 'always-smooth-league-data';
+const TICKER_CACHE_KEY = 'always-smooth-ticker-data';
 const DRAFT_BOARD_CACHE_KEY = 'always-smooth-draft-board';
 const MATCHUPS_CACHE_KEY = 'always-smooth-matchups-data';
 const BETTING_BET_COUNT = 6;
@@ -25,6 +26,7 @@ let adminEditActivated = false;
 let adminEditStart = null;
 let adminCodeCache = '';
 let bettingData = null;
+let tickerData = null;
 let draftBoardData = null;
 let matchupsData = null;
 let selectedBettingMemberRow = null;
@@ -78,6 +80,7 @@ function fetchJsonp(path, params = {}) {
     const routeMap = {
       'api/config': 'config',
       'api/league-data': 'league-data',
+      'api/ticker-data': 'ticker-data',
       'api/betting-data': 'betting-data',
       'api/draft-board': 'draft-board',
       'api/matchups-data': 'matchups-data',
@@ -88,6 +91,7 @@ function fetchJsonp(path, params = {}) {
     const url = buildApiUrl(route, { ...params, callback: callbackName });
     const timeoutMsByRoute = {
       'betting-data': 30000,
+      'ticker-data': 20000,
       'draft-board': 30000,
       'matchups-data': 30000,
       'submit-bets': 45000,
@@ -557,6 +561,99 @@ async function loadStandings() {
     }
     setBanner('Live standings could not be loaded from Apps Script. Double-check that the web app deployment is still live and shared for public access.', 'error');
     renderTeams({ teams: [], updatedAt: '' });
+  }
+}
+
+function getTickerRoot() {
+  return document.getElementById('ticker-root');
+}
+
+function renderTickerEmpty(message = 'Ticker feed unavailable') {
+  const root = getTickerRoot();
+  if (!root) return;
+  root.innerHTML = `
+    <div class="ticker-empty">
+      <span>${escapeHtml(message)}</span>
+    </div>
+  `;
+}
+
+function getTickerItemMarkup(item) {
+  const text = escapeHtml(item?.text || '');
+  if (!text) return '';
+  const type = item?.type === 'score' ? 'score' : 'headline';
+  const url = String(item?.url || '').trim();
+  const content = `
+    <span class="ticker-dot" aria-hidden="true"></span>
+    <span class="ticker-item-label">${text}</span>
+  `;
+  if (!url) {
+    return `<span class="ticker-item ticker-item--${type}">${content}</span>`;
+  }
+  return `
+    <a class="ticker-item ticker-item--${type}" href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">
+      ${content}
+    </a>
+  `;
+}
+
+function renderTicker(payload, isStale = false) {
+  const root = getTickerRoot();
+  const items = Array.isArray(payload?.items) ? payload.items.filter((item) => item?.text) : [];
+  if (!root) return;
+
+  if (!items.length) {
+    renderTickerEmpty('NFL ticker is warming up');
+    return;
+  }
+
+  const segmentMarkup = items.map(getTickerItemMarkup).join('');
+  const duration = Math.max(28, Math.min(96, items.length * 5));
+  root.innerHTML = `
+    <div class="ticker" style="--ticker-duration: ${duration}s;" data-mode="${escapeHtml(payload?.mode || 'offseason')}" aria-label="NFL ticker">
+      <div class="ticker-meta" aria-hidden="true">
+        <span>${payload?.mode === 'in-season' ? 'NFL Live' : 'NFL Headlines'}</span>
+        ${isStale ? '<span>Cached</span>' : ''}
+      </div>
+      <div class="ticker-track">
+        <div class="ticker-segment">
+          ${segmentMarkup}
+        </div>
+        <div class="ticker-segment" aria-hidden="true">
+          ${segmentMarkup}
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+async function loadTickerData() {
+  const root = getTickerRoot();
+  if (!root) return;
+  const cached = getCachedJson(TICKER_CACHE_KEY);
+  if (cached) {
+    tickerData = cached;
+    renderTicker(cached, true);
+  } else {
+    renderTickerEmpty('Loading NFL ticker');
+  }
+
+  try {
+    const payload = await fetchJsonp('api/ticker-data');
+    if (!payload || payload.ok !== true) {
+      throw new Error(payload?.error || 'Ticker data could not be loaded.');
+    }
+    tickerData = payload;
+    setCachedJson(TICKER_CACHE_KEY, payload);
+    renderTicker(payload);
+  } catch (error) {
+    console.error(error);
+    if (cached) {
+      tickerData = cached;
+      renderTicker(cached, true);
+      return;
+    }
+    renderTickerEmpty('NFL ticker could not be loaded');
   }
 }
 
@@ -1777,6 +1874,7 @@ async function bootstrap() {
   await registerServiceWorker();
   document.getElementById('refresh-button').addEventListener('click', () => loadStandings());
   applyConfig(DEFAULT_CONFIG);
+  loadTickerData();
 
   try {
     await loadConfig();
