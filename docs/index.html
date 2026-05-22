@@ -225,9 +225,9 @@
 
         .home-matchup-strip__scoreline {
             display: flex;
-            align-items: baseline;
+            align-items: center;
             justify-content: center;
-            gap: 0.5rem;
+            gap: 0.45rem;
             color: #0f172a;
             font-size: 1rem;
             line-height: 1;
@@ -235,6 +235,38 @@
 
         .dark .home-matchup-strip__scoreline {
             color: #f8fafc;
+        }
+
+        .home-matchup-strip__side {
+            display: grid;
+            min-width: 5.4rem;
+            align-items: center;
+            gap: 0.42rem;
+        }
+
+        .home-matchup-strip__side--team {
+            grid-template-columns: 1.65rem minmax(3.2rem, auto);
+            justify-content: end;
+        }
+
+        .home-matchup-strip__side--opponent {
+            grid-template-columns: minmax(3.2rem, auto) 1.65rem;
+            justify-content: start;
+        }
+
+        .home-matchup-strip__thumb {
+            width: 1.65rem;
+            height: 1.65rem;
+            border: 2px solid rgba(255, 255, 255, 0.9);
+            border-radius: 9999px;
+            background: #e2e8f0;
+            box-shadow: 0 8px 18px rgba(15, 23, 42, 0.14);
+            object-fit: cover;
+        }
+
+        .dark .home-matchup-strip__thumb {
+            border-color: rgba(15, 23, 42, 0.9);
+            background: #1e293b;
         }
 
         .home-matchup-strip__score {

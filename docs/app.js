@@ -305,13 +305,21 @@ function renderHomeMatchupStrip(matchup) {
   const teamScore = formatMatchupScore(matchup?.team?.weekPoints);
   const opponentScore = formatMatchupScore(matchup?.opponent?.weekPoints);
   const opponentName = String(matchup?.opponent?.teamName || 'Opponent').trim();
+  const teamPhoto = String(matchup?.team?.photoUrl || FALLBACK_PHOTO).trim() || FALLBACK_PHOTO;
+  const opponentPhoto = String(matchup?.opponent?.photoUrl || FALLBACK_PHOTO).trim() || FALLBACK_PHOTO;
 
   return `
     <div class="home-matchup-strip" aria-label="Current matchup">
       <div class="home-matchup-strip__scoreline">
-        <span class="home-matchup-strip__score">${escapeHtml(teamScore)}</span>
+        <span class="home-matchup-strip__side home-matchup-strip__side--team">
+          <img src="${escapeHtml(teamPhoto)}" class="home-matchup-strip__thumb" alt="" loading="lazy" onerror="this.src='${FALLBACK_PHOTO}';this.onerror=null;">
+          <span class="home-matchup-strip__score">${escapeHtml(teamScore)}</span>
+        </span>
         <span class="home-matchup-strip__vs">vs</span>
-        <span class="home-matchup-strip__score">${escapeHtml(opponentScore)}</span>
+        <span class="home-matchup-strip__side home-matchup-strip__side--opponent">
+          <span class="home-matchup-strip__score">${escapeHtml(opponentScore)}</span>
+          <img src="${escapeHtml(opponentPhoto)}" class="home-matchup-strip__thumb" alt="" loading="lazy" onerror="this.src='${FALLBACK_PHOTO}';this.onerror=null;">
+        </span>
       </div>
       <p class="home-matchup-strip__opponent">${escapeHtml(opponentName)}</p>
     </div>
