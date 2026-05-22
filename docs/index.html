@@ -203,6 +203,72 @@
             transition: gap 0.3s ease;
         }
 
+        .home-matchup-slot[hidden] {
+            display: none;
+        }
+
+        .home-matchup-strip {
+            margin: 1rem -1.5rem -1.5rem;
+            border-top: 1px solid rgba(226, 232, 240, 0.95);
+            background:
+                linear-gradient(90deg, rgba(236, 72, 153, 0.08), rgba(251, 113, 133, 0.04), rgba(253, 186, 116, 0.08)),
+                rgba(248, 250, 252, 0.86);
+            padding: 0.8rem 1rem 0.9rem;
+        }
+
+        .dark .home-matchup-strip {
+            border-top-color: rgba(236, 72, 153, 0.13);
+            background:
+                linear-gradient(90deg, rgba(236, 72, 153, 0.14), rgba(251, 113, 133, 0.06), rgba(253, 186, 116, 0.1)),
+                rgba(15, 23, 42, 0.72);
+        }
+
+        .home-matchup-strip__scoreline {
+            display: flex;
+            align-items: baseline;
+            justify-content: center;
+            gap: 0.5rem;
+            color: #0f172a;
+            font-size: 1rem;
+            line-height: 1;
+        }
+
+        .dark .home-matchup-strip__scoreline {
+            color: #f8fafc;
+        }
+
+        .home-matchup-strip__score {
+            min-width: 3.2rem;
+            font-weight: 950;
+            text-align: center;
+        }
+
+        .home-matchup-strip__vs {
+            color: #ec4899;
+            font-size: 0.62rem;
+            font-weight: 950;
+            letter-spacing: 0.18em;
+            text-transform: uppercase;
+        }
+
+        .home-matchup-strip__opponent {
+            margin-top: 0.35rem;
+            overflow: hidden;
+            color: #64748b;
+            font-size: 0.68rem;
+            font-weight: 900;
+            letter-spacing: 0.12em;
+            line-height: 1.15;
+            text-align: center;
+            text-overflow: ellipsis;
+            text-transform: uppercase;
+            white-space: nowrap;
+        }
+
+        .dark .home-matchup-strip__opponent {
+            color: #cbd5e1;
+        }
+
         .team-seam-button {
             width: 100%;
             border: 0;

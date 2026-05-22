@@ -177,7 +177,7 @@ Draft-board roster ID resolution:
 * Live standings load from Apps Script with local cached fallback.
 * Home standings header season/week pills are populated from the `Settings` tab via `api=config`; missing Settings values render as `--` instead of hardcoded season/week numbers.
 * Home ticker tape uses Rotoworld/NBC fantasy football headlines and ESPN public NFL scoreboard data through Apps Script; Feb-Aug renders headlines only, while Sep-Jan alternates two score items with one headline. The Rotoworld fetch tries the requested RSS URL, the page Atom feed, then the server-rendered player-news page as fallback. The frontend duplicates ticker items in the marquee track for seamless CSS scrolling, pauses animation on hover/focus, and keeps the ticker sticky near the top of the viewport while scrolling the Home screen.
-* Team cards sorted by wins and points for.
+* Team cards sorted by wins and points for. When `All Matchups` has a complete two-team matchup for a standing team, the Home standings card shows a compact bottom matchup strip with that team's current score, `vs`, the opponent name, and opponent score; teams without an active matchup hide the strip.
 * Expandable standings cards with supplemental stats: team MVP, mulligan, turkey watch, beer trophies, background team image, and manager photo; trophies display inline with the manager name.
 * Expanded team-card detail panels use a light glass overlay in light mode and a darker cinematic overlay in dark mode.
 * Press-and-hold admin edit for `Beer Trophies`, writing to `Teams` column S after Apps Script admin-code validation.

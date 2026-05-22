@@ -29,6 +29,7 @@ let bettingData = null;
 let tickerData = null;
 let draftBoardData = null;
 let matchupsData = null;
+let matchupsDataIsStale = false;
 let selectedBettingMemberRow = null;
 let bettingStatusMessage = '';
 let bettingStatusTone = 'warning';
@@ -267,6 +268,74 @@ function formatPointsBehindLeader(pointsFor, leaderPoints) {
   return `-${gap.toFixed(2)}`;
 }
 
+function normalizeClientTeamKey(name) {
+  return String(name || '').trim().toLowerCase().replace(/\s+/g, ' ');
+}
+
+function formatMatchupScore(value) {
+  const raw = String(value ?? '').trim();
+  if (!raw) return '--';
+  const numeric = Number(raw.replace(/,/g, ''));
+  if (!Number.isFinite(numeric)) return raw;
+  return numeric.toFixed(2).replace(/\.00$/, '');
+}
+
+function buildTeamMatchupLookup(payload) {
+  const lookup = {};
+  const matchups = Array.isArray(payload?.matchups) ? payload.matchups : [];
+
+  matchups.forEach((matchup) => {
+    const teams = Array.isArray(matchup?.teams) ? matchup.teams : [];
+    if (teams.length !== 2) return;
+    const [firstTeam, secondTeam] = teams;
+    const firstKey = normalizeClientTeamKey(firstTeam?.teamName);
+    const secondKey = normalizeClientTeamKey(secondTeam?.teamName);
+    if (firstKey) {
+      lookup[firstKey] = { team: firstTeam, opponent: secondTeam, matchupId: matchup.matchupId };
+    }
+    if (secondKey) {
+      lookup[secondKey] = { team: secondTeam, opponent: firstTeam, matchupId: matchup.matchupId };
+    }
+  });
+
+  return lookup;
+}
+
+function renderHomeMatchupStrip(matchup) {
+  const teamScore = formatMatchupScore(matchup?.team?.weekPoints);
+  const opponentScore = formatMatchupScore(matchup?.opponent?.weekPoints);
+  const opponentName = String(matchup?.opponent?.teamName || 'Opponent').trim();
+
+  return `
+    <div class="home-matchup-strip" aria-label="Current matchup">
+      <div class="home-matchup-strip__scoreline">
+        <span class="home-matchup-strip__score">${escapeHtml(teamScore)}</span>
+        <span class="home-matchup-strip__vs">vs</span>
+        <span class="home-matchup-strip__score">${escapeHtml(opponentScore)}</span>
+      </div>
+      <p class="home-matchup-strip__opponent">${escapeHtml(opponentName)}</p>
+    </div>
+  `;
+}
+
+function renderHomeMatchupSummaries(payload) {
+  const slots = document.querySelectorAll('[data-home-matchup-slot]');
+  if (!slots.length) return;
+
+  const matchupLookup = buildTeamMatchupLookup(payload);
+  slots.forEach((slot) => {
+    const matchup = matchupLookup[normalizeClientTeamKey(slot.dataset.homeMatchupSlot)];
+    if (!matchup) {
+      slot.hidden = true;
+      slot.innerHTML = '';
+      return;
+    }
+
+    slot.hidden = false;
+    slot.innerHTML = renderHomeMatchupStrip(matchup);
+  });
+}
+
 function buildTeamInsight(team, index, leaderPoints) {
   const summary = parseRecord(team.record);
   const tiesText = summary.ties ? `, and ${summary.ties} tie${summary.ties === 1 ? '' : 's'}` : '';
@@ -380,10 +449,15 @@ function renderTeams(payload, isStale = false) {
             </div>
           </div>
         </div>
+        <div class="home-matchup-slot relative z-10" data-home-matchup-slot="${escapeHtml(team.teamName)}" hidden></div>
         <div class="absolute -bottom-8 -right-8 h-28 w-28 rounded-full bg-pink-500/5 transition-colors group-hover:bg-pink-500/10"></div>
       </article>
     `;
   }).join('');
+
+  if (matchupsData) {
+    renderHomeMatchupSummaries(matchupsData);
+  }
 
   if (isStale) {
     setBanner('Showing the most recent cached standings because the live data request failed.');
@@ -561,6 +635,28 @@ async function loadStandings() {
     }
     setBanner('Live standings could not be loaded from Apps Script. Double-check that the web app deployment is still live and shared for public access.', 'error');
     renderTeams({ teams: [], updatedAt: '' });
+  }
+}
+
+async function loadHomeMatchupsData() {
+  const cached = getCachedJson(MATCHUPS_CACHE_KEY);
+  if (cached) {
+    matchupsData = cached;
+    matchupsDataIsStale = true;
+    renderHomeMatchupSummaries(cached);
+  }
+
+  try {
+    const payload = await fetchJsonp('api/matchups-data');
+    if (!payload || payload.ok !== true) {
+      throw new Error(payload?.error || 'Matchups could not be loaded.');
+    }
+    matchupsData = payload;
+    matchupsDataIsStale = false;
+    setCachedJson(MATCHUPS_CACHE_KEY, payload);
+    renderHomeMatchupSummaries(payload);
+  } catch (error) {
+    console.warn('Home matchup summaries could not be loaded.', error);
   }
 }
 
@@ -1035,6 +1131,8 @@ async function loadMatchupsData() {
   const cached = getCachedJson(MATCHUPS_CACHE_KEY);
   if (cached) {
     matchupsData = cached;
+    matchupsDataIsStale = true;
+    renderHomeMatchupSummaries(cached);
     renderMatchups(cached, true);
   } else {
     renderMatchupsSkeleton();
@@ -1046,12 +1144,16 @@ async function loadMatchupsData() {
       throw new Error(payload?.error || 'Matchups could not be loaded.');
     }
     matchupsData = payload;
+    matchupsDataIsStale = false;
     setCachedJson(MATCHUPS_CACHE_KEY, payload);
+    renderHomeMatchupSummaries(payload);
     renderMatchups(payload);
   } catch (error) {
     console.error(error);
     if (cached) {
       matchupsData = cached;
+      matchupsDataIsStale = true;
+      renderHomeMatchupSummaries(cached);
       renderMatchups(cached, true);
       return;
     }
@@ -1822,8 +1924,12 @@ function setActiveTab(tabName, shouldScroll = false) {
   if (activeTab === 'betting' && !bettingData) {
     loadBettingData();
   }
-  if (activeTab === 'matchups' && !matchupsData) {
-    loadMatchupsData();
+  if (activeTab === 'matchups') {
+    if (matchupsData) {
+      renderMatchups(matchupsData, matchupsDataIsStale);
+    } else {
+      loadMatchupsData();
+    }
   }
 }
 
@@ -1872,7 +1978,10 @@ async function bootstrap() {
   setupStandingsAccordion();
   setupAdminEditing();
   await registerServiceWorker();
-  document.getElementById('refresh-button').addEventListener('click', () => loadStandings());
+  document.getElementById('refresh-button').addEventListener('click', async () => {
+    await loadStandings();
+    loadHomeMatchupsData();
+  });
   applyConfig(DEFAULT_CONFIG);
   loadTickerData();
 
@@ -1884,6 +1993,7 @@ async function bootstrap() {
   }
 
   await loadStandings();
+  loadHomeMatchupsData();
   loadDraftBoardData();
   await dismissSplash();
 }
