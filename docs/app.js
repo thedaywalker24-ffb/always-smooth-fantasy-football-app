@@ -324,7 +324,11 @@ function renderHomeMatchupSummaries(payload) {
 
   const matchupLookup = buildTeamMatchupLookup(payload);
   slots.forEach((slot) => {
-    const matchup = matchupLookup[normalizeClientTeamKey(slot.dataset.homeMatchupSlot)];
+    const slotKeys = [
+      normalizeClientTeamKey(slot.dataset.homeMatchupSlot),
+      normalizeClientTeamKey(slot.dataset.homeMatchupOwner)
+    ].filter(Boolean);
+    const matchup = slotKeys.map((key) => matchupLookup[key]).find(Boolean);
     if (!matchup) {
       slot.hidden = true;
       slot.innerHTML = '';
@@ -449,7 +453,7 @@ function renderTeams(payload, isStale = false) {
             </div>
           </div>
         </div>
-        <div class="home-matchup-slot relative z-10" data-home-matchup-slot="${escapeHtml(team.teamName)}" hidden></div>
+        <div class="home-matchup-slot relative z-10" data-home-matchup-slot="${escapeHtml(team.teamName)}" data-home-matchup-owner="${escapeHtml(ownerName)}" hidden></div>
         <div class="absolute -bottom-8 -right-8 h-28 w-28 rounded-full bg-pink-500/5 transition-colors group-hover:bg-pink-500/10"></div>
       </article>
     `;
