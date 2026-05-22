@@ -55,6 +55,8 @@ const APP_THEME_COLOR = '#ec4899';
 const APP_BACKGROUND_COLOR = '#020617';
 const DEFAULT_UPCOMING_DRAFT_ROUNDS = 3;
 const ROTOWORLD_NFL_NEWS_RSS_URL = 'https://www.nbcsports.com/edge/rss/player-news?source=football';
+const ROTOWORLD_NFL_NEWS_ATOM_URL = 'https://www.nbcsports.com/fantasy/football/player-news.atom';
+const ROTOWORLD_NFL_PLAYER_NEWS_URL = 'https://www.nbcsports.com/fantasy/football/player-news';
 const ESPN_NFL_SCOREBOARD_URL = 'https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard';
 const ESPN_NFL_SCOREBOARD_WEB_URL = 'https://www.espn.com/nfl/scoreboard';
 
@@ -2048,6 +2050,140 @@ function fetchRssXml_(url) {
 }
 
 /**
+ * @param {string} url
+ * @return {string}
+ */
+function fetchText_(url) {
+  var response = UrlFetchApp.fetch(url, {
+    method: 'get',
+    muteHttpExceptions: true
+  });
+  var status = response.getResponseCode();
+  var body = response.getContentText();
+  if (status < 200 || status >= 300) {
+    throw new Error('Request failed with status ' + status + ' for ' + url + '.');
+  }
+  return body || '';
+}
+
+/**
+ * @param {string} value
+ * @return {string}
+ */
+function decodeHtmlEntities_(value) {
+  return String(value || '')
+    .replace(/&amp;/g, '&')
+    .replace(/&quot;/g, '"')
+    .replace(/&#x27;/g, "'")
+    .replace(/&#39;/g, "'")
+    .replace(/&apos;/g, "'")
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>');
+}
+
+/**
+ * @param {string} value
+ * @return {string}
+ */
+function stripHtml_(value) {
+  return decodeHtmlEntities_(String(value || '').replace(/<[^>]*>/g, ' '))
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/**
+ * @param {GoogleAppsScript.XML_Service.Element} element
+ * @param {string} childName
+ * @param {GoogleAppsScript.XML_Service.Namespace} namespace
+ * @return {string}
+ */
+function getXmlChildTextWithNamespace_(element, childName, namespace) {
+  if (!element) return '';
+  var child = namespace ? element.getChild(childName, namespace) : element.getChild(childName);
+  return child ? String(child.getText() || '').trim() : '';
+}
+
+/**
+ * @param {string} xml
+ * @return {Array<{type: string, text: string, url: string}>}
+ */
+function parseRotoworldFeedTickerItems_(xml) {
+  var document = XmlService.parse(xml);
+  var root = document.getRootElement();
+  if (!root) return [];
+
+  var items = [];
+  if (root.getName() === 'rss') {
+    var channel = root.getChild('channel');
+    var rssItems = channel ? channel.getChildren('item') : [];
+    rssItems.forEach(function (item) {
+      var headline = getXmlChildText_(item, 'title');
+      var href = getXmlChildText_(item, 'link');
+      if (headline) {
+        items.push({
+          type: 'headline',
+          text: 'HOT: ' + headline,
+          url: href
+        });
+      }
+    });
+    return items;
+  }
+
+  if (root.getName() === 'feed') {
+    var namespace = root.getNamespace();
+    var entries = root.getChildren('entry', namespace);
+    entries.forEach(function (entry) {
+      var headline = getXmlChildTextWithNamespace_(entry, 'title', namespace);
+      var href = '';
+      var links = entry.getChildren('link', namespace);
+      for (var i = 0; i < links.length; i++) {
+        var rel = links[i].getAttribute('rel');
+        if (!rel || String(rel.getValue()) === 'alternate') {
+          var hrefAttr = links[i].getAttribute('href');
+          href = hrefAttr ? String(hrefAttr.getValue() || '').trim() : '';
+          break;
+        }
+      }
+      if (headline) {
+        items.push({
+          type: 'headline',
+          text: 'HOT: ' + headline,
+          url: href
+        });
+      }
+    });
+  }
+
+  return items;
+}
+
+/**
+ * The requested RSS URL currently returns 404 and the advertised Atom feed can
+ * be empty, so this fallback scrapes the server-rendered Rotoworld page.
+ * @param {string} html
+ * @return {Array<{type: string, text: string, url: string}>}
+ */
+function parseRotoworldHtmlTickerItems_(html) {
+  var items = [];
+  var seen = {};
+  var re = /<div class="PlayerNewsPost-headline">\s*([\s\S]*?)\s*<\/div>[\s\S]*?data-share-url="([^"]+)"/g;
+  var match;
+  while ((match = re.exec(html)) !== null && items.length < 25) {
+    var headline = stripHtml_(match[1]);
+    var href = decodeHtmlEntities_(match[2]);
+    if (!headline || seen[headline]) continue;
+    seen[headline] = true;
+    items.push({
+      type: 'headline',
+      text: 'HOT: ' + headline,
+      url: href
+    });
+  }
+  return items;
+}
+
+/**
  * @param {Date} now
  * @return {boolean}
  */
@@ -2060,22 +2196,31 @@ function isNflOffseason_(now) {
  * @return {Array<{type: string, text: string, url: string}>}
  */
 function getRotoworldHeadlineTickerItems_() {
-  var document = fetchRssXml_(ROTOWORLD_NFL_NEWS_RSS_URL);
-  var root = document.getRootElement();
-  var channel = root ? root.getChild('channel') : null;
-  var articles = channel ? channel.getChildren('item') : [];
-  var items = [];
-  articles.forEach(function (article) {
-    var headline = getXmlChildText_(article, 'title');
-    if (!headline) return;
-    var href = getXmlChildText_(article, 'link');
-    items.push({
-      type: 'headline',
-      text: 'HOT: ' + headline,
-      url: href
-    });
-  });
-  return items;
+  var errors = [];
+  var feedUrls = [
+    ROTOWORLD_NFL_NEWS_RSS_URL,
+    ROTOWORLD_NFL_NEWS_ATOM_URL
+  ];
+
+  for (var i = 0; i < feedUrls.length; i++) {
+    try {
+      var feedItems = parseRotoworldFeedTickerItems_(fetchText_(feedUrls[i]));
+      if (feedItems.length) return feedItems;
+      errors.push('No feed entries found at ' + feedUrls[i] + '.');
+    } catch (err) {
+      errors.push(err.message || String(err));
+    }
+  }
+
+  try {
+    var htmlItems = parseRotoworldHtmlTickerItems_(fetchText_(ROTOWORLD_NFL_PLAYER_NEWS_URL));
+    if (htmlItems.length) return htmlItems;
+    errors.push('No PlayerNewsPost headlines found on Rotoworld HTML page.');
+  } catch (err) {
+    errors.push(err.message || String(err));
+  }
+
+  throw new Error(errors.join(' '));
 }
 
 /**
@@ -2173,6 +2318,19 @@ function getTickerItems() {
         headlineIndex++;
       }
     }
+  }
+
+  if (!items.length && warnings.length) {
+    return {
+      ok: false,
+      error: warnings.join(' '),
+      mode: offseason ? 'offseason' : 'in-season',
+      items: [],
+      headlineCount: headlines.length,
+      scoreCount: scores.length,
+      warnings: warnings,
+      updatedAt: now.toISOString()
+    };
   }
 
   return {
