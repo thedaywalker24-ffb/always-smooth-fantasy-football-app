@@ -1994,7 +1994,8 @@ function setupAppTabs() {
 async function registerServiceWorker() {
   if (!('serviceWorker' in navigator)) return;
   try {
-    await navigator.serviceWorker.register('./service-worker.js');
+    const registration = await navigator.serviceWorker.register('./service-worker.js');
+    registration.update();
   } catch (error) {
     console.warn('Service worker registration failed', error);
   }
