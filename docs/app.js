@@ -1,5 +1,5 @@
 const API_BASE_URL = 'https://script.google.com/macros/s/AKfycbwtM_NX16wFOHssvhvP2Iw7FI_7YcVgJ9-5DNbvNOblMxifawE4R-F_eiOLU1NsEggF/exec';
-const APP_VERSION = 'v2026.06.05.1';
+const APP_VERSION = 'v2026.06.05.2';
 const FALLBACK_PHOTO = 'https://images.unsplash.com/photo-1540747913346-19e32dc3e97e?q=80&w=600&auto=format&fit=crop';
 const THEME_KEY = 'theme';
 const CONFIG_CACHE_KEY = 'always-smooth-config';
@@ -1265,6 +1265,12 @@ function getBettingSeasonBetsWonValue(member) {
   return raw || '0';
 }
 
+function getBettingSeasonBetsWonNumber(member) {
+  const raw = getBettingSeasonBetsWonValue(member).replace(/,/g, '');
+  const value = Number(raw);
+  return Number.isFinite(value) ? value : 0;
+}
+
 function getBettingSeasonBetsWonMarkup(member, size = 'default') {
   const sizeClass = size === 'large' ? ' betting-season-total--large' : '';
   return `
@@ -1272,6 +1278,56 @@ function getBettingSeasonBetsWonMarkup(member, size = 'default') {
       <strong>${escapeHtml(getBettingSeasonBetsWonValue(member))}</strong>
       <span>Bets Won</span>
     </span>
+  `;
+}
+
+function renderBettingLeaders() {
+  if (!bettingData || !Array.isArray(bettingData.members)) return '';
+
+  const leaders = bettingData.members
+    .map((member, index) => ({
+      member,
+      index,
+      total: getBettingSeasonBetsWonNumber(member)
+    }))
+    .filter((entry) => entry.total > 0)
+    .sort((a, b) => {
+      if (b.total !== a.total) return b.total - a.total;
+      return a.index - b.index;
+    })
+    .slice(0, 5);
+
+  if (!leaders.length) return '';
+
+  const maxTotal = Math.max(...leaders.map((entry) => entry.total), 1);
+  const leaderRows = leaders.map((entry, index) => {
+    const width = Math.max((entry.total / maxTotal) * 100, 7);
+    return `
+      <li class="betting-leader-row">
+        <span class="betting-leader-rank">${index + 1}</span>
+        ${getBettingMemberAvatarMarkup(entry.member, 'tiny')}
+        <span class="betting-leader-name">${escapeHtml(entry.member.name)}</span>
+        <span class="betting-leader-track" aria-hidden="true">
+          <span class="betting-leader-bar" style="width: ${width.toFixed(2)}%;"></span>
+        </span>
+        <strong class="betting-leader-total">${escapeHtml(getBettingSeasonBetsWonValue(entry.member))}</strong>
+      </li>
+    `;
+  }).join('');
+
+  return `
+    <section class="betting-leaders-card glass-panel" aria-label="Top five betting leaders">
+      <div class="betting-leaders-heading">
+        <div>
+          <p class="betting-leaders-kicker">Season Total</p>
+          <h2>Betting Leaders</h2>
+        </div>
+        <span>Top 5</span>
+      </div>
+      <ol class="betting-leader-list">
+        ${leaderRows}
+      </ol>
+    </section>
   `;
 }
 
@@ -1397,6 +1453,7 @@ function renderBettingMemberPicker() {
 
   root.innerHTML = `
     <div class="space-y-6">
+      ${renderBettingLeaders()}
       ${renderBettingHeader()}
       ${getBettingStatusMarkup()}
       ${bettingData.warnings?.length ? `
@@ -1537,6 +1594,7 @@ function renderBettingForm() {
 
   root.innerHTML = `
     <div class="space-y-6">
+      ${renderBettingLeaders()}
       ${renderBettingHeader(backButton)}
       ${getBettingStatusMarkup()}
       <div class="glass-panel rounded-3xl border border-slate-200 bg-white/90 p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900/70">
