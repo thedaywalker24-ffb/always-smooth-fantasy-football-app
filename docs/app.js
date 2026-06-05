@@ -1,4 +1,5 @@
 const API_BASE_URL = 'https://script.google.com/macros/s/AKfycbwtM_NX16wFOHssvhvP2Iw7FI_7YcVgJ9-5DNbvNOblMxifawE4R-F_eiOLU1NsEggF/exec';
+const APP_VERSION = 'v2026.06.05.1';
 const FALLBACK_PHOTO = 'https://images.unsplash.com/photo-1540747913346-19e32dc3e97e?q=80&w=600&auto=format&fit=crop';
 const THEME_KEY = 'theme';
 const CONFIG_CACHE_KEY = 'always-smooth-config';
@@ -222,6 +223,10 @@ function applyConfig(config) {
     banner.src = FALLBACK_PHOTO;
     banner.onerror = null;
   };
+  const versionLabel = document.getElementById('app-version-label');
+  if (versionLabel) {
+    versionLabel.textContent = `App ${APP_VERSION}`;
+  }
 }
 
 function renderSkeleton() {

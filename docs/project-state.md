@@ -172,6 +172,7 @@ Draft-board roster ID resolution:
 * Repo continuity/skill system v1: root `SKILL.md` and official artifacts exist and define the entrypoint, operating manual, current state, startup prompt, and skill-maintenance prompt.
 * GitHub Pages static frontend for the app shell.
 * PWA metadata, app icons, install prompt handling, and service worker caching.
+* Visible app version badge above the bottom navigation helps diagnose stale mobile/PWA caches.
 * Light/dark/system theme toggle with local preference.
 * Splash screen and mobile-friendly banner.
 * Live config load from Apps Script with fallback defaults.
