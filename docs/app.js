@@ -1255,6 +1255,21 @@ function getBettingMemberByName(name) {
   return bettingData.members.find((member) => normalizeMemberNameKey(member.name) === key) || null;
 }
 
+function getBettingSeasonBetsWonValue(member) {
+  const raw = String(member?.seasonBetsWon ?? '').trim();
+  return raw || '0';
+}
+
+function getBettingSeasonBetsWonMarkup(member, size = 'default') {
+  const sizeClass = size === 'large' ? ' betting-season-total--large' : '';
+  return `
+    <span class="betting-season-total${sizeClass}" aria-label="${escapeHtml(member?.name || 'Member')} season total bets won: ${escapeHtml(getBettingSeasonBetsWonValue(member))}">
+      <strong>${escapeHtml(getBettingSeasonBetsWonValue(member))}</strong>
+      <span>Bets Won</span>
+    </span>
+  `;
+}
+
 function getBettingMemberAvatarMarkup(member, size = 'default') {
   const isLarge = size === 'large';
   const isTiny = size === 'tiny';
@@ -1363,7 +1378,10 @@ function renderBettingMemberPicker() {
     <button type="button" data-betting-member-row="${member.row}" class="betting-member-tile glass-panel group min-h-32 rounded-2xl border border-slate-200 bg-white/90 px-3 py-4 text-center shadow-sm transition hover:border-pink-500/40 hover:shadow-xl dark:border-slate-800 dark:bg-slate-900/70" aria-label="${escapeHtml(member.name)} ${member.submitted ? 'submitted' : 'open'}">
       <span class="betting-member-tile-accent absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-pink-500 via-rose-400 to-orange-300" aria-hidden="true"></span>
       <div class="betting-member-tile-content flex h-full min-w-0 flex-col items-center justify-center gap-3">
-        ${getBettingMemberAvatarMarkup(member, 'compact')}
+        <div class="betting-member-tile-head">
+          ${getBettingMemberAvatarMarkup(member, 'compact')}
+          ${getBettingSeasonBetsWonMarkup(member)}
+        </div>
         <div class="w-full min-w-0">
           <p class="truncate text-sm font-black italic uppercase leading-tight tracking-tight text-slate-900 group-hover:text-pink-500 dark:text-white">${escapeHtml(member.name)}</p>
           <span class="${member.submitted ? 'bg-emerald-500 text-white' : 'border border-slate-200 bg-white text-slate-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300'} mt-2 inline-flex rounded-full px-2.5 py-1 text-[9px] font-black uppercase tracking-[0.14em]">${member.submitted ? 'In' : 'Open'}</span>
@@ -1522,7 +1540,10 @@ function renderBettingForm() {
             ${getBettingMemberAvatarMarkup(member, 'large')}
             <div class="min-w-0">
               <p class="text-[10px] font-black uppercase tracking-[0.22em] text-slate-400">Selected Team</p>
-              <h3 class="mt-2 truncate text-2xl font-black italic uppercase tracking-tight text-slate-950 dark:text-white">${escapeHtml(member.name)}</h3>
+              <div class="mt-2 flex min-w-0 flex-wrap items-center gap-3">
+                <h3 class="truncate text-2xl font-black italic uppercase tracking-tight text-slate-950 dark:text-white">${escapeHtml(member.name)}</h3>
+                ${getBettingSeasonBetsWonMarkup(member, 'large')}
+              </div>
             </div>
           </div>
           <span class="${member.submitted ? 'bg-emerald-500 text-white' : 'bg-pink-500 text-white'} w-fit rounded-full px-4 py-2 text-xs font-black uppercase tracking-[0.18em]">${member.submitted ? 'Submitted' : 'Open'}</span>

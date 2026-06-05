@@ -145,6 +145,7 @@ Draft-board roster ID resolution:
 * Header row is row 2.
 * Data starts on row 3.
 * Team name column is detected by header, falling back to column D when needed.
+* Column B: season total bets won, surfaced on Betting member tiles.
 * Column E: mulligan.
 * Column H: manager photo.
 * Column I: turkey watch.
@@ -182,7 +183,7 @@ Draft-board roster ID resolution:
 * Expanded team-card detail panels use a light glass overlay in light mode and a darker cinematic overlay in dark mode.
 * Press-and-hold admin edit for `Beer Trophies`, writing to `Teams` column S after Apps Script admin-code validation.
 * Fixed bottom tab overlay for `Home` and `Betting`; Home wraps the current standings dashboard and Betting renders the weekly betting workflow.
-* Betting tab reads `App Data Collection`, lets a league member select their team, renders member profile photos from `N2:N11`, renders six weekly prompts from `B1:G1`, maps input types through `B13:G13`, `team_choice`, and `H1:K6`, confirms overwrites, and submits picks to that member's row in `B2:G11`.
+* Betting tab reads `App Data Collection`, lets a league member select their team, renders member profile photos from `N2:N11`, renders season total bets won from `Teams!B`, renders six weekly prompts from `B1:G1`, maps input types through `B13:G13`, `team_choice`, and `H1:K6`, confirms overwrites, and submits picks to that member's row in `B2:G11`.
 * Betting member picker uses compact two-column mobile tiles so all 10 league profiles are faster to scan before entering the betting form; the grid uses a named CSS class instead of dynamic Tailwind-only column utilities, and member tiles reuse the home-page pink/rose/orange top accent.
 * Betting team/manager avatar dropdowns use a fixed body-level menu portal so expanded lists can overlap lower bet cards on Android and other mobile browsers.
 * Betting submissions use the submit response to refresh the selected member form instead of immediately making a second sheet read.

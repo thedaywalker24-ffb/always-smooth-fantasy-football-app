@@ -87,6 +87,7 @@ const ROSTERS_DISPLAY_NAME_COL_FALLBACK = 9;
 
 /** Optional tab: supplemental team data columns matched to standings by Team Name */
 const TEAMS_SHEET = 'Teams';
+const TEAMS_SEASON_TOTAL_BETS_WON_COL = 2; // Column B (1-based)
 const TEAMS_MANAGER_PHOTO_COL = 8; // Column H (1-based)
 const TEAMS_MULLIGAN_COL = 5; // Column E (1-based)
 const TEAMS_TURKEY_WATCH_COL = 9; // Column I (1-based)
@@ -1042,6 +1043,90 @@ function buildWeeklyBetConfigs_(sheet, memberNames) {
 }
 
 /**
+ * @param {Array} headers
+ * @param {number} teamNameCol0
+ * @return {Array<number>}
+ */
+function findTeamsSheetBettingNameColumns_(headers, teamNameCol0) {
+  var cols = {};
+  var add = function (col0) {
+    if (col0 >= 0 && col0 < headers.length) cols[col0] = true;
+  };
+
+  add(0);
+  add(teamNameCol0);
+
+  for (var c = 0; c < headers.length; c++) {
+    var header = normalizeTeamsHeader_(headers[c]);
+    if (
+      header === 'name' ||
+      header === 'member' ||
+      header === 'league member' ||
+      header === 'manager' ||
+      header === 'manager name' ||
+      header === 'owner' ||
+      header === 'owner name' ||
+      header === 'display name' ||
+      header === 'actual name' ||
+      header === 'team name'
+    ) {
+      add(c);
+    }
+  }
+
+  return Object.keys(cols).map(function (key) {
+    return Number(key);
+  });
+}
+
+/**
+ * Reads Teams!B season-long betting totals and returns name-key and row-order lookups.
+ * @param {GoogleAppsScript.Spreadsheet.Spreadsheet} spreadsheet
+ * @return {{byKey: Object<string, string>, byIndex: Array<string>, warnings: Array<string>}}
+ */
+function buildBettingSeasonTotals_(spreadsheet) {
+  var result = {
+    byKey: {},
+    byIndex: [],
+    warnings: []
+  };
+
+  var teamsSheet = spreadsheet.getSheetByName(TEAMS_SHEET);
+  if (!teamsSheet) {
+    result.warnings.push('Season bet totals unavailable: sheet "' + TEAMS_SHEET + '" was not found.');
+    return result;
+  }
+
+  var lastRow = teamsSheet.getLastRow();
+  var lastCol = Math.max(teamsSheet.getLastColumn(), TEAMS_SEASON_TOTAL_BETS_WON_COL);
+  if (lastRow < TEAMS_DATA_START_ROW || lastCol < TEAMS_SEASON_TOTAL_BETS_WON_COL) {
+    result.warnings.push('Season bet totals unavailable: Teams sheet has no data rows.');
+    return result;
+  }
+
+  var headers = teamsSheet.getRange(TEAMS_HEADER_ROW, 1, 1, lastCol).getDisplayValues()[0];
+  var teamNamePick = findTeamsSheetTeamNameColumn_(headers);
+  var nameCols = findTeamsSheetBettingNameColumns_(headers, teamNamePick.col0);
+  var rows = teamsSheet
+    .getRange(TEAMS_DATA_START_ROW, 1, lastRow - TEAMS_DATA_START_ROW + 1, lastCol)
+    .getDisplayValues();
+
+  rows.forEach(function (row, index) {
+    var total = getDisplayCell_(row, TEAMS_SEASON_TOTAL_BETS_WON_COL - 1);
+    result.byIndex[index] = total;
+
+    nameCols.forEach(function (col0) {
+      var key = normalizeBettingOptionKey_(getDisplayCell_(row, col0));
+      if (key && result.byKey[key] === undefined) {
+        result.byKey[key] = total;
+      }
+    });
+  });
+
+  return result;
+}
+
+/**
  * @param {GoogleAppsScript.Spreadsheet.Spreadsheet} spreadsheet
  * @return {Object}
  */
@@ -1065,6 +1150,7 @@ function getBettingData_(spreadsheet) {
       .getDisplayValues();
     var memberNames = extractBettingMemberNames_(membersRaw);
     var config = buildWeeklyBetConfigs_(sheet, memberNames);
+    var seasonTotals = buildBettingSeasonTotals_(spreadsheet);
     var memberPhotosRaw = sheet
       .getRange(BETTING_MEMBER_START_ROW, BETTING_MEMBER_PHOTO_COL, BETTING_MEMBER_COUNT, 1)
       .getValues();
@@ -1087,10 +1173,16 @@ function getBettingData_(spreadsheet) {
       });
       var rawPhoto = memberPhotosRaw[r][0];
       var photoUrl = looksLikePhotoUrl_(rawPhoto) ? formatDriveUrl(String(rawPhoto).trim()) : '';
+      var memberKey = normalizeBettingOptionKey_(name);
+      var seasonBetsWon =
+        seasonTotals.byKey[memberKey] !== undefined
+          ? seasonTotals.byKey[memberKey]
+          : (seasonTotals.byIndex[r] || '');
       members.push({
         row: BETTING_MEMBER_START_ROW + r,
         name: name,
         photoUrl: photoUrl,
+        seasonBetsWon: seasonBetsWon,
         picks: picks,
         submitted: picks.some(function (value) {
           return !isBlankDisplayValue_(value);
@@ -1109,7 +1201,7 @@ function getBettingData_(spreadsheet) {
         return !isBlankDisplayValue_(value);
       }),
       optionBanks: config.optionBanks,
-      warnings: config.warnings,
+      warnings: config.warnings.concat(seasonTotals.warnings),
       updatedAt: new Date().toISOString()
     };
   } catch (err) {
