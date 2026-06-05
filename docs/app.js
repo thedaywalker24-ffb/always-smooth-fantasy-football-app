@@ -1,5 +1,5 @@
 const API_BASE_URL = 'https://script.google.com/macros/s/AKfycbwtM_NX16wFOHssvhvP2Iw7FI_7YcVgJ9-5DNbvNOblMxifawE4R-F_eiOLU1NsEggF/exec';
-const APP_VERSION = 'v2026.06.05.3';
+const APP_VERSION = 'v2026.06.05.4';
 const FALLBACK_PHOTO = 'https://images.unsplash.com/photo-1540747913346-19e32dc3e97e?q=80&w=600&auto=format&fit=crop';
 const THEME_KEY = 'theme';
 const CONFIG_CACHE_KEY = 'always-smooth-config';
@@ -382,7 +382,7 @@ function renderTeams(payload, isStale = false) {
   const grid = document.getElementById('standings-grid');
   const teams = Array.isArray(payload?.teams) ? payload.teams : [];
   const leaderPoints = Number(teams[0]?.pointsFor || 0);
-  document.getElementById('updated-at').textContent = formatTimestamp(payload?.updatedAt);
+  document.getElementById('updated-at').textContent = formatCompactTimestamp(payload?.updatedAt);
 
   if (!teams.length) {
     grid.innerHTML = `
@@ -1422,21 +1422,19 @@ function renderBettingEmpty(message) {
 }
 
 function renderBettingHeader(actionsMarkup = '') {
+  const actions = actionsMarkup
+    ? `<div class="flex items-center gap-3">${actionsMarkup}</div>`
+    : '';
   return `
     <div class="flex flex-col gap-4 px-1 md:flex-row md:items-start md:justify-between">
       <div class="space-y-3">
         <h2 class="text-3xl font-black uppercase italic tracking-tight">${escapeHtml(getBettingWeekLabel())}</h2>
         <div class="flex flex-wrap gap-2 text-xs font-black uppercase tracking-[0.14em] sm:gap-3 sm:tracking-[0.18em]">
-          <span class="rounded-full border border-slate-200 bg-white px-3 py-2 text-slate-700 shadow-sm dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 sm:px-4">${escapeHtml(formatCompactTimestamp(bettingData?.updatedAt))}</span>
+          <button type="button" data-betting-refresh class="rounded-full border border-slate-200 bg-white px-3 py-2 text-slate-700 shadow-sm transition hover:border-pink-500 hover:text-pink-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 sm:px-4" aria-label="Refresh betting data">${escapeHtml(formatCompactTimestamp(bettingData?.updatedAt))}</button>
           ${bettingData?.resultsPosted ? '<span class="rounded-full bg-emerald-500 px-4 py-2 text-white shadow-lg shadow-emerald-500/20">Finalized</span>' : '<span class="rounded-full bg-pink-500 px-4 py-2 text-white shadow-lg shadow-pink-500/20">Open</span>'}
         </div>
       </div>
-      <div class="flex items-center gap-3">
-        ${actionsMarkup}
-        <button type="button" data-betting-refresh class="rounded-full border border-slate-200 bg-white p-3 shadow-sm transition hover:border-pink-500 dark:border-slate-800 dark:bg-slate-900" aria-label="Refresh betting data">
-          <svg class="h-4 w-4 text-pink-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
-        </button>
-      </div>
+      ${actions}
     </div>
   `;
 }
@@ -2091,7 +2089,7 @@ async function bootstrap() {
   setupStandingsAccordion();
   setupAdminEditing();
   await registerServiceWorker();
-  document.getElementById('refresh-button').addEventListener('click', async () => {
+  document.getElementById('updated-at').addEventListener('click', async () => {
     await loadStandings();
     loadHomeMatchupsData();
   });
