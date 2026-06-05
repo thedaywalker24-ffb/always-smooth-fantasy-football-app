@@ -1,5 +1,5 @@
 const API_BASE_URL = 'https://script.google.com/macros/s/AKfycbwtM_NX16wFOHssvhvP2Iw7FI_7YcVgJ9-5DNbvNOblMxifawE4R-F_eiOLU1NsEggF/exec';
-const APP_VERSION = 'v2026.06.05.2';
+const APP_VERSION = 'v2026.06.05.3';
 const FALLBACK_PHOTO = 'https://images.unsplash.com/photo-1540747913346-19e32dc3e97e?q=80&w=600&auto=format&fit=crop';
 const THEME_KEY = 'theme';
 const CONFIG_CACHE_KEY = 'always-smooth-config';
@@ -196,6 +196,22 @@ function formatTimestamp(value) {
 
   const dayLabel = date.toLocaleDateString([], { month: 'short', day: 'numeric' });
   return `Updated ${dayLabel} at ${timeLabel}`;
+}
+
+function formatCompactTimestamp(value) {
+  if (!value) return 'Sync';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return 'Sync';
+  const now = new Date();
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const startOfTargetDay = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  const diffDays = Math.round((startOfToday - startOfTargetDay) / 86400000);
+  const timeLabel = date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+
+  if (diffDays === 0) return timeLabel;
+  if (diffDays === 1) return `Yday ${timeLabel}`;
+
+  return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
 }
 
 function escapeHtml(value) {
@@ -1276,7 +1292,7 @@ function getBettingSeasonBetsWonMarkup(member, size = 'default') {
   return `
     <span class="betting-season-total${sizeClass}" aria-label="${escapeHtml(member?.name || 'Member')} season total bets won: ${escapeHtml(getBettingSeasonBetsWonValue(member))}">
       <strong>${escapeHtml(getBettingSeasonBetsWonValue(member))}</strong>
-      <span>Bets Won</span>
+      <span>Total</span>
     </span>
   `;
 }
@@ -1410,8 +1426,8 @@ function renderBettingHeader(actionsMarkup = '') {
     <div class="flex flex-col gap-4 px-1 md:flex-row md:items-start md:justify-between">
       <div class="space-y-3">
         <h2 class="text-3xl font-black uppercase italic tracking-tight">${escapeHtml(getBettingWeekLabel())}</h2>
-        <div class="flex flex-wrap gap-3 text-xs font-black uppercase tracking-[0.18em]">
-          <span class="rounded-full border border-slate-200 bg-white px-4 py-2 text-slate-700 shadow-sm dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200">${escapeHtml(formatTimestamp(bettingData?.updatedAt))}</span>
+        <div class="flex flex-wrap gap-2 text-xs font-black uppercase tracking-[0.14em] sm:gap-3 sm:tracking-[0.18em]">
+          <span class="rounded-full border border-slate-200 bg-white px-3 py-2 text-slate-700 shadow-sm dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 sm:px-4">${escapeHtml(formatCompactTimestamp(bettingData?.updatedAt))}</span>
           ${bettingData?.resultsPosted ? '<span class="rounded-full bg-emerald-500 px-4 py-2 text-white shadow-lg shadow-emerald-500/20">Finalized</span>' : '<span class="rounded-full bg-pink-500 px-4 py-2 text-white shadow-lg shadow-pink-500/20">Open</span>'}
         </div>
       </div>
