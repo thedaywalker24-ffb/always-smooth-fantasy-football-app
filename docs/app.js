@@ -1,5 +1,5 @@
 const API_BASE_URL = 'https://script.google.com/macros/s/AKfycbwtM_NX16wFOHssvhvP2Iw7FI_7YcVgJ9-5DNbvNOblMxifawE4R-F_eiOLU1NsEggF/exec';
-const APP_VERSION = 'v2026.06.05.6';
+const APP_VERSION = 'v2026.06.05.7';
 const FALLBACK_PHOTO = 'https://images.unsplash.com/photo-1540747913346-19e32dc3e97e?q=80&w=600&auto=format&fit=crop';
 const THEME_KEY = 'theme';
 const CONFIG_CACHE_KEY = 'always-smooth-config';
@@ -586,7 +586,11 @@ async function submitCaptainPick(button) {
 
   button.disabled = true;
   setBanner('');
-  setCaptainDialog('loading', 'Setting Captain', `Saving ${teamName}'s Captain pick...`);
+  setCaptainDialog(
+    'loading',
+    'Setting Captain',
+    `Saving ${teamName}'s Captain pick. This can take up to a minute, and the app will auto refresh when it is complete.`
+  );
   try {
     const payload = await fetchJsonp('api/submit-captain', { teamName, playerId });
     if (!payload || payload.ok !== true) {
