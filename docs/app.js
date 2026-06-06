@@ -1,5 +1,5 @@
 const API_BASE_URL = 'https://script.google.com/macros/s/AKfycbwtM_NX16wFOHssvhvP2Iw7FI_7YcVgJ9-5DNbvNOblMxifawE4R-F_eiOLU1NsEggF/exec';
-const APP_VERSION = 'v2026.06.05.4';
+const APP_VERSION = 'v2026.06.05.5';
 const FALLBACK_PHOTO = 'https://images.unsplash.com/photo-1540747913346-19e32dc3e97e?q=80&w=600&auto=format&fit=crop';
 const THEME_KEY = 'theme';
 const CONFIG_CACHE_KEY = 'always-smooth-config';
@@ -7,6 +7,7 @@ const DATA_CACHE_KEY = 'always-smooth-league-data';
 const TICKER_CACHE_KEY = 'always-smooth-ticker-data';
 const DRAFT_BOARD_CACHE_KEY = 'always-smooth-draft-board';
 const MATCHUPS_CACHE_KEY = 'always-smooth-matchups-data';
+const CAPTAIN_CACHE_KEY = 'always-smooth-captain-data';
 const BETTING_BET_COUNT = 6;
 const DEFAULT_CONFIG = {
   appName: 'Always Smooth',
@@ -31,6 +32,7 @@ let tickerData = null;
 let draftBoardData = null;
 let matchupsData = null;
 let matchupsDataIsStale = false;
+let captainData = null;
 let selectedBettingMemberRow = null;
 let bettingStatusMessage = '';
 let bettingStatusTone = 'warning';
@@ -86,8 +88,10 @@ function fetchJsonp(path, params = {}) {
       'api/betting-data': 'betting-data',
       'api/draft-board': 'draft-board',
       'api/matchups-data': 'matchups-data',
+      'api/captain-data': 'captain-data',
       'api/update-team-field': 'update-team-field',
-      'api/submit-bets': 'submit-bets'
+      'api/submit-bets': 'submit-bets',
+      'api/submit-captain': 'submit-captain'
     };
     const route = routeMap[path] || path.replace(/^\//, '');
     const url = buildApiUrl(route, { ...params, callback: callbackName });
@@ -96,7 +100,9 @@ function fetchJsonp(path, params = {}) {
       'ticker-data': 20000,
       'draft-board': 30000,
       'matchups-data': 30000,
+      'captain-data': 30000,
       'submit-bets': 45000,
+      'submit-captain': 45000,
       'update-team-field': 45000
     };
     const timeoutMs = timeoutMsByRoute[route] || 15000;
@@ -369,6 +375,177 @@ function renderHomeMatchupSummaries(payload) {
   });
 }
 
+function buildCaptainLookup(payload) {
+  const lookup = {};
+  const teams = Array.isArray(payload?.teams) ? payload.teams : [];
+  teams.forEach((team) => {
+    const key = normalizeClientTeamKey(team?.teamName);
+    if (key) lookup[key] = team;
+  });
+  return lookup;
+}
+
+function getCaptainDetailsLabel(captain) {
+  return [captain?.position, captain?.nflTeam]
+    .map((value) => String(value || '').trim())
+    .filter(Boolean)
+    .join(' / ');
+}
+
+function getCaptainShortName(name) {
+  const parts = String(name || '').trim().split(/\s+/).filter(Boolean);
+  if (!parts.length) return 'Captain';
+  if (parts.length === 1) return parts[0];
+  return `${parts[0][0]}. ${parts[parts.length - 1]}`;
+}
+
+function getCaptainImageMarkup(captain, className) {
+  const src = String(captain?.playerImageUrl || '').trim();
+  const initials = escapeHtml(getMemberInitials(captain?.playerName || 'C'));
+  if (!src) return `<span class="${className} captain-player-fallback" aria-hidden="true">${initials}</span>`;
+  return `
+    <span class="relative shrink-0">
+      <img src="${escapeHtml(src)}" class="${className}" alt="${escapeHtml(captain?.playerName || 'Captain')} player photo" loading="lazy" onerror="this.classList.add('hidden');this.nextElementSibling.classList.remove('hidden');">
+      <span class="${className} captain-player-fallback hidden" aria-hidden="true">${initials}</span>
+    </span>
+  `;
+}
+
+function renderCaptainPrimaryBadge(teamCaptain) {
+  const captain = teamCaptain?.currentCaptain;
+  if (!captain) return '';
+  return `
+    <div class="captain-primary-badge">
+      ${getCaptainImageMarkup(captain, 'captain-primary-photo')}
+      <span class="captain-primary-mark">C</span>
+      <span class="min-w-0 truncate">${escapeHtml(getCaptainShortName(captain.playerName))}</span>
+    </div>
+  `;
+}
+
+function renderCaptainOption(teamName, player, currentCaptain) {
+  const isCurrent = currentCaptain && String(currentCaptain.playerId) === String(player.playerId);
+  const disabled = player.usedEarlierThisSeason === true;
+  const detail = getCaptainDetailsLabel(player);
+  const disabledAttr = disabled ? ' disabled' : '';
+  const status = disabled
+    ? player.disabledReason || 'Already used'
+    : isCurrent
+      ? 'Current'
+      : 'Available';
+  return `
+    <button type="button" class="captain-player-option" data-captain-option data-team-name="${escapeHtml(teamName)}" data-player-id="${escapeHtml(player.playerId)}"${disabledAttr}>
+      ${getCaptainImageMarkup(player, 'captain-option-photo')}
+      <span class="min-w-0 flex-1">
+        <span class="captain-option-name">${escapeHtml(player.playerName)}</span>
+        ${detail ? `<span class="captain-option-detail">${escapeHtml(detail)}</span>` : ''}
+      </span>
+      <span class="captain-option-status${disabled ? ' captain-option-status--disabled' : ''}">${escapeHtml(status)}</span>
+    </button>
+  `;
+}
+
+function renderCaptainDetail(teamCaptain, teamName) {
+  const captain = teamCaptain?.currentCaptain;
+  const isOpen = captainData?.isOpen === true;
+  const players = Array.isArray(teamCaptain?.eligiblePlayers) ? teamCaptain.eligiblePlayers : [];
+  const detail = captain ? getCaptainDetailsLabel(captain) : '';
+  const pickerId = `captain-picker-${normalizeBettingOptionKey(teamName)}`;
+  const statusLabel = isOpen ? 'Open' : 'Locked';
+
+  return `
+    <div class="captain-detail-card">
+      <div class="captain-detail-main">
+        ${captain
+          ? getCaptainImageMarkup(captain, 'captain-detail-photo')
+          : '<span class="captain-detail-photo captain-player-fallback" aria-hidden="true">C</span>'}
+        <div class="min-w-0 flex-1">
+          <p class="captain-kicker">Weekly Captain</p>
+          <p class="captain-detail-name">${escapeHtml(captain?.playerName || 'No Captain selected')}</p>
+          ${detail ? `<p class="captain-detail-meta">${escapeHtml(detail)}</p>` : ''}
+        </div>
+        <span class="captain-lock-pill">${escapeHtml(statusLabel)}</span>
+      </div>
+      ${isOpen ? `
+        <button type="button" class="captain-picker-toggle" data-captain-toggle-picker aria-expanded="false" aria-controls="${pickerId}">
+          ${captain ? 'Change Captain' : 'Set Captain'}
+        </button>
+        <div id="${pickerId}" class="captain-picker" data-captain-picker hidden>
+          ${players.length
+            ? players.map((player) => renderCaptainOption(teamCaptain.teamName || teamName, player, captain)).join('')
+            : '<p class="captain-picker-empty">No current starters are available.</p>'}
+        </div>
+      ` : ''}
+    </div>
+  `;
+}
+
+function renderCaptainSummaries(payload) {
+  const lookup = buildCaptainLookup(payload);
+  document.querySelectorAll('[data-captain-primary-slot]').forEach((slot) => {
+    const teamCaptain = lookup[normalizeClientTeamKey(slot.dataset.captainPrimarySlot)];
+    const markup = renderCaptainPrimaryBadge(teamCaptain);
+    slot.hidden = !markup;
+    slot.innerHTML = markup;
+  });
+
+  document.querySelectorAll('[data-captain-detail-slot]').forEach((slot) => {
+    const teamName = slot.dataset.captainDetailSlot || '';
+    const teamCaptain = lookup[normalizeClientTeamKey(teamName)];
+    if (!teamCaptain && !payload) {
+      slot.hidden = true;
+      slot.innerHTML = '';
+      return;
+    }
+    slot.hidden = false;
+    slot.innerHTML = renderCaptainDetail(teamCaptain, teamName);
+  });
+}
+
+async function loadCaptainData() {
+  const cached = getCachedJson(CAPTAIN_CACHE_KEY);
+  if (cached) {
+    captainData = cached;
+    renderCaptainSummaries(cached);
+  }
+
+  try {
+    const payload = await fetchJsonp('api/captain-data');
+    if (!payload || payload.ok !== true) {
+      throw new Error(payload?.error || 'Captain data could not be loaded.');
+    }
+    captainData = payload;
+    setCachedJson(CAPTAIN_CACHE_KEY, payload);
+    renderCaptainSummaries(payload);
+  } catch (error) {
+    console.warn('Captain data could not be loaded.', error);
+    if (!cached) renderCaptainSummaries(null);
+  }
+}
+
+async function submitCaptainPick(button) {
+  if (!button || button.disabled) return;
+  const teamName = button.dataset.teamName || '';
+  const playerId = button.dataset.playerId || '';
+  if (!teamName || !playerId) return;
+
+  button.disabled = true;
+  setBanner(`Saving Captain for ${teamName}...`);
+  try {
+    const payload = await fetchJsonp('api/submit-captain', { teamName, playerId });
+    if (!payload || payload.ok !== true) {
+      throw new Error(payload?.error || 'Captain could not be saved.');
+    }
+    setBanner(`Captain saved for ${teamName}.`);
+    await loadCaptainData();
+  } catch (error) {
+    console.error(error);
+    setBanner(`Captain could not be saved: ${error.message || error}`, 'error');
+  } finally {
+    button.disabled = false;
+  }
+}
+
 function buildTeamInsight(team, index, leaderPoints) {
   const summary = parseRecord(team.record);
   const tiesText = summary.ties ? `, and ${summary.ties} tie${summary.ties === 1 ? '' : 's'}` : '';
@@ -426,6 +603,7 @@ function renderTeams(payload, isStale = false) {
             <div class="min-w-0 flex-1">
               <h3 class="truncate text-lg font-black italic uppercase leading-none tracking-tight text-slate-900 transition-colors group-hover:text-pink-500 dark:text-white">${team.teamName}</h3>
               <p class="mt-2 flex min-w-0 items-center gap-1 text-sm font-semibold text-pink-500 dark:text-pink-400"><span class="truncate">${ownerName}</span>${ownerTrophiesMarkup}</p>
+              <div class="captain-primary-slot mt-3" data-captain-primary-slot="${escapeHtml(team.teamName)}" hidden></div>
             </div>
           </div>
 
@@ -439,6 +617,7 @@ function renderTeams(payload, isStale = false) {
             <div class="team-expand-panel__inner">
               <div class="team-expand-card rounded-[1.5rem] p-4" ${teamExpandCardStyle}>
                 <div class="team-expand-content">
+                <div class="captain-detail-slot" data-captain-detail-slot="${escapeHtml(team.teamName)}" hidden></div>
                 <div class="team-expand-stats">
                   <div class="team-stat-row">
                     <div>
@@ -491,6 +670,9 @@ function renderTeams(payload, isStale = false) {
   if (matchupsData) {
     renderHomeMatchupSummaries(matchupsData);
   }
+  if (captainData) {
+    renderCaptainSummaries(captainData);
+  }
 
   if (isStale) {
     setBanner('Showing the most recent cached standings because the live data request failed.');
@@ -527,6 +709,28 @@ function setupStandingsAccordion() {
   };
 
   grid.addEventListener('click', (event) => {
+    const pickerToggle = event.target.closest('[data-captain-toggle-picker]');
+    if (pickerToggle) {
+      event.preventDefault();
+      event.stopPropagation();
+      const pickerId = pickerToggle.getAttribute('aria-controls');
+      const picker = pickerId ? document.getElementById(pickerId) : pickerToggle.parentElement?.querySelector('[data-captain-picker]');
+      if (picker) {
+        const nextHidden = !picker.hidden;
+        picker.hidden = nextHidden;
+        pickerToggle.setAttribute('aria-expanded', nextHidden ? 'false' : 'true');
+      }
+      return;
+    }
+
+    const captainOption = event.target.closest('[data-captain-option]');
+    if (captainOption) {
+      event.preventDefault();
+      event.stopPropagation();
+      submitCaptainPick(captainOption);
+      return;
+    }
+
     const toggle = event.target.closest('[data-team-toggle]');
     if (toggle) {
       toggleTile(toggle.closest('[data-team-tile]'));
@@ -2092,6 +2296,7 @@ async function bootstrap() {
   document.getElementById('updated-at').addEventListener('click', async () => {
     await loadStandings();
     loadHomeMatchupsData();
+    loadCaptainData();
   });
   applyConfig(DEFAULT_CONFIG);
   loadTickerData();
@@ -2105,6 +2310,7 @@ async function bootstrap() {
 
   await loadStandings();
   loadHomeMatchupsData();
+  loadCaptainData();
   loadDraftBoardData();
   await dismissSplash();
 }

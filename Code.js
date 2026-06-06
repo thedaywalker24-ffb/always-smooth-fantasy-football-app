@@ -44,6 +44,7 @@ const SETTINGS_WEEK_CELL = 'B3';
 const SETTINGS_LEAGUE_ID_CELL = 'B4';
 const SETTINGS_APP_ICON_CELL = 'B5';
 const SETTINGS_UPCOMING_DRAFT_ID_CELL = 'B6';
+const SETTINGS_CAPTAIN_OPEN_CELL = 'B7';
 const DEFAULT_LEAGUE_SEASON = '';
 const DEFAULT_LEAGUE_WEEK = '';
 const DEFAULT_LEAGUE_ID = GLOBAL_LEAGUE_ID;
@@ -80,6 +81,22 @@ const ROSTERS_RECORDS_SHEET = 'Rosters & Records';
 const ALL_MATCHUPS_SHEET = 'All Matchups';
 /** Sheet tab written by buildUpcomingDraftBoardSheet */
 const UPCOMING_DRAFT_BOARD_SHEET = 'Upcoming Draft Board';
+/** Sheet tab written by fetchAndPopulateRosters */
+const TEAM_ROSTERS_SHEET = 'Team Rosters';
+/** Sheet tab used by the weekly Captain self-serve workflow */
+const WEEKLY_CAPTAINS_SHEET = 'Weekly Captains';
+const WEEKLY_CAPTAINS_HEADERS = [
+  'Season',
+  'Week',
+  'Team Name',
+  'Owner/User ID',
+  'Player ID',
+  'Player Name',
+  'Position',
+  'NFL Team',
+  'Player Image URL',
+  'Submitted At'
+];
 /** 0-based column index when "Streak" header is missing (column G) */
 const ROSTERS_STREAK_COL_FALLBACK = 6;
 /** 0-based column for manager display name when header "Display Name" is used (column J) */
@@ -209,6 +226,18 @@ function getUpcomingDraftId_(spreadsheet) {
 }
 
 /**
+ * Captain submissions are open only when Settings!B7 is TRUE.
+ * @param {GoogleAppsScript.Spreadsheet.Spreadsheet} spreadsheet
+ * @return {boolean}
+ */
+function getCaptainSubmissionsOpen_(spreadsheet) {
+  if (!spreadsheet) return false;
+  var sheet = spreadsheet.getSheetByName(SETTINGS_SHEET);
+  if (!sheet) return false;
+  return String(sheet.getRange(SETTINGS_CAPTAIN_OPEN_CELL).getDisplayValue() || '').trim().toLowerCase() === 'true';
+}
+
+/**
  * Creates the Settings sheet with default values if it does not exist yet.
  */
 function ensureSettingsSheet() {
@@ -220,13 +249,14 @@ function ensureSettingsSheet() {
     sheet = spreadsheet.insertSheet(SETTINGS_SHEET);
   }
 
-  sheet.getRange('A1:B6').setValues([
+  sheet.getRange('A1:B7').setValues([
     ['Setting', 'Value'],
     ['Season', getLeagueSeason_(spreadsheet)],
     ['Week', getLeagueWeek_(spreadsheet)],
     ['League ID', getLeagueId_(spreadsheet)],
     ['App Icon URL', getAppIconUrl_(spreadsheet)],
-    ['Upcoming Draft ID', getUpcomingDraftId_(spreadsheet)]
+    ['Upcoming Draft ID', getUpcomingDraftId_(spreadsheet)],
+    ['Captain Submissions Open', getCaptainSubmissionsOpen_(spreadsheet) ? 'TRUE' : 'FALSE']
   ]);
   sheet.getRange('A1:B1').setFontWeight('bold');
   sheet.autoResizeColumns(1, 2);
@@ -1379,6 +1409,383 @@ function submitBettingPicks_(spreadsheet, params) {
 }
 
 /**
+ * @param {*} playerId
+ * @return {string}
+ */
+function getSleeperPlayerImageUrl_(playerId) {
+  var id = String(playerId || '').trim();
+  return id ? 'https://sleepercdn.com/content/nfl/players/' + encodeURIComponent(id) + '.jpg' : '';
+}
+
+/**
+ * @param {GoogleAppsScript.Spreadsheet.Spreadsheet} spreadsheet
+ * @return {GoogleAppsScript.Spreadsheet.Sheet}
+ */
+function ensureWeeklyCaptainsSheet_(spreadsheet) {
+  var sheet = spreadsheet.getSheetByName(WEEKLY_CAPTAINS_SHEET);
+  if (!sheet) sheet = spreadsheet.insertSheet(WEEKLY_CAPTAINS_SHEET);
+
+  var headerRange = sheet.getRange(1, 1, 1, WEEKLY_CAPTAINS_HEADERS.length);
+  var headers = headerRange.getDisplayValues()[0];
+  var headersMatch = WEEKLY_CAPTAINS_HEADERS.every(function (header, index) {
+    return normalizeBettingOptionKey_(headers[index]) === normalizeBettingOptionKey_(header);
+  });
+  if (!headersMatch) {
+    headerRange.setValues([WEEKLY_CAPTAINS_HEADERS]).setFontWeight('bold');
+    sheet.autoResizeColumns(1, WEEKLY_CAPTAINS_HEADERS.length);
+  }
+  return sheet;
+}
+
+/**
+ * @param {GoogleAppsScript.Spreadsheet.Spreadsheet} spreadsheet
+ * @return {Object<string, {position: string, nflTeam: string}>}
+ */
+function buildSleeperPlayerInfoMap_(spreadsheet) {
+  var map = {};
+  var sheet = spreadsheet.getSheetByName('Sleeper Players');
+  if (!sheet) return map;
+
+  var values = sheet.getDataRange().getDisplayValues();
+  if (values.length < 2) return map;
+  var headers = values[0].map(normalizeBettingOptionKey_);
+  var playerIdCol = headers.indexOf(normalizeBettingOptionKey_('Player ID'));
+  var positionCol = headers.indexOf(normalizeBettingOptionKey_('Position'));
+  var teamCol = headers.indexOf(normalizeBettingOptionKey_('Team'));
+  if (playerIdCol === -1) return map;
+
+  for (var r = 1; r < values.length; r++) {
+    var playerId = getDisplayCell_(values[r], playerIdCol);
+    if (!playerId) continue;
+    map[playerId] = {
+      position: getDisplayCell_(values[r], positionCol),
+      nflTeam: getDisplayCell_(values[r], teamCol)
+    };
+  }
+
+  return map;
+}
+
+/**
+ * Reads current Starter rows from Team Rosters and enriches them from Sleeper Players.
+ * @param {GoogleAppsScript.Spreadsheet.Spreadsheet} spreadsheet
+ * @return {{teamsByKey: Object<string, Object>, warnings: Array<string>}}
+ */
+function buildCaptainStarterOptions_(spreadsheet) {
+  var result = {
+    teamsByKey: {},
+    warnings: []
+  };
+  var sheet = spreadsheet.getSheetByName(TEAM_ROSTERS_SHEET);
+  if (!sheet) {
+    result.warnings.push('Captain starters unavailable: sheet "' + TEAM_ROSTERS_SHEET + '" was not found.');
+    return result;
+  }
+
+  var values = sheet.getDataRange().getDisplayValues();
+  if (values.length < 2) {
+    result.warnings.push('Captain starters unavailable: "' + TEAM_ROSTERS_SHEET + '" has no roster rows.');
+    return result;
+  }
+
+  var headers = values[0].map(normalizeBettingOptionKey_);
+  var userIdCol = headers.indexOf(normalizeBettingOptionKey_('User ID'));
+  var teamNameCol = headers.indexOf(normalizeBettingOptionKey_('Team Name'));
+  var playerIdCol = headers.indexOf(normalizeBettingOptionKey_('Player ID'));
+  var rosterTypeCol = headers.indexOf(normalizeBettingOptionKey_('Roster Type'));
+  var playerNameCol = headers.indexOf(normalizeBettingOptionKey_('Player Name'));
+
+  if (teamNameCol === -1 || playerIdCol === -1 || rosterTypeCol === -1 || playerNameCol === -1) {
+    result.warnings.push('Captain starters unavailable: Team Rosters needs User ID, Team Name, Player ID, Roster Type, and Player Name headers.');
+    return result;
+  }
+
+  var playerInfoById = buildSleeperPlayerInfoMap_(spreadsheet);
+  for (var r = 1; r < values.length; r++) {
+    var row = values[r];
+    var rosterType = getDisplayCell_(row, rosterTypeCol);
+    if (normalizeBettingOptionKey_(rosterType) !== 'starter') continue;
+
+    var teamName = getDisplayCell_(row, teamNameCol);
+    var playerId = getDisplayCell_(row, playerIdCol);
+    var playerName = getDisplayCell_(row, playerNameCol);
+    if (!teamName || !playerId || !playerName) continue;
+
+    var teamKey = normalizeTeamNameKey_(teamName);
+    if (!result.teamsByKey[teamKey]) {
+      result.teamsByKey[teamKey] = {
+        teamName: teamName,
+        ownerUserId: getDisplayCell_(row, userIdCol),
+        players: []
+      };
+    }
+
+    var info = playerInfoById[playerId] || {};
+    result.teamsByKey[teamKey].players.push({
+      playerId: playerId,
+      playerName: playerName,
+      position: info.position || '',
+      nflTeam: info.nflTeam || '',
+      playerImageUrl: getSleeperPlayerImageUrl_(playerId)
+    });
+  }
+
+  return result;
+}
+
+/**
+ * @param {GoogleAppsScript.Spreadsheet.Spreadsheet} spreadsheet
+ * @return {{rows: Array<Object>, warnings: Array<string>, sheetFound: boolean, headerMap: Object}}
+ */
+function readCaptainRows_(spreadsheet) {
+  var result = {
+    rows: [],
+    warnings: [],
+    sheetFound: false,
+    headerMap: {}
+  };
+  var sheet = spreadsheet.getSheetByName(WEEKLY_CAPTAINS_SHEET);
+  if (!sheet) {
+    result.warnings.push('Captain history unavailable: sheet "' + WEEKLY_CAPTAINS_SHEET + '" was not found.');
+    return result;
+  }
+  result.sheetFound = true;
+
+  var lastRow = sheet.getLastRow();
+  var lastCol = Math.max(sheet.getLastColumn(), WEEKLY_CAPTAINS_HEADERS.length);
+  if (lastRow < 2) return result;
+
+  var headers = sheet.getRange(1, 1, 1, lastCol).getDisplayValues()[0].map(normalizeBettingOptionKey_);
+  WEEKLY_CAPTAINS_HEADERS.forEach(function (header) {
+    result.headerMap[normalizeBettingOptionKey_(header)] = headers.indexOf(normalizeBettingOptionKey_(header));
+  });
+
+  var required = ['Season', 'Week', 'Team Name', 'Player ID', 'Player Name'];
+  var missing = required.filter(function (header) {
+    return result.headerMap[normalizeBettingOptionKey_(header)] === -1;
+  });
+  if (missing.length) {
+    result.warnings.push('Captain history has missing headers: ' + missing.join(', ') + '.');
+    return result;
+  }
+
+  var values = sheet.getRange(2, 1, lastRow - 1, lastCol).getDisplayValues();
+  values.forEach(function (row, index) {
+    var get = function (header) {
+      return getDisplayCell_(row, result.headerMap[normalizeBettingOptionKey_(header)]);
+    };
+    var season = get('Season');
+    var week = get('Week');
+    var teamName = get('Team Name');
+    var playerId = get('Player ID');
+    if (!season || !week || !teamName || !playerId) return;
+    result.rows.push({
+      rowNumber: index + 2,
+      season: season,
+      week: week,
+      teamName: teamName,
+      ownerUserId: get('Owner/User ID'),
+      playerId: playerId,
+      playerName: get('Player Name'),
+      position: get('Position'),
+      nflTeam: get('NFL Team'),
+      playerImageUrl: get('Player Image URL') || getSleeperPlayerImageUrl_(playerId),
+      submittedAt: get('Submitted At')
+    });
+  });
+
+  return result;
+}
+
+/**
+ * @param {GoogleAppsScript.Spreadsheet.Spreadsheet} spreadsheet
+ * @return {Object}
+ */
+function getCaptainData_(spreadsheet) {
+  var fail = function (message) {
+    return {
+      ok: false,
+      error: message,
+      updatedAt: new Date().toISOString()
+    };
+  };
+
+  if (!spreadsheet) return fail('No spreadsheet is available.');
+
+  var season = getLeagueSeason_(spreadsheet);
+  var week = getLeagueWeek_(spreadsheet);
+  var isOpen = getCaptainSubmissionsOpen_(spreadsheet);
+  var warnings = [];
+  if (!season) warnings.push('Captain submissions need Settings season.');
+  if (!week) warnings.push('Captain submissions need Settings week.');
+  if (!isOpen) warnings.push('Captain submissions are closed.');
+
+  var starters = buildCaptainStarterOptions_(spreadsheet);
+  var captainRows = readCaptainRows_(spreadsheet);
+  warnings = warnings.concat(starters.warnings).concat(captainRows.warnings);
+
+  var currentByTeamKey = {};
+  var usedByTeamPlayerKey = {};
+  captainRows.rows.forEach(function (entry) {
+    if (String(entry.season) !== String(season)) return;
+    var teamKey = normalizeTeamNameKey_(entry.teamName);
+    var playerKey = String(entry.playerId || '').trim();
+    if (!teamKey || !playerKey) return;
+    if (!usedByTeamPlayerKey[teamKey]) usedByTeamPlayerKey[teamKey] = {};
+    if (
+      !usedByTeamPlayerKey[teamKey][playerKey] ||
+      String(usedByTeamPlayerKey[teamKey][playerKey].week) === String(week)
+    ) {
+      usedByTeamPlayerKey[teamKey][playerKey] = entry;
+    }
+    if (String(entry.week) === String(week)) {
+      currentByTeamKey[teamKey] = entry;
+    }
+  });
+
+  var teams = Object.keys(starters.teamsByKey).sort(function (a, b) {
+    return starters.teamsByKey[a].teamName.localeCompare(starters.teamsByKey[b].teamName);
+  }).map(function (teamKey) {
+    var team = starters.teamsByKey[teamKey];
+    var currentCaptain = currentByTeamKey[teamKey] || null;
+    var players = team.players.map(function (player) {
+      var usedEntry = usedByTeamPlayerKey[teamKey] && usedByTeamPlayerKey[teamKey][player.playerId];
+      var usedEarlier = !!(usedEntry && String(usedEntry.week) !== String(week));
+      return {
+        playerId: player.playerId,
+        playerName: player.playerName,
+        position: player.position,
+        nflTeam: player.nflTeam,
+        playerImageUrl: player.playerImageUrl,
+        usedThisSeason: !!usedEntry,
+        usedEarlierThisSeason: usedEarlier,
+        usedWeek: usedEntry ? usedEntry.week : '',
+        disabledReason: usedEarlier ? 'Already used Week ' + usedEntry.week : ''
+      };
+    });
+    return {
+      teamName: team.teamName,
+      ownerUserId: team.ownerUserId,
+      currentCaptain: currentCaptain,
+      eligiblePlayers: players
+    };
+  });
+
+  return {
+    ok: true,
+    sheetName: WEEKLY_CAPTAINS_SHEET,
+    season: season,
+    week: week,
+    isOpen: isOpen,
+    teams: teams,
+    warnings: warnings,
+    updatedAt: new Date().toISOString()
+  };
+}
+
+/**
+ * @param {GoogleAppsScript.Spreadsheet.Spreadsheet} spreadsheet
+ * @param {Object} params
+ * @return {Object}
+ */
+function submitCaptain_(spreadsheet, params) {
+  var fail = function (message) {
+    return {
+      ok: false,
+      error: message,
+      updatedAt: new Date().toISOString()
+    };
+  };
+
+  if (!spreadsheet) return fail('No spreadsheet is available.');
+  var season = getLeagueSeason_(spreadsheet);
+  var week = getLeagueWeek_(spreadsheet);
+  if (!season || !week) return fail('Captain submissions require Settings season and week.');
+  if (!getCaptainSubmissionsOpen_(spreadsheet)) return fail('Captain submissions are closed.');
+
+  var teamName = String(params.teamName || params.team || '').trim();
+  var playerId = String(params.playerId || params.player_id || '').trim();
+  if (!teamName) return fail('Missing team name.');
+  if (!playerId) return fail('Missing player ID.');
+
+  var starters = buildCaptainStarterOptions_(spreadsheet);
+  var teamKey = normalizeTeamNameKey_(teamName);
+  var team = starters.teamsByKey[teamKey];
+  if (!team) return fail('Team "' + teamName + '" was not found in current starter rosters.');
+
+  var player = team.players.find(function (candidate) {
+    return String(candidate.playerId) === String(playerId);
+  });
+  if (!player) return fail('Selected player is not a current starter for ' + team.teamName + '.');
+
+  var captainRows = readCaptainRows_(spreadsheet);
+  var alreadyUsed = captainRows.rows.find(function (entry) {
+    return String(entry.season) === String(season) &&
+      normalizeTeamNameKey_(entry.teamName) === teamKey &&
+      String(entry.playerId) === String(playerId) &&
+      String(entry.week) !== String(week);
+  });
+  if (alreadyUsed) {
+    return fail(player.playerName + ' was already used as Captain in Week ' + alreadyUsed.week + '.');
+  }
+
+  var lock = LockService.getScriptLock();
+  var hasLock = false;
+  try {
+    lock.waitLock(5000);
+    hasLock = true;
+    var sheet = ensureWeeklyCaptainsSheet_(spreadsheet);
+    var rows = readCaptainRows_(spreadsheet).rows;
+    var existing = rows.find(function (entry) {
+      return String(entry.season) === String(season) &&
+        String(entry.week) === String(week) &&
+        normalizeTeamNameKey_(entry.teamName) === teamKey;
+    });
+    var submittedAt = new Date().toISOString();
+    var rowValues = [
+      season,
+      week,
+      team.teamName,
+      team.ownerUserId,
+      player.playerId,
+      player.playerName,
+      player.position,
+      player.nflTeam,
+      player.playerImageUrl,
+      submittedAt
+    ];
+    var targetRow = existing ? existing.rowNumber : sheet.getLastRow() + 1;
+    sheet.getRange(targetRow, 1, 1, WEEKLY_CAPTAINS_HEADERS.length).setValues([rowValues]);
+    SpreadsheetApp.flush();
+
+    return {
+      ok: true,
+      season: season,
+      week: week,
+      teamName: team.teamName,
+      ownerUserId: team.ownerUserId,
+      currentCaptain: {
+        season: season,
+        week: week,
+        teamName: team.teamName,
+        ownerUserId: team.ownerUserId,
+        playerId: player.playerId,
+        playerName: player.playerName,
+        position: player.position,
+        nflTeam: player.nflTeam,
+        playerImageUrl: player.playerImageUrl,
+        submittedAt: submittedAt
+      },
+      updatedAt: submittedAt
+    };
+  } catch (err) {
+    return fail(err.message || String(err));
+  } finally {
+    if (hasLock) lock.releaseLock();
+  }
+}
+
+/**
  * @param {*} value
  * @return {string}
  */
@@ -2475,6 +2882,10 @@ function doGet(e) {
     return createApiOutput_(getMatchupsData_(spreadsheet), callbackName);
   }
 
+  if (path === 'captain-data' || path === 'api/captain-data' || apiName === 'captain-data') {
+    return createApiOutput_(getCaptainData_(spreadsheet), callbackName);
+  }
+
   if (path === 'ticker-data' || path === 'api/ticker-data' || apiName === 'ticker-data') {
     return createApiOutput_(getTickerItems(), callbackName);
   }
@@ -2485,6 +2896,10 @@ function doGet(e) {
 
   if (path === 'submit-bets' || path === 'api/submit-bets' || apiName === 'submit-bets') {
     return createApiOutput_(submitBettingPicks_(spreadsheet, params), callbackName);
+  }
+
+  if (path === 'submit-captain' || path === 'api/submit-captain' || apiName === 'submit-captain') {
+    return createApiOutput_(submitCaptain_(spreadsheet, params), callbackName);
   }
 
   var raw = HEADER_IMAGE_URL || '';

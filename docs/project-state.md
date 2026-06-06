@@ -52,7 +52,9 @@ Current routes handled by `Code.js#doGet`:
 * `api=betting-data` / `betting-data`: weekly betting prompts, members, current picks, results, and input option metadata from `App Data Collection`.
 * `api=draft-board` / `draft-board`: upcoming rookie draft board payload compiled from Sleeper draft metadata, traded picks, optional selected picks, and `Rosters & Records` roster ID mappings.
 * `api=matchups-data` / `matchups-data`: matchup tile payload grouped from the `All Matchups` sheet by `Matchup ID`; incomplete groups are excluded.
+* `api=captain-data` / `captain-data`: weekly Captain open/closed state, current Captain picks, eligible current starters, and season-used Captain history from `Weekly Captains` plus `Team Rosters`.
 * `api=submit-bets` / `submit-bets`: public league-member betting write route limited to `App Data Collection!B2:G11`.
+* `api=submit-captain` / `submit-captain`: public weekly Captain write route that upserts one Captain per `Season + Week + Team Name`.
 * `api=update-team-field` / `update-team-field`: admin-code-protected write route for whitelisted Teams-sheet fields.
 * `manifest.json`: Apps Script-served manifest payload for the Apps Script-hosted version.
 * default route: renders root `index.html` as an Apps Script template.
@@ -70,6 +72,7 @@ Known tabs and dependencies:
 * `API Data`: current matchup import uses week number from `A19` and writes to a fixed starting row.
 * `Sleeper Players`: player lookup data for roster population.
 * `Team Rosters`: generated roster output.
+* `Weekly Captains`: auditable weekly Captain picks written by the app.
 * `Draft Results`: generated draft pick output.
 * `Upcoming Draft Board`: generated offseason rookie draft board snapshot written by the Apps Script menu action `Build Upcoming Draft Board`.
 * `App Data Collection`: weekly betting prompts, member picks, results, input mappings, option banks, and helper-cleared submission range.
@@ -81,6 +84,7 @@ Known tabs and dependencies:
 * `B4`: Sleeper league ID.
 * `B5`: app icon URL.
 * `B6`: upcoming Sleeper draft ID for the offseason rookie draft board.
+* `B7`: Captain submissions open flag; only `TRUE` opens self-serve Captain submissions.
 
 Current 2026 Sleeper league ID:
 
@@ -167,6 +171,13 @@ Draft-board roster ID resolution:
 * `H2:K6`: option values. Two-option banks render as pill buttons; larger banks render as dropdowns.
 * `N2:N11`: league member profile photos for Betting member cards and selected-member form headers.
 
+`Weekly Captains` contract:
+
+* Row 1 headers: `Season`, `Week`, `Team Name`, `Owner/User ID`, `Player ID`, `Player Name`, `Position`, `NFL Team`, `Player Image URL`, `Submitted At`.
+* App writes one row per `Season + Week + Team Name`; same-week resubmits overwrite that row.
+* One-use-per-season is enforced by rejecting the same `Player ID` for the same `Team Name` in a different week of the same season.
+* Eligible Captain options come from `Team Rosters` rows where `Roster Type` is `Starter`; position/NFL team are enriched from `Sleeper Players` when available.
+
 ## Completed Sections / Implemented Features
 
 * Repo continuity/skill system v1: root `SKILL.md` and official artifacts exist and define the entrypoint, operating manual, current state, startup prompt, and skill-maintenance prompt.
@@ -179,6 +190,7 @@ Draft-board roster ID resolution:
 * Live standings load from Apps Script with local cached fallback.
 * Home standings header season/week pills are populated from the `Settings` tab via `api=config`; missing Settings values render as `--` instead of hardcoded season/week numbers.
 * Home and Betting timestamp pills double as refresh buttons to save mobile header space.
+* Home standings cards show weekly Captain state: compact `C` player badge on the primary card when selected, and a fuller Captain card plus starter picker inside the expanded accordion when Captain submissions are open.
 * Home ticker tape uses Rotoworld/NBC fantasy football headlines and ESPN public NFL scoreboard data through Apps Script; Feb-Aug renders headlines only, while Sep-Jan alternates two score items with one headline. The Rotoworld fetch tries the requested RSS URL, the page Atom feed, then the server-rendered player-news page as fallback. The frontend duplicates ticker items in the marquee track for seamless CSS scrolling, pauses animation on hover/focus, and keeps the ticker sticky near the top of the viewport while scrolling the Home screen.
 * Team cards sorted by wins and points for. When `All Matchups` has a complete two-team matchup for a standing team, the Home standings card shows a compact bottom matchup strip with that team's thumbnail + current score, `vs`, the opponent score + thumbnail, and opponent name; teams without an active matchup hide the strip. Home matchup hydration matches either standings team name or standings owner/real name because `All Matchups` currently uses first names in its `Name` column.
 * Expandable standings cards with supplemental stats: team MVP, mulligan, turkey watch, beer trophies, background team image, and manager photo; trophies display inline with the manager name.

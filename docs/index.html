@@ -447,6 +447,237 @@
             box-shadow: 0 8px 20px rgba(236, 72, 153, 0.14);
         }
 
+        .captain-primary-slot[hidden],
+        .captain-detail-slot[hidden],
+        .captain-picker[hidden] {
+            display: none;
+        }
+
+        .captain-primary-badge {
+            display: inline-flex;
+            max-width: 100%;
+            align-items: center;
+            gap: 0.42rem;
+            border: 1px solid rgba(236, 72, 153, 0.24);
+            border-radius: 9999px;
+            background: rgba(236, 72, 153, 0.08);
+            padding: 0.24rem 0.55rem 0.24rem 0.28rem;
+            color: #be185d;
+            font-size: 0.68rem;
+            font-weight: 950;
+            letter-spacing: 0.06em;
+            line-height: 1;
+            text-transform: uppercase;
+        }
+
+        .dark .captain-primary-badge {
+            border-color: rgba(244, 114, 182, 0.22);
+            background: rgba(236, 72, 153, 0.14);
+            color: #f9a8d4;
+        }
+
+        .captain-primary-photo,
+        .captain-option-photo {
+            width: 1.65rem;
+            height: 1.65rem;
+            border-radius: 9999px;
+            border: 2px solid rgba(255, 255, 255, 0.92);
+            background: #0f172a;
+            object-fit: cover;
+            box-shadow: 0 8px 18px rgba(15, 23, 42, 0.14);
+        }
+
+        .captain-primary-mark {
+            display: inline-flex;
+            width: 1.15rem;
+            height: 1.15rem;
+            align-items: center;
+            justify-content: center;
+            border-radius: 9999px;
+            background: #ec4899;
+            color: #ffffff;
+            font-size: 0.62rem;
+            font-weight: 950;
+        }
+
+        .captain-player-fallback {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            color: #ffffff;
+            font-size: 0.62rem;
+            font-weight: 950;
+        }
+
+        .captain-detail-card {
+            border: 1px solid rgba(255, 255, 255, 0.22);
+            border-radius: 1.15rem;
+            background: rgba(255, 255, 255, 0.74);
+            padding: 0.8rem;
+            color: #0f172a;
+            box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
+            backdrop-filter: blur(12px);
+        }
+
+        .dark .captain-detail-card {
+            border-color: rgba(255, 255, 255, 0.08);
+            background: rgba(15, 23, 42, 0.72);
+            color: #f8fafc;
+        }
+
+        .captain-detail-main {
+            display: flex;
+            min-width: 0;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .captain-detail-photo {
+            width: 3.1rem;
+            height: 3.1rem;
+            flex: 0 0 auto;
+            border-radius: 9999px;
+            border: 2px solid rgba(236, 72, 153, 0.32);
+            background: #0f172a;
+            object-fit: cover;
+            box-shadow: 0 12px 26px rgba(236, 72, 153, 0.12);
+        }
+
+        .captain-kicker {
+            color: #ec4899;
+            font-size: 0.58rem;
+            font-weight: 950;
+            letter-spacing: 0.18em;
+            line-height: 1;
+            text-transform: uppercase;
+        }
+
+        .captain-detail-name {
+            margin-top: 0.25rem;
+            overflow: hidden;
+            font-size: 0.95rem;
+            font-weight: 950;
+            line-height: 1.1;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .captain-detail-meta,
+        .captain-option-detail {
+            display: block;
+            margin-top: 0.16rem;
+            color: #64748b;
+            font-size: 0.7rem;
+            font-weight: 800;
+            line-height: 1.15;
+        }
+
+        .dark .captain-detail-meta,
+        .dark .captain-option-detail {
+            color: #cbd5e1;
+        }
+
+        .captain-lock-pill,
+        .captain-option-status {
+            flex: 0 0 auto;
+            border-radius: 9999px;
+            background: #ec4899;
+            color: #ffffff;
+            padding: 0.34rem 0.55rem;
+            font-size: 0.56rem;
+            font-weight: 950;
+            letter-spacing: 0.14em;
+            line-height: 1;
+            text-transform: uppercase;
+        }
+
+        .captain-picker-toggle {
+            width: 100%;
+            margin-top: 0.75rem;
+            border-radius: 0.95rem;
+            background: #ec4899;
+            color: #ffffff;
+            padding: 0.65rem 0.8rem;
+            font-size: 0.68rem;
+            font-weight: 950;
+            letter-spacing: 0.16em;
+            text-transform: uppercase;
+            transition: background 0.18s ease, transform 0.18s ease;
+        }
+
+        .captain-picker-toggle:hover {
+            background: #f472b6;
+        }
+
+        .captain-picker {
+            display: grid;
+            gap: 0.45rem;
+            margin-top: 0.65rem;
+        }
+
+        .captain-player-option {
+            display: flex;
+            width: 100%;
+            min-width: 0;
+            align-items: center;
+            gap: 0.65rem;
+            border: 1px solid rgba(226, 232, 240, 0.86);
+            border-radius: 0.95rem;
+            background: rgba(255, 255, 255, 0.7);
+            padding: 0.55rem;
+            text-align: left;
+            transition: border-color 0.18s ease, background 0.18s ease, color 0.18s ease;
+        }
+
+        .captain-player-option:hover:not(:disabled) {
+            border-color: rgba(236, 72, 153, 0.5);
+            background: rgba(236, 72, 153, 0.08);
+        }
+
+        .captain-player-option:disabled {
+            cursor: not-allowed;
+            opacity: 0.64;
+        }
+
+        .dark .captain-player-option {
+            border-color: rgba(51, 65, 85, 0.88);
+            background: rgba(2, 6, 23, 0.38);
+        }
+
+        .captain-option-name {
+            display: block;
+            overflow: hidden;
+            color: #0f172a;
+            font-size: 0.78rem;
+            font-weight: 950;
+            line-height: 1.05;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .dark .captain-option-name {
+            color: #f8fafc;
+        }
+
+        .captain-option-status {
+            background: rgba(15, 23, 42, 0.88);
+            font-size: 0.5rem;
+        }
+
+        .captain-option-status--disabled {
+            background: #64748b;
+        }
+
+        .captain-picker-empty {
+            border-radius: 0.95rem;
+            background: rgba(248, 250, 252, 0.8);
+            padding: 0.7rem;
+            color: #64748b;
+            font-size: 0.78rem;
+            font-weight: 850;
+            text-align: center;
+        }
+
         .bottom-tabs-overlay {
             position: fixed;
             inset-inline: 0;
@@ -1771,7 +2002,7 @@
     </div>
 
     <div class="bottom-tabs-overlay" aria-label="Primary navigation">
-        <span id="app-version-label" class="app-version-badge" aria-label="App version">App v2026.06.05.4</span>
+        <span id="app-version-label" class="app-version-badge" aria-label="App version">App v2026.06.05.5</span>
         <nav class="bottom-tab-nav" role="tablist" aria-label="App sections">
             <button id="tab-home" type="button" class="bottom-tab-button" role="tab" aria-selected="true" aria-controls="home-panel" data-app-tab="home">
                 <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 11.5L12 4l9 7.5M5.5 10.5V20h13v-9.5M9.5 20v-5h5v5"></path></svg>
