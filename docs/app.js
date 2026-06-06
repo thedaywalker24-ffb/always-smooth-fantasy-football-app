@@ -1,5 +1,5 @@
 const API_BASE_URL = 'https://script.google.com/macros/s/AKfycbwtM_NX16wFOHssvhvP2Iw7FI_7YcVgJ9-5DNbvNOblMxifawE4R-F_eiOLU1NsEggF/exec';
-const APP_VERSION = 'v2026.06.05.5';
+const APP_VERSION = 'v2026.06.05.6';
 const FALLBACK_PHOTO = 'https://images.unsplash.com/photo-1540747913346-19e32dc3e97e?q=80&w=600&auto=format&fit=crop';
 const THEME_KEY = 'theme';
 const CONFIG_CACHE_KEY = 'always-smooth-config';
@@ -33,6 +33,7 @@ let draftBoardData = null;
 let matchupsData = null;
 let matchupsDataIsStale = false;
 let captainData = null;
+let captainDialogTimer = null;
 let selectedBettingMemberRow = null;
 let bettingStatusMessage = '';
 let bettingStatusTone = 'warning';
@@ -172,6 +173,60 @@ function setBanner(message, tone = 'warning') {
     ? 'rounded-2xl border px-4 py-3 text-sm font-semibold shadow-sm border-red-300 bg-red-50 text-red-900 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-100'
     : 'rounded-2xl border px-4 py-3 text-sm font-semibold shadow-sm border-amber-300 bg-amber-50 text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-100';
   card.className = classes;
+}
+
+function setCaptainDialog(state, title, message, options = {}) {
+  const dialog = document.getElementById('captain-save-dialog');
+  if (!dialog) return;
+
+  const icon = dialog.querySelector('[data-action-dialog-icon]');
+  const titleEl = dialog.querySelector('[data-action-dialog-title]');
+  const messageEl = dialog.querySelector('[data-action-dialog-message]');
+  const closeButton = dialog.querySelector('[data-action-dialog-close]');
+  window.clearTimeout(captainDialogTimer);
+
+  dialog.hidden = false;
+  dialog.dataset.state = state || 'loading';
+  titleEl.textContent = title || '';
+  messageEl.textContent = message || '';
+  closeButton.hidden = state === 'loading';
+  closeButton.textContent = options.closeLabel || 'OK';
+
+  icon.className = 'action-dialog-icon';
+  icon.textContent = '';
+  if (state === 'loading') {
+    icon.classList.add('action-dialog-spinner');
+  } else if (state === 'success') {
+    icon.classList.add('action-dialog-icon--success');
+    icon.textContent = 'C';
+  } else {
+    icon.classList.add('action-dialog-icon--error');
+    icon.textContent = '!';
+  }
+
+  if (options.autoCloseMs) {
+    captainDialogTimer = window.setTimeout(() => {
+      hideCaptainDialog();
+    }, options.autoCloseMs);
+  }
+}
+
+function hideCaptainDialog() {
+  const dialog = document.getElementById('captain-save-dialog');
+  window.clearTimeout(captainDialogTimer);
+  if (dialog) dialog.hidden = true;
+}
+
+function setupCaptainDialog() {
+  const dialog = document.getElementById('captain-save-dialog');
+  if (!dialog) return;
+
+  dialog.querySelector('[data-action-dialog-close]')?.addEventListener('click', hideCaptainDialog);
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && !dialog.hidden && dialog.dataset.state !== 'loading') {
+      hideCaptainDialog();
+    }
+  });
 }
 
 async function dismissSplash() {
@@ -530,17 +585,20 @@ async function submitCaptainPick(button) {
   if (!teamName || !playerId) return;
 
   button.disabled = true;
-  setBanner(`Saving Captain for ${teamName}...`);
+  setBanner('');
+  setCaptainDialog('loading', 'Setting Captain', `Saving ${teamName}'s Captain pick...`);
   try {
     const payload = await fetchJsonp('api/submit-captain', { teamName, playerId });
     if (!payload || payload.ok !== true) {
       throw new Error(payload?.error || 'Captain could not be saved.');
     }
-    setBanner(`Captain saved for ${teamName}.`);
     await loadCaptainData();
+    setCaptainDialog('success', 'Captain Saved', `${payload.currentCaptain?.playerName || 'Captain'} is set for ${teamName}.`, {
+      autoCloseMs: 1600
+    });
   } catch (error) {
     console.error(error);
-    setBanner(`Captain could not be saved: ${error.message || error}`, 'error');
+    setCaptainDialog('error', 'Captain Not Saved', error.message || String(error));
   } finally {
     button.disabled = false;
   }
@@ -2288,6 +2346,7 @@ async function bootstrap() {
   setupScrollBehavior();
   setupHomeShortcuts();
   setupAppTabs();
+  setupCaptainDialog();
   setupBettingControls();
   setupDraftBoardControls();
   setupStandingsAccordion();
