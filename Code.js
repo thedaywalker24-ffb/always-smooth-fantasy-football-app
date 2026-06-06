@@ -1419,6 +1419,18 @@ function getSleeperPlayerImageUrl_(playerId) {
 
 /**
  * @param {GoogleAppsScript.Spreadsheet.Spreadsheet} spreadsheet
+ * @param {Date} date
+ * @return {string}
+ */
+function formatCaptainSubmittedAt_(spreadsheet, date) {
+  var timezone = spreadsheet && spreadsheet.getSpreadsheetTimeZone
+    ? spreadsheet.getSpreadsheetTimeZone()
+    : Session.getScriptTimeZone();
+  return Utilities.formatDate(date, timezone || 'Etc/UTC', 'MMM d, yyyy h:mm a z');
+}
+
+/**
+ * @param {GoogleAppsScript.Spreadsheet.Spreadsheet} spreadsheet
  * @return {GoogleAppsScript.Spreadsheet.Sheet}
  */
 function ensureWeeklyCaptainsSheet_(spreadsheet) {
@@ -1741,7 +1753,9 @@ function submitCaptain_(spreadsheet, params) {
         String(entry.week) === String(week) &&
         normalizeTeamNameKey_(entry.teamName) === teamKey;
     });
-    var submittedAt = new Date().toISOString();
+    var submittedAtDate = new Date();
+    var submittedAt = formatCaptainSubmittedAt_(spreadsheet, submittedAtDate);
+    var submittedAtIso = submittedAtDate.toISOString();
     var rowValues = [
       season,
       week,
@@ -1776,7 +1790,7 @@ function submitCaptain_(spreadsheet, params) {
         playerImageUrl: player.playerImageUrl,
         submittedAt: submittedAt
       },
-      updatedAt: submittedAt
+      updatedAt: submittedAtIso
     };
   } catch (err) {
     return fail(err.message || String(err));

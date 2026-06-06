@@ -175,6 +175,7 @@ Draft-board roster ID resolution:
 
 * Row 1 headers: `Season`, `Week`, `Team Name`, `Owner/User ID`, `Player ID`, `Player Name`, `Position`, `NFL Team`, `Player Image URL`, `Submitted At`.
 * App writes one row per `Season + Week + Team Name`; same-week resubmits overwrite that row.
+* `Submitted At` is written as a readable spreadsheet-timezone string, for example `Jun 5, 2026 2:14 PM MST`.
 * One-use-per-season is enforced by rejecting the same `Player ID` for the same `Team Name` in a different week of the same season.
 * Eligible Captain options come from `Team Rosters` rows where `Roster Type` is `Starter`; position/NFL team are enriched from `Sleeper Players` when available.
 
