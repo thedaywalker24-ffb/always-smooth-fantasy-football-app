@@ -2,9 +2,9 @@
 
 ## Current Status
 
-* Last completed section: NFL ticker parser repair deployed in Apps Script version 68; the NBC/Rotoworld HTML fallback now extracts each player-news post independently, and the live endpoint is again returning fresh headlines without warnings.
-* Current section in progress: GitHub Pages/PWA verification for the Betting Leaders gating and the 2026 offseason updates.
-* Next recommended task: Publish the pending GitHub Pages frontend changes, then verify the ticker loses its Cached pill after reload and the Betting leaderboard follows offseason/week gating.
+* Last completed section: Header audio easter egg; pressing the Always Smooth banner title plays a bundled short MP3 without exposing audio controls, with native button keyboard support and PWA shell caching.
+* Current section in progress: GitHub Pages/PWA verification for the header audio, Betting Leaders gating, and the 2026 offseason updates.
+* Next recommended task: Publish the pending GitHub Pages frontend changes, then verify header audio on Android/iOS and confirm the Betting leaderboard follows offseason/week gating.
 * Open risks: Hardcoded Apps Script deployment URL, simple JSONP/GET admin and betting write flows, public trust-based bet submission, fragile Google Sheets tab/column dependencies, fixed matchup sheet row offsets, no automated tests, and duplicated/legacy Apps Script paths.
 * Most relevant files: `SKILL.md`, `docs/index.html`, `docs/app.js`, `docs/service-worker.js`, `docs/manifest.webmanifest`, `Code.js`, `index.html`, `.clasp.json`, `.claspignore`.
 
@@ -191,6 +191,7 @@ Draft-board roster ID resolution:
 * Visible app version badge above the bottom navigation helps diagnose stale mobile/PWA caches.
 * Light/dark/system theme toggle with local preference.
 * Splash screen and mobile-friendly banner.
+* The Always Smooth banner title is a keyboard-accessible audio easter egg. It restarts the bundled `docs/audio/always-smooth-easter-egg.mp3` clip on each press without rendering playback controls, and the service worker includes the clip in the PWA app shell.
 * Live config load from Apps Script with fallback defaults.
 * Live standings load from Apps Script with local cached fallback.
 * Home standings header season/week pills are populated from the `Settings` tab via `api=config`; missing Settings values render as `--` instead of hardcoded season/week numbers.

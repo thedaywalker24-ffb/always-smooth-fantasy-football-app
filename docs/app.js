@@ -1,5 +1,5 @@
 const API_BASE_URL = 'https://script.google.com/macros/s/AKfycbwtM_NX16wFOHssvhvP2Iw7FI_7YcVgJ9-5DNbvNOblMxifawE4R-F_eiOLU1NsEggF/exec';
-const APP_VERSION = 'v2026.07.20.1';
+const APP_VERSION = 'v2026.07.21.1';
 const FALLBACK_PHOTO = 'https://images.unsplash.com/photo-1540747913346-19e32dc3e97e?q=80&w=600&auto=format&fit=crop';
 const THEME_KEY = 'theme';
 const CONFIG_CACHE_KEY = 'always-smooth-config';
@@ -291,7 +291,10 @@ function applyConfig(config) {
   const leagueWeek = String(config.leagueWeek || '').trim();
   document.title = `${config.appName || 'Always Smooth'} ${leagueSeason}`.trim();
   document.querySelector('meta[name="theme-color"]').setAttribute('content', config.appThemeColor || '#ec4899');
-  document.getElementById('page-title').textContent = config.appShortName || 'Always Smooth';
+  const pageTitleTrigger = document.getElementById('page-title-audio-trigger');
+  if (pageTitleTrigger) {
+    pageTitleTrigger.textContent = config.appShortName || 'Always Smooth';
+  }
   document.getElementById('season-pill').textContent = `Season ${leagueSeason || '--'}`;
   document.getElementById('week-pill').textContent = `Week ${leagueWeek || '--'}`;
   const banner = document.getElementById('league-banner');
@@ -2285,6 +2288,21 @@ function setupScrollBehavior() {
   }, { passive: true });
 }
 
+function setupHeaderAudioEasterEgg() {
+  const trigger = document.getElementById('page-title-audio-trigger');
+  const audio = document.getElementById('header-easter-egg-audio');
+  if (!trigger || !audio) return;
+
+  trigger.addEventListener('click', () => {
+    audio.pause();
+    if (audio.readyState > 0) audio.currentTime = 0;
+    const playback = audio.play();
+    if (playback && typeof playback.catch === 'function') {
+      playback.catch((error) => console.warn('Header audio could not be played.', error));
+    }
+  });
+}
+
 function setupHomeShortcuts() {
   document.querySelectorAll('[data-jump-to-draft]').forEach((button) => {
     button.addEventListener('click', () => {
@@ -2363,6 +2381,7 @@ async function registerServiceWorker() {
 
 async function bootstrap() {
   setupThemeControls();
+  setupHeaderAudioEasterEgg();
   setupInstallPrompt();
   setupScrollBehavior();
   setupHomeShortcuts();

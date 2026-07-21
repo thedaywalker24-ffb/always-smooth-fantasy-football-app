@@ -109,6 +109,31 @@
             text-shadow: 0 0 20px rgba(236, 72, 153, 0.38);
         }
 
+        .header-audio-trigger {
+            appearance: none;
+            margin: 0;
+            padding: 0;
+            border: 0;
+            border-radius: 0.2em;
+            background: transparent;
+            color: inherit;
+            font: inherit;
+            letter-spacing: inherit;
+            text-transform: inherit;
+            cursor: pointer;
+            touch-action: manipulation;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        .header-audio-trigger:focus-visible {
+            outline: 3px solid rgba(244, 114, 182, 0.9);
+            outline-offset: 0.16em;
+        }
+
+        .header-audio-trigger:active {
+            transform: scale(0.98);
+        }
+
         .manager-photo {
             width: 64px;
             height: 64px;
@@ -2045,11 +2070,17 @@
             <img id="league-banner" class="banner-image" alt="Always Smooth banner">
             <div class="banner-overlay">
                 <div class="mx-auto w-full max-w-7xl px-4 py-10 md:px-8 md:py-12">
-                    <h1 id="page-title" class="pink-glow text-3xl font-black italic uppercase tracking-tight text-pink-500 sm:text-4xl md:text-5xl">Always Smooth</h1>
+                    <h1 id="page-title" class="pink-glow text-3xl font-black italic uppercase tracking-tight text-pink-500 sm:text-4xl md:text-5xl">
+                        <button id="page-title-audio-trigger" class="header-audio-trigger" type="button" aria-label="Play the Always Smooth audio clip">Always Smooth</button>
+                    </h1>
                     <p class="mt-3 text-sm font-bold uppercase tracking-[0.28em] text-pink-100/75 md:text-base">Dynasty Football League</p>
                 </div>
             </div>
         </section>
+
+        <audio id="header-easter-egg-audio" preload="auto" aria-hidden="true" hidden>
+            <source src="./audio/always-smooth-easter-egg.mp3" type="audio/mpeg">
+        </audio>
 
         <main id="app-main" class="mx-auto max-w-7xl px-4 py-8 md:px-8">
             <div id="home-panel" data-tab-panel="home" role="tabpanel" aria-labelledby="tab-home" class="space-y-8">
@@ -2117,7 +2148,7 @@
     </div>
 
     <div class="bottom-tabs-overlay" aria-label="Primary navigation">
-        <span id="app-version-label" class="app-version-badge" aria-label="App version">App v2026.07.20.1</span>
+        <span id="app-version-label" class="app-version-badge" aria-label="App version">App v2026.07.21.1</span>
         <nav class="bottom-tab-nav" role="tablist" aria-label="App sections">
             <button id="tab-home" type="button" class="bottom-tab-button" role="tab" aria-selected="true" aria-controls="home-panel" data-app-tab="home">
                 <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 11.5L12 4l9 7.5M5.5 10.5V20h13v-9.5M9.5 20v-5h5v5"></path></svg>

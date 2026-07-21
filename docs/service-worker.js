@@ -1,8 +1,9 @@
-const CACHE_NAME = 'always-smooth-shell-v42';
+const CACHE_NAME = 'always-smooth-shell-v43';
 const APP_SHELL = [
   './',
   './index.html',
   './app.js',
+  './audio/always-smooth-easter-egg.mp3',
   './icons/icon-192.png',
   './icons/icon-512.png',
   './icons/apple-touch-icon.png'
