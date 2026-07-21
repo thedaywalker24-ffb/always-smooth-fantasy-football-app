@@ -2,9 +2,9 @@
 
 ## Current Status
 
-* Last completed section: Standalone Matchups tab disabled behind a frontend feature flag; the navigation entry is hidden and guarded from activation while all Matchups panel/rendering code remains available for an easy rollback. Home standings matchup strips continue loading normally.
-* Current section in progress: GitHub Pages/PWA verification for the simplified two-tab navigation, header audio, Betting Leaders gating, and the 2026 offseason updates.
-* Next recommended task: Publish the pending GitHub Pages frontend changes, then verify the Home/Betting tab navigation, header audio on Android/iOS, and Betting leaderboard offseason/week gating.
+* Last completed section: Elastic bottom navigation; the centered nav now sizes itself around visible tabs instead of reserving three fixed grid columns, while retaining touch-friendly sizing and support for restoring a third tab.
+* Current section in progress: GitHub Pages/PWA verification for the elastic two-tab navigation, header audio, Betting Leaders gating, and the 2026 offseason updates.
+* Next recommended task: Publish the pending GitHub Pages frontend changes, then verify the snug Home/Betting navigation across phone widths, header audio on Android/iOS, and Betting leaderboard offseason/week gating.
 * Open risks: Hardcoded Apps Script deployment URL, simple JSONP/GET admin and betting write flows, public trust-based bet submission, fragile Google Sheets tab/column dependencies, fixed matchup sheet row offsets, no automated tests, and duplicated/legacy Apps Script paths.
 * Most relevant files: `SKILL.md`, `docs/index.html`, `docs/app.js`, `docs/service-worker.js`, `docs/manifest.webmanifest`, `Code.js`, `index.html`, `.clasp.json`, `.claspignore`.
 
