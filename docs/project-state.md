@@ -2,9 +2,9 @@
 
 ## Current Status
 
-* Last completed section: Betting Leaders season gating; the leaderboard stays visible during the February-August offseason, hides during in-season weeks 1-3, and returns starting in week 4.
-* Current section in progress: Apps Script/GitHub Pages deployment verification for the Betting Leaders gating and the 2026 offseason updates.
-* Next recommended task: Deploy Apps Script so the Betting payload includes season mode, then publish GitHub Pages and verify the leaderboard in offseason and early-season conditions.
+* Last completed section: NFL ticker parser repair deployed in Apps Script version 68; the NBC/Rotoworld HTML fallback now extracts each player-news post independently, and the live endpoint is again returning fresh headlines without warnings.
+* Current section in progress: GitHub Pages/PWA verification for the Betting Leaders gating and the 2026 offseason updates.
+* Next recommended task: Publish the pending GitHub Pages frontend changes, then verify the ticker loses its Cached pill after reload and the Betting leaderboard follows offseason/week gating.
 * Open risks: Hardcoded Apps Script deployment URL, simple JSONP/GET admin and betting write flows, public trust-based bet submission, fragile Google Sheets tab/column dependencies, fixed matchup sheet row offsets, no automated tests, and duplicated/legacy Apps Script paths.
 * Most relevant files: `SKILL.md`, `docs/index.html`, `docs/app.js`, `docs/service-worker.js`, `docs/manifest.webmanifest`, `Code.js`, `index.html`, `.clasp.json`, `.claspignore`.
 
@@ -104,6 +104,10 @@ Apps Script Script Properties:
 
 * `ALWAYS_SMOOTH_ADMIN_CODE`: admin code required for app-originated write routes.
 
+Apps Script web-app manifest:
+
+* `appsscript.json` explicitly preserves the public JSONP deployment entry point with `webapp.access = ANYONE_ANONYMOUS` and `webapp.executeAs = USER_DEPLOYING`; keep these values aligned with the existing public league-app trust model when deploying through clasp.
+
 `Rosters & Records` expected headers:
 
 * `Row ID`
@@ -192,7 +196,7 @@ Draft-board roster ID resolution:
 * Home standings header season/week pills are populated from the `Settings` tab via `api=config`; missing Settings values render as `--` instead of hardcoded season/week numbers.
 * Home and Betting timestamp pills double as refresh buttons to save mobile header space.
 * Home standings cards show weekly Captain state: compact `C` player badge on the primary card when selected, and a fuller Captain card plus starter picker inside the expanded accordion when Captain submissions are open.
-* Home ticker tape uses Rotoworld/NBC fantasy football headlines and ESPN public NFL scoreboard data through Apps Script; Feb-Aug renders headlines only, while Sep-Jan alternates two score items with one headline. The Rotoworld fetch tries the requested RSS URL, the page Atom feed, then the server-rendered player-news page as fallback. The frontend duplicates ticker items in the marquee track for seamless CSS scrolling, pauses animation on hover/focus, and keeps the ticker sticky near the top of the viewport while scrolling the Home screen.
+* Home ticker tape uses Rotoworld/NBC fantasy football headlines and ESPN public NFL scoreboard data through Apps Script; Feb-Aug renders headlines only, while Sep-Jan alternates two score items with one headline. The Rotoworld fetch tries the requested RSS URL, the page Atom feed, then the server-rendered player-news page as fallback. The HTML fallback parses each `PlayerNewsPost` independently so its headline and share link can appear in either order. The frontend duplicates ticker items in the marquee track for seamless CSS scrolling, pauses animation on hover/focus, and keeps the ticker sticky near the top of the viewport while scrolling the Home screen.
 * Team cards sorted by wins and points for. When `All Matchups` has a complete two-team matchup for a standing team, the Home standings card shows a compact bottom matchup strip with that team's thumbnail + current score, `vs`, the opponent score + thumbnail, and opponent name; teams without an active matchup hide the strip. Home matchup hydration matches either standings team name or standings owner/real name because `All Matchups` currently uses first names in its `Name` column.
 * Expandable standings cards with supplemental stats: team MVP, mulligan, turkey watch, beer trophies, background team image, and manager photo; trophies display inline with the manager name.
 * Expanded team-card detail panels use a light glass overlay in light mode and a darker cinematic overlay in dark mode.

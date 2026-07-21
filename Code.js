@@ -2681,11 +2681,14 @@ function parseRotoworldFeedTickerItems_(xml) {
 function parseRotoworldHtmlTickerItems_(html) {
   var items = [];
   var seen = {};
-  var re = /<div class="PlayerNewsPost-headline">\s*([\s\S]*?)\s*<\/div>[\s\S]*?data-share-url="([^"]+)"/g;
-  var match;
-  while ((match = re.exec(html)) !== null && items.length < 25) {
-    var headline = stripHtml_(match[1]);
-    var href = decodeHtmlEntities_(match[2]);
+  var posts = String(html || '').split(/<div class="PlayerNewsPost"(?:\s[^>]*)?>/i).slice(1);
+  for (var i = 0; i < posts.length && items.length < 25; i++) {
+    var headlineMatch = posts[i].match(/<h3 class="PlayerNewsPost-headline"[^>]*>([\s\S]*?)<\/h3>/i);
+    var shareUrlMatch = posts[i].match(/data-share-url="([^"]+)"/i);
+    if (!headlineMatch) continue;
+
+    var headline = stripHtml_(headlineMatch[1]);
+    var href = shareUrlMatch ? decodeHtmlEntities_(shareUrlMatch[1]) : ROTOWORLD_NFL_PLAYER_NEWS_URL;
     if (!headline || seen[headline]) continue;
     seen[headline] = true;
     items.push({
