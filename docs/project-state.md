@@ -2,9 +2,9 @@
 
 ## Current Status
 
-* Last completed section: Upcoming rookie draft board v1; Home now renders a mobile-first offseason draft board below standings using Sleeper draft metadata, traded picks, optional selected picks, and roster/team names from `Rosters & Records`.
-* Current section in progress: Apps Script/GitHub Pages deployment verification for the 2026 league ID and upcoming rookie draft board.
-* Next recommended task: Deploy Apps Script so `api=draft-board` is live, then publish GitHub Pages and verify the Home-page draft board on mobile.
+* Last completed section: Betting Leaders season gating; the leaderboard stays visible during the February-August offseason, hides during in-season weeks 1-3, and returns starting in week 4.
+* Current section in progress: Apps Script/GitHub Pages deployment verification for the Betting Leaders gating and the 2026 offseason updates.
+* Next recommended task: Deploy Apps Script so the Betting payload includes season mode, then publish GitHub Pages and verify the leaderboard in offseason and early-season conditions.
 * Open risks: Hardcoded Apps Script deployment URL, simple JSONP/GET admin and betting write flows, public trust-based bet submission, fragile Google Sheets tab/column dependencies, fixed matchup sheet row offsets, no automated tests, and duplicated/legacy Apps Script paths.
 * Most relevant files: `SKILL.md`, `docs/index.html`, `docs/app.js`, `docs/service-worker.js`, `docs/manifest.webmanifest`, `Code.js`, `index.html`, `.clasp.json`, `.claspignore`.
 
@@ -49,7 +49,7 @@ Current routes handled by `Code.js#doGet`:
 * `api=config` / `config`: frontend branding, season, week, header image, icon URL.
 * `api=league-data` / `league-data`: standings/team cards payload.
 * `api=ticker-data` / `ticker-data`: Rotoworld/NBC fantasy football headlines plus ESPN scoreboard payload. Offseason uses headlines; in-season interleaves NFL scores with headlines.
-* `api=betting-data` / `betting-data`: weekly betting prompts, members, current picks, results, and input option metadata from `App Data Collection`.
+* `api=betting-data` / `betting-data`: weekly betting prompts, members, current picks, results, input option metadata from `App Data Collection`, and the current offseason/in-season mode used for leaderboard visibility.
 * `api=draft-board` / `draft-board`: upcoming rookie draft board payload compiled from Sleeper draft metadata, traded picks, optional selected picks, and `Rosters & Records` roster ID mappings.
 * `api=matchups-data` / `matchups-data`: matchup tile payload grouped from the `All Matchups` sheet by `Matchup ID`; incomplete groups are excluded.
 * `api=captain-data` / `captain-data`: weekly Captain open/closed state, current Captain picks, eligible current starters, and season-used Captain history from `Weekly Captains` plus `Team Rosters`.
@@ -199,7 +199,7 @@ Draft-board roster ID resolution:
 * Press-and-hold admin edit for `Beer Trophies`, writing to `Teams` column S after Apps Script admin-code validation.
 * Fixed bottom tab overlay for `Home` and `Betting`; Home wraps the current standings dashboard and Betting renders the weekly betting workflow.
 * Betting tab reads `App Data Collection`, lets a league member select their team, renders member profile photos from `N2:N11`, renders season total bets won from `Teams!B`, renders six weekly prompts from `B1:G1`, maps input types through `B13:G13`, `team_choice`, and `H1:K6`, confirms overwrites, and submits picks to that member's row in `B2:G11`.
-* Betting tab shows a compact top-five Betting Leaders horizontal bar chart above the weekly betting header when season total bets won data is available.
+* Betting tab shows a compact top-five Betting Leaders horizontal bar chart above the weekly betting header when season total bets won data is available and either the app is in its February-August offseason mode or the configured league week is 4 or later. It stays hidden during in-season weeks 1-3.
 * Betting member picker uses compact two-column mobile tiles so all 10 league profiles are faster to scan before entering the betting form; the grid uses a named CSS class instead of dynamic Tailwind-only column utilities, and member tiles reuse the home-page pink/rose/orange top accent.
 * Betting team/manager avatar dropdowns use a fixed body-level menu portal so expanded lists can overlap lower bet cards on Android and other mobile browsers.
 * Betting submissions use the submit response to refresh the selected member form instead of immediately making a second sheet read.

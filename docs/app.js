@@ -1,5 +1,5 @@
 const API_BASE_URL = 'https://script.google.com/macros/s/AKfycbwtM_NX16wFOHssvhvP2Iw7FI_7YcVgJ9-5DNbvNOblMxifawE4R-F_eiOLU1NsEggF/exec';
-const APP_VERSION = 'v2026.06.05.7';
+const APP_VERSION = 'v2026.07.20.1';
 const FALLBACK_PHOTO = 'https://images.unsplash.com/photo-1540747913346-19e32dc3e97e?q=80&w=600&auto=format&fit=crop';
 const THEME_KEY = 'theme';
 const CONFIG_CACHE_KEY = 'always-smooth-config';
@@ -1563,8 +1563,25 @@ function getBettingSeasonBetsWonMarkup(member, size = 'default') {
   `;
 }
 
+function shouldShowBettingLeaders() {
+  if (!bettingData) return false;
+
+  const mode = String(bettingData.mode || '').trim().toLowerCase();
+  const isOffseason = mode
+    ? mode === 'offseason'
+    : (() => {
+        const month = new Date().getMonth();
+        return month >= 1 && month <= 7;
+      })();
+  if (isOffseason) return true;
+
+  const weekMatch = String(bettingData.week || '').match(/\d+/);
+  const week = weekMatch ? Number(weekMatch[0]) : 0;
+  return week >= 4;
+}
+
 function renderBettingLeaders() {
-  if (!bettingData || !Array.isArray(bettingData.members)) return '';
+  if (!shouldShowBettingLeaders() || !Array.isArray(bettingData.members)) return '';
 
   const leaders = bettingData.members
     .map((member, index) => ({

@@ -1224,6 +1224,7 @@ function getBettingData_(spreadsheet) {
       ok: true,
       sheetName: BETTING_SHEET,
       week: getLeagueWeek_(spreadsheet),
+      mode: isNflOffseason_(new Date()) ? 'offseason' : 'in-season',
       bets: config.bets,
       members: members,
       results: results,
