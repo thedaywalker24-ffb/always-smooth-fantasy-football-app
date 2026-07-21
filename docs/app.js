@@ -1,5 +1,5 @@
 const API_BASE_URL = 'https://script.google.com/macros/s/AKfycbwtM_NX16wFOHssvhvP2Iw7FI_7YcVgJ9-5DNbvNOblMxifawE4R-F_eiOLU1NsEggF/exec';
-const APP_VERSION = 'v2026.07.21.3';
+const APP_VERSION = 'v2026.07.21.4';
 const FALLBACK_PHOTO = 'https://images.unsplash.com/photo-1540747913346-19e32dc3e97e?q=80&w=600&auto=format&fit=crop';
 const THEME_KEY = 'theme';
 const CONFIG_CACHE_KEY = 'always-smooth-config';
@@ -621,11 +621,23 @@ function buildTeamInsight(team, index, leaderPoints) {
   return `${summary.wins} win${summary.wins === 1 ? '' : 's'}, ${summary.losses} loss${summary.losses === 1 ? '' : 'es'}${tiesText} through ${summary.games} game${summary.games === 1 ? '' : 's'} and ${gapText}`;
 }
 
+function renderAnnouncement(payload) {
+  const tile = document.getElementById('announcement-tile');
+  const messageElement = document.getElementById('announcement-message');
+  if (!tile || !messageElement) return;
+
+  const announcement = String(payload?.announcement || '').trim();
+  tile.dataset.currentValue = announcement;
+  messageElement.textContent = announcement || 'No announcement posted.';
+  tile.hidden = false;
+}
+
 function renderTeams(payload, isStale = false) {
   const grid = document.getElementById('standings-grid');
   const teams = Array.isArray(payload?.teams) ? payload.teams : [];
   const leaderPoints = Number(teams[0]?.pointsFor || 0);
   document.getElementById('updated-at').textContent = formatCompactTimestamp(payload?.updatedAt);
+  renderAnnouncement(payload);
 
   if (!teams.length) {
     grid.innerHTML = `
@@ -831,14 +843,15 @@ async function updateEditableTeamField(target) {
   const field = target.dataset.adminEditField || '';
   const label = target.dataset.adminEditLabel || 'Team Field';
   const currentValue = target.dataset.currentValue || '';
+  const subject = teamName ? `${label} for ${teamName}` : label;
   const adminCode = getAdminCode();
   if (!adminCode) return;
 
-  const nextValue = window.prompt(`Update ${label} for ${teamName}`, currentValue);
+  const nextValue = window.prompt(`Update ${subject}`, currentValue);
   if (nextValue === null) return;
 
   target.setAttribute('aria-busy', 'true');
-  setBanner(`Updating ${label} for ${teamName}...`);
+  setBanner(`Updating ${subject}...`);
 
   try {
     const payload = await fetchJsonp('api/update-team-field', {
@@ -852,7 +865,7 @@ async function updateEditableTeamField(target) {
     }
 
     await loadStandings();
-    setBanner(`${label} updated for ${teamName}.`);
+    setBanner(`${subject} updated.`);
   } catch (error) {
     console.error(error);
     if (/admin code/i.test(error.message || '')) {
@@ -864,12 +877,11 @@ async function updateEditableTeamField(target) {
   }
 }
 
-function setupAdminEditing() {
-  const grid = document.getElementById('standings-grid');
-  if (!grid || grid.dataset.adminEditingBound === 'true') return;
+function bindAdminEditing(root) {
+  if (!root || root.dataset.adminEditingBound === 'true') return;
 
-  grid.dataset.adminEditingBound = 'true';
-  grid.addEventListener('pointerdown', (event) => {
+  root.dataset.adminEditingBound = 'true';
+  root.addEventListener('pointerdown', (event) => {
     const target = event.target.closest('[data-admin-edit-field]');
     if (!target || (event.pointerType === 'mouse' && event.button !== 0)) return;
 
@@ -886,7 +898,7 @@ function setupAdminEditing() {
     }, ADMIN_EDIT_HOLD_MS);
   });
 
-  grid.addEventListener('pointermove', (event) => {
+  root.addEventListener('pointermove', (event) => {
     if (!adminEditStart) return;
     const movedX = Math.abs(event.clientX - adminEditStart.x);
     const movedY = Math.abs(event.clientY - adminEditStart.y);
@@ -896,21 +908,28 @@ function setupAdminEditing() {
   });
 
   ['pointerup', 'pointercancel', 'pointerleave'].forEach((eventName) => {
-    grid.addEventListener(eventName, clearAdminEditTimer);
+    root.addEventListener(eventName, clearAdminEditTimer);
   });
 
-  grid.addEventListener('contextmenu', (event) => {
+  root.addEventListener('contextmenu', (event) => {
     if (event.target.closest('[data-admin-edit-field]')) {
       event.preventDefault();
     }
   });
 
-  grid.addEventListener('click', (event) => {
+  root.addEventListener('click', (event) => {
     if (!adminEditActivated || !event.target.closest('[data-admin-edit-field]')) return;
     event.preventDefault();
     event.stopPropagation();
     adminEditActivated = false;
   }, true);
+}
+
+function setupAdminEditing() {
+  [
+    document.getElementById('announcement-tile'),
+    document.getElementById('standings-grid')
+  ].forEach(bindAdminEditing);
 }
 async function loadConfig() {
   const cached = getCachedJson(CONFIG_CACHE_KEY);

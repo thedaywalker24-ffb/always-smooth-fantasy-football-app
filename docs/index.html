@@ -134,6 +134,30 @@
             transform: scale(0.98);
         }
 
+        .announcement-tile {
+            border: 1px solid rgba(244, 114, 182, 0.72);
+            border-radius: 1.5rem;
+            background: linear-gradient(135deg, #ec4899, #db2777);
+            padding: 1.15rem 1.35rem;
+            color: #ffffff;
+            box-shadow: 0 16px 38px rgba(219, 39, 119, 0.24);
+            cursor: default;
+            user-select: none;
+        }
+
+        .announcement-tile[aria-busy="true"] {
+            opacity: 0.68;
+        }
+
+        .announcement-tile p {
+            margin: 0;
+            font-size: 0.98rem;
+            font-weight: 850;
+            line-height: 1.55;
+            overflow-wrap: anywhere;
+            white-space: pre-wrap;
+        }
+
         .manager-photo {
             width: 64px;
             height: 64px;
@@ -2095,6 +2119,10 @@
                     <p class="mt-2 leading-relaxed">On iPhone or iPad, tap Share and then Add to Home Screen to save this as an app-style shortcut.</p>
                 </div>
 
+                <section id="announcement-tile" class="announcement-tile" aria-label="League announcement" aria-live="polite" data-admin-edit-field="announcement" data-admin-edit-label="Announcement" data-current-value="" title="Press and hold to edit the announcement" hidden>
+                    <p id="announcement-message"></p>
+                </section>
+
                 <section id="ticker-section" aria-label="NFL ticker">
                     <div id="ticker-root"></div>
                 </section>
@@ -2154,7 +2182,7 @@
     </div>
 
     <div class="bottom-tabs-overlay" aria-label="Primary navigation">
-        <span id="app-version-label" class="app-version-badge" aria-label="App version">App v2026.07.21.3</span>
+        <span id="app-version-label" class="app-version-badge" aria-label="App version">App v2026.07.21.4</span>
         <nav class="bottom-tab-nav" role="tablist" aria-label="App sections">
             <button id="tab-home" type="button" class="bottom-tab-button" role="tab" aria-selected="true" aria-controls="home-panel" data-app-tab="home">
                 <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 11.5L12 4l9 7.5M5.5 10.5V20h13v-9.5M9.5 20v-5h5v5"></path></svg>

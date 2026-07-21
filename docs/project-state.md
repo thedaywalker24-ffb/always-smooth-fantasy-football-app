@@ -2,9 +2,9 @@
 
 ## Current Status
 
-* Last completed section: Elastic bottom navigation; the centered nav now sizes itself around visible tabs instead of reserving three fixed grid columns, while retaining touch-friendly sizing and support for restoring a third tab.
-* Current section in progress: GitHub Pages/PWA verification for the elastic two-tab navigation, header audio, Betting Leaders gating, and the 2026 offseason updates.
-* Next recommended task: Publish the pending GitHub Pages frontend changes, then verify the snug Home/Betting navigation across phone widths, header audio on Android/iOS, and Betting leaderboard offseason/week gating.
+* Last completed section: Editable Home announcement tile; `Teams!X3` is read into `api=league-data`, displayed as a simple pink tile above the ticker, and updated through the existing admin-code-protected press-and-hold workflow.
+* Current section in progress: Apps Script/GitHub Pages deployment verification for the announcement tile plus PWA verification for the recent navigation, audio, and Betting updates.
+* Next recommended task: Deploy Apps Script so announcement reads/writes are live, publish GitHub Pages, then verify announcement editing and refresh behavior on phone.
 * Open risks: Hardcoded Apps Script deployment URL, simple JSONP/GET admin and betting write flows, public trust-based bet submission, fragile Google Sheets tab/column dependencies, fixed matchup sheet row offsets, no automated tests, and duplicated/legacy Apps Script paths.
 * Most relevant files: `SKILL.md`, `docs/index.html`, `docs/app.js`, `docs/service-worker.js`, `docs/manifest.webmanifest`, `Code.js`, `index.html`, `.clasp.json`, `.claspignore`.
 
@@ -47,7 +47,7 @@ Because cross-origin Apps Script requests are constrained, `docs/app.js` uses JS
 Current routes handled by `Code.js#doGet`:
 
 * `api=config` / `config`: frontend branding, season, week, header image, icon URL.
-* `api=league-data` / `league-data`: standings/team cards payload.
+* `api=league-data` / `league-data`: standings/team cards payload plus the league-wide announcement from `Teams!X3`.
 * `api=ticker-data` / `ticker-data`: Rotoworld/NBC fantasy football headlines plus ESPN scoreboard payload. Offseason uses headlines; in-season interleaves NFL scores with headlines.
 * `api=betting-data` / `betting-data`: weekly betting prompts, members, current picks, results, input option metadata from `App Data Collection`, and the current offseason/in-season mode used for leaderboard visibility.
 * `api=draft-board` / `draft-board`: upcoming rookie draft board payload compiled from Sleeper draft metadata, traded picks, optional selected picks, and `Rosters & Records` roster ID mappings.
@@ -162,6 +162,7 @@ Draft-board roster ID resolution:
 * Column Q: team MVP name.
 * Column S: beer trophies.
 * Column V: team MVP image.
+* Cell X3: league-wide Home announcement text, editable from the app through the admin-code-protected update route.
 
 `App Data Collection` betting contract:
 
@@ -192,6 +193,7 @@ Draft-board roster ID resolution:
 * Light/dark/system theme toggle with local preference.
 * Splash screen and mobile-friendly banner.
 * The Always Smooth banner title is a keyboard-accessible audio easter egg. It restarts the bundled `docs/audio/always-smooth-easter-egg.mp3` clip on each press without rendering playback controls, and the service worker includes the clip in the PWA app shell.
+* Home displays a simple headerless pink announcement tile above the ticker. It reads `Teams!X3`, shows a neutral empty-state message when the cell is blank, and uses press-and-hold plus the existing admin code to edit only that whitelisted cell.
 * Live config load from Apps Script with fallback defaults.
 * Live standings load from Apps Script with local cached fallback.
 * Home standings header season/week pills are populated from the `Settings` tab via `api=config`; missing Settings values render as `--` instead of hardcoded season/week numbers.

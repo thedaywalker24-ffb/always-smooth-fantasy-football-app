@@ -113,12 +113,18 @@ const TEAMS_SLEEPER_TEAM_IMAGE_COL = 13; // Column M (1-based)
 const TEAMS_MVP_NAME_COL = 17; // Column Q (1-based)
 const TEAMS_BEER_TROPHIES_COL = 19; // Column S (1-based)
 const TEAMS_MVP_IMAGE_COL = 22; // Column V (1-based)
+const TEAMS_ANNOUNCEMENT_CELL = 'X3';
 /** Teams tab: title/instructions may occupy row 1; column headers are on this row (1-based). */
 const TEAMS_HEADER_ROW = 2;
 /** First row of team data below the header row */
 const TEAMS_DATA_START_ROW = TEAMS_HEADER_ROW + 1;
 const ADMIN_CODE_PROPERTY = 'ALWAYS_SMOOTH_ADMIN_CODE';
 const EDITABLE_TEAM_FIELD_CONFIG = {
+  announcement: {
+    label: 'Announcement',
+    fixedCell: TEAMS_ANNOUNCEMENT_CELL,
+    maxLength: 500
+  },
   beerTrophies: {
     label: 'Beer Trophies',
     col: TEAMS_BEER_TROPHIES_COL,
@@ -513,6 +519,18 @@ function normalizeBooleanCell_(value) {
 }
 
 /**
+ * Reads the league-wide announcement displayed above the Home ticker.
+ * @param {GoogleAppsScript.Spreadsheet.Spreadsheet} spreadsheet
+ * @return {string}
+ */
+function getTeamsAnnouncement_(spreadsheet) {
+  if (!spreadsheet) return '';
+  var sheet = spreadsheet.getSheetByName(TEAMS_SHEET);
+  if (!sheet) return '';
+  return String(sheet.getRange(TEAMS_ANNOUNCEMENT_CELL).getDisplayValue() || '').trim();
+}
+
+/**
  * Builds team name (lowercase key) -> supplemental team fields from the "Teams" sheet.
  * Headers are read from TEAMS_HEADER_ROW; data from TEAMS_DATA_START_ROW onward.
  * @param {GoogleAppsScript.Spreadsheet.Spreadsheet} spreadsheet
@@ -724,13 +742,14 @@ function createApiOutput_(payload, callbackName) {
  */
 function normalizeEditableTeamFieldKey_(field) {
   var normalized = String(field || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+  if (normalized === 'announcement') return 'announcement';
   if (normalized === 'beertrophies') return 'beerTrophies';
   return '';
 }
 
 /**
  * @param {string} field
- * @return {{key: string, label: string, col: number, maxLength: number}|null}
+ * @return {{key: string, label: string, col: number|undefined, fixedCell: string, maxLength: number}|null}
  */
 function getEditableTeamFieldConfig_(field) {
   var key = normalizeEditableTeamFieldKey_(field);
@@ -740,6 +759,7 @@ function getEditableTeamFieldConfig_(field) {
     key: key,
     label: config.label,
     col: config.col,
+    fixedCell: config.fixedCell || '',
     maxLength: config.maxLength
   };
 }
@@ -803,42 +823,56 @@ function updateTeamField_(spreadsheet, params) {
     return fail('That field is not editable from the app.');
   }
 
-  var teamName = String(params.teamName || params.team || '').trim();
-  if (!teamName) return fail('Missing team name.');
-
   var sanitized = sanitizeEditableTeamFieldValue_(params.value, fieldConfig);
   if (sanitized.error) return fail(sanitized.error);
 
   var sheet = spreadsheet.getSheetByName(TEAMS_SHEET);
   if (!sheet) return fail('Sheet "' + TEAMS_SHEET + '" was not found.');
 
-  var lastRow = sheet.getLastRow();
-  var lastCol = sheet.getLastColumn();
-  if (lastRow < TEAMS_DATA_START_ROW || lastCol < 1) {
-    return fail('Sheet "' + TEAMS_SHEET + '" has no editable team rows.');
-  }
-
-  var headers = sheet.getRange(TEAMS_HEADER_ROW, 1, 1, Math.max(lastCol, 1)).getValues()[0];
-  var pick = findTeamsSheetTeamNameColumn_(headers);
-  var nameCol1 = pick.col0 + 1;
-  var numRows = lastRow - TEAMS_DATA_START_ROW + 1;
-  var nameVals = sheet.getRange(TEAMS_DATA_START_ROW, nameCol1, numRows, 1).getValues();
-  var targetKey = normalizeTeamNameKey_(teamName);
+  var teamName = String(params.teamName || params.team || '').trim();
+  var targetRange;
   var targetRow = 0;
-  for (var r = 0; r < nameVals.length; r++) {
-    if (normalizeTeamNameKey_(nameVals[r][0]) === targetKey) {
-      targetRow = TEAMS_DATA_START_ROW + r;
-    }
-  }
+  var targetColumn = '';
+  var targetCell = '';
 
-  if (!targetRow) return fail('Team "' + teamName + '" was not found on the Teams sheet.');
+  if (fieldConfig.fixedCell) {
+    targetRange = sheet.getRange(fieldConfig.fixedCell);
+    targetRow = targetRange.getRow();
+    targetColumn = columnIndexToA1Letter_(targetRange.getColumn() - 1);
+    targetCell = fieldConfig.fixedCell;
+  } else {
+    if (!teamName) return fail('Missing team name.');
+
+    var lastRow = sheet.getLastRow();
+    var lastCol = sheet.getLastColumn();
+    if (lastRow < TEAMS_DATA_START_ROW || lastCol < 1) {
+      return fail('Sheet "' + TEAMS_SHEET + '" has no editable team rows.');
+    }
+
+    var headers = sheet.getRange(TEAMS_HEADER_ROW, 1, 1, Math.max(lastCol, 1)).getValues()[0];
+    var pick = findTeamsSheetTeamNameColumn_(headers);
+    var nameCol1 = pick.col0 + 1;
+    var numRows = lastRow - TEAMS_DATA_START_ROW + 1;
+    var nameVals = sheet.getRange(TEAMS_DATA_START_ROW, nameCol1, numRows, 1).getValues();
+    var targetKey = normalizeTeamNameKey_(teamName);
+    for (var r = 0; r < nameVals.length; r++) {
+      if (normalizeTeamNameKey_(nameVals[r][0]) === targetKey) {
+        targetRow = TEAMS_DATA_START_ROW + r;
+      }
+    }
+
+    if (!targetRow) return fail('Team "' + teamName + '" was not found on the Teams sheet.');
+    targetRange = sheet.getRange(targetRow, fieldConfig.col);
+    targetColumn = columnIndexToA1Letter_(fieldConfig.col - 1);
+    targetCell = targetColumn + targetRow;
+  }
 
   var lock = LockService.getScriptLock();
   var hasLock = false;
   try {
     lock.waitLock(5000);
     hasLock = true;
-    sheet.getRange(targetRow, fieldConfig.col).setValue(sanitized.value);
+    targetRange.setValue(sanitized.value);
     SpreadsheetApp.flush();
     return {
       ok: true,
@@ -847,7 +881,8 @@ function updateTeamField_(spreadsheet, params) {
       label: fieldConfig.label,
       value: sanitized.value,
       row: targetRow,
-      column: columnIndexToA1Letter_(fieldConfig.col - 1),
+      column: targetColumn,
+      cell: targetCell,
       updatedAt: new Date().toISOString()
     };
   } catch (err) {
@@ -2945,13 +2980,15 @@ function doGet(e) {
  * Returns team standings from the "Rosters & Records" sheet for the client UI.
  * Column positions are resolved from the header row so minor layout changes stay safe.
  * @param {boolean} [includeDiagnostics] When true, payload includes `diagnostics` for photo/sheet troubleshooting (use ?debug=1 on the web app URL).
- * @return {{ teams: Array<{teamName: string, realName: string, record: string, streak: string, pointsFor: number, photoUrl: string, sleeperTeamImageUrl: string, teamMvpName: string, teamMvpImageUrl: string, turkeyWatch: string, trophies: string, beerTrophies: string, mulligan: boolean}>, updatedAt: string, error?: string, diagnostics?: Object }}
+ * @return {{ teams: Array<{teamName: string, realName: string, record: string, streak: string, pointsFor: number, photoUrl: string, sleeperTeamImageUrl: string, teamMvpName: string, teamMvpImageUrl: string, turkeyWatch: string, trophies: string, beerTrophies: string, mulligan: boolean}>, announcement: string, updatedAt: string, error?: string, diagnostics?: Object }}
  */
 function getLeagueData(includeDiagnostics) {
   const wantDiag = includeDiagnostics === true;
+  let announcement = '';
   const emptyPayload = function (err) {
     var payload = {
       teams: [],
+      announcement: announcement,
       updatedAt: new Date().toISOString(),
       error: err || undefined
     };
@@ -2973,6 +3010,8 @@ function getLeagueData(includeDiagnostics) {
       );
     }
 
+    announcement = getTeamsAnnouncement_(spreadsheet);
+
     const rosterSheet = spreadsheet.getSheetByName(ROSTERS_RECORDS_SHEET);
     if (!rosterSheet) {
       return emptyPayload('Sheet "' + ROSTERS_RECORDS_SHEET + '" was not found.');
@@ -2983,6 +3022,7 @@ function getLeagueData(includeDiagnostics) {
     if (lastRow < 2 || lastCol < 1) {
       const emptyRoster = {
         teams: [],
+        announcement: announcement,
         updatedAt: new Date().toISOString()
       };
       if (wantDiag) {
@@ -3092,6 +3132,7 @@ function getLeagueData(includeDiagnostics) {
 
     const payload = {
       teams: teams,
+      announcement: announcement,
       updatedAt: new Date().toISOString()
     };
 

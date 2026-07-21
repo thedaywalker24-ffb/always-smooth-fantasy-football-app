@@ -64,7 +64,7 @@ Admin writes from the GitHub Pages app use a simple admin-code gate because the 
 * The admin code must be stored as Apps Script Script Property `ALWAYS_SMOOTH_ADMIN_CODE`.
 * Do not hardcode the admin code in repo files or frontend code.
 * Do not reuse a sensitive password because the simple JSONP/GET write flow can expose the code in browser/network history.
-* Only whitelisted fields should be writable; the first supported field is `beerTrophies`, which writes to `Teams` column S.
+* Only whitelisted fields should be writable. `beerTrophies` writes to the matched team row in `Teams` column S; the league-wide `announcement` field is fixed to `Teams!X3` and must never accept a client-supplied cell or row.
 * The frontend activation gesture should remain press-and-hold, not a normal tap/click, to reduce accidental edits.
 * Write routes should return structured `{ ok, error }` payloads and the frontend should refresh live standings after successful writes.
 * If expanding editable fields, add explicit field-to-column mapping in `Code.js` and update this documentation.
@@ -87,6 +87,7 @@ Admin writes from the GitHub Pages app use a simple admin-code gate because the 
 * `Rosters & Records` display/real name resolution prefers headers like `Display Name`, then falls back to column J.
 * `Teams` supplemental data expects headers on row 2 and data from row 3.
 * `Teams` supplemental columns are fixed for season total bets won, mulligan, manager photo, turkey watch, trophies, Sleeper team image, team MVP name, beer trophies, and team MVP image.
+* `Teams!X3` stores the Home announcement. It is returned as top-level `announcement` in `api=league-data`; the frontend renders it as text (not HTML) and binds the same press-and-hold admin editor used by Beer Trophies. Blank content keeps the tile available with a neutral empty state so it can still be edited from the app.
 * `Teams` team-name matching is normalized lower-case string matching against `Rosters & Records` team names.
 * Google Drive image links are rewritten to `https://lh3.googleusercontent.com/d/...=w1920`; Drive sharing/permissions can still break images.
 * `fetchMatchupData` depends on `API Data!A19` and writes matchup data starting at row `278`.
