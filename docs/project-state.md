@@ -2,9 +2,9 @@
 
 ## Current Status
 
-* Last completed section: Header audio easter egg; pressing the Always Smooth banner title plays a bundled short MP3 without exposing audio controls, with native button keyboard support and PWA shell caching.
-* Current section in progress: GitHub Pages/PWA verification for the header audio, Betting Leaders gating, and the 2026 offseason updates.
-* Next recommended task: Publish the pending GitHub Pages frontend changes, then verify header audio on Android/iOS and confirm the Betting leaderboard follows offseason/week gating.
+* Last completed section: Standalone Matchups tab disabled behind a frontend feature flag; the navigation entry is hidden and guarded from activation while all Matchups panel/rendering code remains available for an easy rollback. Home standings matchup strips continue loading normally.
+* Current section in progress: GitHub Pages/PWA verification for the simplified two-tab navigation, header audio, Betting Leaders gating, and the 2026 offseason updates.
+* Next recommended task: Publish the pending GitHub Pages frontend changes, then verify the Home/Betting tab navigation, header audio on Android/iOS, and Betting leaderboard offseason/week gating.
 * Open risks: Hardcoded Apps Script deployment URL, simple JSONP/GET admin and betting write flows, public trust-based bet submission, fragile Google Sheets tab/column dependencies, fixed matchup sheet row offsets, no automated tests, and duplicated/legacy Apps Script paths.
 * Most relevant files: `SKILL.md`, `docs/index.html`, `docs/app.js`, `docs/service-worker.js`, `docs/manifest.webmanifest`, `Code.js`, `index.html`, `.clasp.json`, `.claspignore`.
 
@@ -202,7 +202,7 @@ Draft-board roster ID resolution:
 * Expandable standings cards with supplemental stats: team MVP, mulligan, turkey watch, beer trophies, background team image, and manager photo; trophies display inline with the manager name.
 * Expanded team-card detail panels use a light glass overlay in light mode and a darker cinematic overlay in dark mode.
 * Press-and-hold admin edit for `Beer Trophies`, writing to `Teams` column S after Apps Script admin-code validation.
-* Fixed bottom tab overlay for `Home` and `Betting`; Home wraps the current standings dashboard and Betting renders the weekly betting workflow.
+* Fixed bottom tab overlay currently exposes `Home` and `Betting`; Home wraps the current standings dashboard and Betting renders the weekly betting workflow. The standalone Matchups tab is disabled by `MATCHUPS_TAB_ENABLED = false`, but its panel and rendering implementation are retained for a quick restoration if league feedback favors it.
 * Betting tab reads `App Data Collection`, lets a league member select their team, renders member profile photos from `N2:N11`, renders season total bets won from `Teams!B`, renders six weekly prompts from `B1:G1`, maps input types through `B13:G13`, `team_choice`, and `H1:K6`, confirms overwrites, and submits picks to that member's row in `B2:G11`.
 * Betting tab shows a compact top-five Betting Leaders horizontal bar chart above the weekly betting header when season total bets won data is available and either the app is in its February-August offseason mode or the configured league week is 4 or later. It stays hidden during in-season weeks 1-3.
 * Betting member picker uses compact two-column mobile tiles so all 10 league profiles are faster to scan before entering the betting form; the grid uses a named CSS class instead of dynamic Tailwind-only column utilities, and member tiles reuse the home-page pink/rose/orange top accent.

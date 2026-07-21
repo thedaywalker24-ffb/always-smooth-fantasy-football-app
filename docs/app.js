@@ -1,5 +1,5 @@
 const API_BASE_URL = 'https://script.google.com/macros/s/AKfycbwtM_NX16wFOHssvhvP2Iw7FI_7YcVgJ9-5DNbvNOblMxifawE4R-F_eiOLU1NsEggF/exec';
-const APP_VERSION = 'v2026.07.21.1';
+const APP_VERSION = 'v2026.07.21.2';
 const FALLBACK_PHOTO = 'https://images.unsplash.com/photo-1540747913346-19e32dc3e97e?q=80&w=600&auto=format&fit=crop';
 const THEME_KEY = 'theme';
 const CONFIG_CACHE_KEY = 'always-smooth-config';
@@ -9,6 +9,7 @@ const DRAFT_BOARD_CACHE_KEY = 'always-smooth-draft-board';
 const MATCHUPS_CACHE_KEY = 'always-smooth-matchups-data';
 const CAPTAIN_CACHE_KEY = 'always-smooth-captain-data';
 const BETTING_BET_COUNT = 6;
+const MATCHUPS_TAB_ENABLED = false;
 const DEFAULT_CONFIG = {
   appName: 'Always Smooth',
   appShortName: 'Always Smooth',
@@ -2314,7 +2315,10 @@ function setupHomeShortcuts() {
 }
 
 function setActiveTab(tabName, shouldScroll = false) {
-  const activeTab = ['home', 'matchups', 'betting'].includes(tabName) ? tabName : 'home';
+  const enabledTabs = MATCHUPS_TAB_ENABLED
+    ? ['home', 'matchups', 'betting']
+    : ['home', 'betting'];
+  const activeTab = enabledTabs.includes(tabName) ? tabName : 'home';
   document.querySelectorAll('[data-tab-panel]').forEach((panel) => {
     panel.hidden = panel.dataset.tabPanel !== activeTab;
   });
@@ -2345,7 +2349,15 @@ function setActiveTab(tabName, shouldScroll = false) {
 }
 
 function setupAppTabs() {
-  const tabs = Array.from(document.querySelectorAll('[data-app-tab]'));
+  const matchupsTab = document.getElementById('tab-matchups');
+  if (matchupsTab) {
+    matchupsTab.hidden = !MATCHUPS_TAB_ENABLED;
+    matchupsTab.disabled = !MATCHUPS_TAB_ENABLED;
+    matchupsTab.setAttribute('aria-disabled', MATCHUPS_TAB_ENABLED ? 'false' : 'true');
+  }
+
+  const tabs = Array.from(document.querySelectorAll('[data-app-tab]'))
+    .filter((button) => !button.hidden && !button.disabled);
   if (!tabs.length) return;
 
   tabs.forEach((button, index) => {
