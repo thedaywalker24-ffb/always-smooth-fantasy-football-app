@@ -2,9 +2,9 @@
 
 ## Current Status
 
-* Last completed section: Editable Home announcement tile; `Teams!X3` is read into `api=league-data`, displayed as a simple pink tile above the ticker, and updated through the existing admin-code-protected press-and-hold workflow.
-* Current section in progress: Apps Script/GitHub Pages deployment verification for the announcement tile plus PWA verification for the recent navigation, audio, and Betting updates.
-* Next recommended task: Deploy Apps Script so announcement reads/writes are live, publish GitHub Pages, then verify announcement editing and refresh behavior on phone.
+* Last completed section: Editable Home announcement tile polish; announcement text is centered within the simple pink tile while the deployed `Teams!X3` read/write workflow remains unchanged.
+* Current section in progress: GitHub Pages/PWA verification for the announcement tile plus the recent navigation, audio, and Betting updates.
+* Next recommended task: Publish any pending GitHub Pages changes, then verify announcement editing/refresh behavior and the recent frontend updates on phone.
 * Open risks: Hardcoded Apps Script deployment URL, simple JSONP/GET admin and betting write flows, public trust-based bet submission, fragile Google Sheets tab/column dependencies, fixed matchup sheet row offsets, no automated tests, and duplicated/legacy Apps Script paths.
 * Most relevant files: `SKILL.md`, `docs/index.html`, `docs/app.js`, `docs/service-worker.js`, `docs/manifest.webmanifest`, `Code.js`, `index.html`, `.clasp.json`, `.claspignore`.
 
