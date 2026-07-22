@@ -1361,6 +1361,84 @@
             box-shadow: 0 12px 28px rgba(236, 72, 153, 0.28);
         }
 
+        .draft-board-jump-wrap {
+            display: flex;
+            width: 100%;
+        }
+
+        .draft-board-jump-button {
+            display: grid;
+            width: 100%;
+            grid-template-columns: auto minmax(0, 1fr) auto;
+            align-items: center;
+            gap: 0.7rem;
+            border: 1px solid rgba(255, 255, 255, 0.28);
+            border-radius: 1rem;
+            background: linear-gradient(135deg, #ec4899 0%, #f43f5e 56%, #f97316 100%);
+            padding: 0.72rem 0.85rem;
+            color: #ffffff;
+            box-shadow: 0 14px 30px rgba(236, 72, 153, 0.28);
+            font-size: 0.75rem;
+            font-weight: 950;
+            letter-spacing: 0.16em;
+            line-height: 1;
+            text-align: left;
+            text-transform: uppercase;
+            transition: transform 0.18s ease, box-shadow 0.18s ease, filter 0.18s ease;
+        }
+
+        .draft-board-jump-button:hover {
+            filter: saturate(1.08) brightness(1.04);
+            transform: translateY(-2px);
+            box-shadow: 0 18px 38px rgba(236, 72, 153, 0.34);
+        }
+
+        .draft-board-jump-button:active {
+            transform: translateY(0) scale(0.985);
+        }
+
+        .draft-board-jump-button:focus-visible {
+            outline: 3px solid rgba(244, 114, 182, 0.34);
+            outline-offset: 3px;
+        }
+
+        .draft-board-jump-icon {
+            display: inline-flex;
+            width: 2rem;
+            height: 2rem;
+            align-items: center;
+            justify-content: center;
+            border: 1px solid rgba(255, 255, 255, 0.24);
+            border-radius: 0.7rem;
+            background: rgba(255, 255, 255, 0.16);
+        }
+
+        .draft-board-jump-icon svg {
+            width: 1.05rem;
+            height: 1.05rem;
+        }
+
+        .draft-board-jump-arrow {
+            width: 1rem;
+            height: 1rem;
+            transition: transform 0.18s ease;
+        }
+
+        .draft-board-jump-button:hover .draft-board-jump-arrow {
+            transform: translateY(2px);
+        }
+
+        @media (min-width: 640px) {
+            .draft-board-jump-wrap {
+                width: auto;
+            }
+
+            .draft-board-jump-button {
+                width: auto;
+                min-width: 15rem;
+            }
+        }
+
         .draft-board-shell {
             display: grid;
             grid-template-columns: minmax(0, 1fr);
@@ -2232,10 +2310,13 @@
                                     Syncing
                                 </button>
                             </div>
-                            <div class="flex">
-                                <button type="button" data-jump-to-draft class="inline-flex items-center gap-2 rounded-full border border-pink-500/30 bg-pink-50 px-4 py-2 text-xs font-black uppercase tracking-[0.18em] text-pink-600 shadow-sm transition hover:border-pink-500 hover:bg-pink-500 hover:text-white dark:border-pink-500/30 dark:bg-pink-500/10 dark:text-pink-200 dark:hover:bg-pink-500 dark:hover:text-white">
-                                    <span>Draft Board</span>
-                                    <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 5v14m0 0l-6-6m6 6l6-6"></path></svg>
+                            <div class="draft-board-jump-wrap">
+                                <button type="button" data-jump-to-draft class="draft-board-jump-button">
+                                    <span class="draft-board-jump-icon" aria-hidden="true">
+                                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a3 3 0 006 0M9 5a3 3 0 016 0M9 12h6m-6 4h4"></path></svg>
+                                    </span>
+                                    <span>View Draft Board</span>
+                                    <svg class="draft-board-jump-arrow" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 5v14m0 0l-6-6m6 6l6-6"></path></svg>
                                 </button>
                             </div>
                         </div>
@@ -2276,7 +2357,7 @@
     </div>
 
     <div class="bottom-tabs-overlay" aria-label="Primary navigation">
-        <span id="app-version-label" class="app-version-badge" aria-label="App version">App v2026.07.22.1</span>
+        <span id="app-version-label" class="app-version-badge" aria-label="App version">App v2026.07.22.2</span>
         <nav class="bottom-tab-nav" role="tablist" aria-label="App sections">
             <button id="tab-home" type="button" class="bottom-tab-button" role="tab" aria-selected="true" aria-controls="home-panel" data-app-tab="home">
                 <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 11.5L12 4l9 7.5M5.5 10.5V20h13v-9.5M9.5 20v-5h5v5"></path></svg>

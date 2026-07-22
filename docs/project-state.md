@@ -2,9 +2,9 @@
 
 ## Current Status
 
-* Last completed section: Position-color pills across player displays; Captain selections/options, Team MVPs, and completed draft picks now show a consistent position badge when position data is available.
-* Current section in progress: Apps Script and GitHub Pages/PWA deployment verification for player-position pills plus the recent Home visual updates.
-* Next recommended task: Deploy the backend and frontend changes, then verify all six position colors on phone in light/dark mode.
+* Last completed section: Home Draft Board shortcut prominence; the former outline pill is now a full-width mobile gradient CTA with draft icon, clear label, down arrow, and restrained hover/press feedback.
+* Current section in progress: Apps Script and GitHub Pages/PWA deployment verification for player-position pills and the enhanced Draft Board shortcut.
+* Next recommended task: Deploy the backend and frontend changes, then verify the Draft Board CTA and all six position colors on phone in light/dark mode.
 * Open risks: Hardcoded Apps Script deployment URL, simple JSONP/GET admin and betting write flows, public trust-based bet submission, fragile Google Sheets tab/column dependencies, fixed matchup sheet row offsets, no automated tests, and duplicated/legacy Apps Script paths.
 * Most relevant files: `SKILL.md`, `docs/index.html`, `docs/app.js`, `docs/service-worker.js`, `docs/manifest.webmanifest`, `Code.js`, `index.html`, `.clasp.json`, `.claspignore`.
 
@@ -214,6 +214,7 @@ Draft-board roster ID resolution:
 * Betting submissions use the submit response to refresh the selected member form instead of immediately making a second sheet read.
 * Matchups tab v1 reads the `All Matchups` sheet, groups rows by `Matchup ID`, excludes incomplete groups, and renders each active matchup as a side-by-side photo-backed tile with `Photo` as backdrop plus `Record` and `Week Points` in the foreground. Matchup tiles reuse the standings-card border/accent treatment.
 * Upcoming rookie draft board v1 appears on Home below League Standings during the offseason; it reads `Settings!B6`, builds linear pre-draft pick slots from Sleeper `slot_to_roster_id`, applies `traded_picks`, highlights intentionally unresolved draft-order slots as TBD with candidate teams, maps roster IDs through `Rosters & Records`, caches the payload locally, and displays optional selected-player data when `/picks` is populated. The League Standings header includes a Draft Board shortcut. On mobile, Round 1 is expanded by default and later rounds are collapsed by default; tablet/desktop keeps all rounds visible.
+* The League Standings Draft Board shortcut is a prominent pink-to-orange gradient CTA: full-width on mobile, compact on larger screens, with a draft icon and down arrow. It uses only interaction feedback rather than continuous animation.
 * Removed the original GitHub Pages explainer tiles (`Install Friendly` and `Live Sheet Data`) from the bottom of Home so the page stays focused on league content.
 * Apps Script menu action `Build Upcoming Draft Board` creates/refreshes a normalized `Upcoming Draft Board` sheet snapshot using the same compiled draft-board payload.
 * Apps Script spreadsheet menu for league data operations.
