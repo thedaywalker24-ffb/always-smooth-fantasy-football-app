@@ -171,8 +171,306 @@
         #install-panel[hidden],
         #ios-install-tip[hidden],
         #status-banner[hidden],
-        .action-dialog[hidden] {
+        .action-dialog[hidden],
+        .rules-dialog[hidden] {
             display: none;
+        }
+
+        body.rules-dialog-open {
+            overflow: hidden;
+        }
+
+        .rules-trigger-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.4rem;
+            border: 1px solid rgba(236, 72, 153, 0.3);
+            border-radius: 9999px;
+            background: rgba(253, 242, 248, 0.92);
+            padding: 0.5rem 0.8rem;
+            color: #db2777;
+            box-shadow: 0 6px 16px rgba(236, 72, 153, 0.1);
+            transition: border-color 0.18s ease, background 0.18s ease, color 0.18s ease, transform 0.18s ease;
+        }
+
+        .rules-trigger-pill:hover,
+        .rules-trigger-pill[aria-expanded="true"] {
+            border-color: rgba(236, 72, 153, 0.72);
+            background: #ec4899;
+            color: #ffffff;
+            transform: translateY(-1px);
+        }
+
+        .dark .rules-trigger-pill {
+            border-color: rgba(244, 114, 182, 0.3);
+            background: rgba(236, 72, 153, 0.12);
+            color: #f9a8d4;
+        }
+
+        .dark .rules-trigger-pill:hover,
+        .dark .rules-trigger-pill[aria-expanded="true"] {
+            background: #ec4899;
+            color: #ffffff;
+        }
+
+        .rules-trigger-pill svg {
+            width: 0.95rem;
+            height: 0.95rem;
+        }
+
+        .rules-dialog {
+            position: fixed;
+            inset: 0;
+            z-index: 100;
+            display: flex;
+            align-items: flex-end;
+            justify-content: center;
+        }
+
+        .rules-dialog-backdrop {
+            position: absolute;
+            inset: 0;
+            border: 0;
+            background: rgba(2, 6, 23, 0.58);
+            backdrop-filter: blur(8px);
+        }
+
+        .rules-dialog-panel {
+            position: relative;
+            z-index: 1;
+            display: flex;
+            width: 100%;
+            max-height: 90vh;
+            flex-direction: column;
+            overflow: hidden;
+            border: 1px solid rgba(226, 232, 240, 0.94);
+            border-radius: 1.6rem 1.6rem 0 0;
+            background: rgba(248, 250, 252, 0.98);
+            color: #0f172a;
+            box-shadow: 0 -24px 70px rgba(15, 23, 42, 0.28);
+        }
+
+        .dark .rules-dialog-panel {
+            border-color: rgba(244, 114, 182, 0.16);
+            background: rgba(2, 6, 23, 0.98);
+            color: #f8fafc;
+        }
+
+        .rules-dialog-handle {
+            width: 2.75rem;
+            height: 0.28rem;
+            flex: 0 0 auto;
+            margin: 0.55rem auto 0;
+            border-radius: 9999px;
+            background: #cbd5e1;
+        }
+
+        .dark .rules-dialog-handle {
+            background: #475569;
+        }
+
+        .rules-dialog-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 1rem;
+            padding: 0.8rem 1rem 0.9rem;
+        }
+
+        .rules-dialog-eyebrow {
+            color: #ec4899;
+            font-size: 0.62rem;
+            font-weight: 950;
+            letter-spacing: 0.2em;
+            text-transform: uppercase;
+        }
+
+        .rules-dialog-title {
+            margin-top: 0.22rem;
+            font-size: 1.35rem;
+            font-weight: 950;
+            font-style: italic;
+            line-height: 1;
+            text-transform: uppercase;
+        }
+
+        .rules-dialog-close {
+            display: inline-flex;
+            width: 2.5rem;
+            height: 2.5rem;
+            flex: 0 0 auto;
+            align-items: center;
+            justify-content: center;
+            border: 1px solid rgba(226, 232, 240, 0.95);
+            border-radius: 9999px;
+            background: #ffffff;
+            color: #475569;
+            box-shadow: 0 8px 20px rgba(15, 23, 42, 0.08);
+        }
+
+        .dark .rules-dialog-close {
+            border-color: #334155;
+            background: #0f172a;
+            color: #e2e8f0;
+        }
+
+        .rules-dialog-close svg {
+            width: 1.1rem;
+            height: 1.1rem;
+        }
+
+        .rules-dialog-body {
+            min-height: 0;
+            flex: 1;
+            overflow-y: auto;
+            overscroll-behavior: contain;
+            padding: 0 1rem 1rem;
+        }
+
+        .rules-accordion-list {
+            display: grid;
+            gap: 0.65rem;
+        }
+
+        .rules-accordion {
+            overflow: hidden;
+            border: 1px solid rgba(226, 232, 240, 0.95);
+            border-radius: 1rem;
+            background: rgba(255, 255, 255, 0.86);
+            box-shadow: 0 8px 24px rgba(15, 23, 42, 0.05);
+        }
+
+        .dark .rules-accordion {
+            border-color: rgba(51, 65, 85, 0.9);
+            background: rgba(15, 23, 42, 0.82);
+            box-shadow: none;
+        }
+
+        .rules-accordion summary {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 1rem;
+            padding: 0.95rem 1rem;
+            cursor: pointer;
+            font-size: 0.78rem;
+            font-weight: 950;
+            letter-spacing: 0.1em;
+            list-style: none;
+            text-transform: uppercase;
+        }
+
+        .rules-accordion summary::-webkit-details-marker {
+            display: none;
+        }
+
+        .rules-accordion summary::after {
+            width: 0.55rem;
+            height: 0.55rem;
+            flex: 0 0 auto;
+            border-right: 2px solid #ec4899;
+            border-bottom: 2px solid #ec4899;
+            content: '';
+            transform: rotate(45deg) translateY(-2px);
+            transition: transform 0.18s ease;
+        }
+
+        .rules-accordion[open] summary::after {
+            transform: rotate(225deg) translate(-2px, -2px);
+        }
+
+        .rules-accordion-content {
+            display: grid;
+            gap: 0.75rem;
+            border-top: 1px solid rgba(226, 232, 240, 0.82);
+            padding: 0.9rem 1rem 1rem;
+            color: #475569;
+            font-size: 0.82rem;
+            font-weight: 650;
+            line-height: 1.55;
+        }
+
+        .dark .rules-accordion-content {
+            border-top-color: rgba(51, 65, 85, 0.8);
+            color: #cbd5e1;
+        }
+
+        .rules-block-heading {
+            color: #db2777;
+            font-size: 0.68rem;
+            font-weight: 950;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+        }
+
+        .dark .rules-block-heading {
+            color: #f9a8d4;
+        }
+
+        .rules-block-list {
+            display: grid;
+            gap: 0.5rem;
+            padding-left: 1.1rem;
+            list-style: disc;
+        }
+
+        .rules-block-list li::marker {
+            color: #ec4899;
+        }
+
+        .rules-dialog-footer {
+            border-top: 1px solid rgba(226, 232, 240, 0.9);
+            padding: 0.8rem 1rem calc(0.8rem + env(safe-area-inset-bottom));
+            text-align: center;
+        }
+
+        .dark .rules-dialog-footer {
+            border-top-color: rgba(51, 65, 85, 0.82);
+        }
+
+        .rules-source-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.4rem;
+            color: #db2777;
+            font-size: 0.68rem;
+            font-weight: 950;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+        }
+
+        .dark .rules-source-link {
+            color: #f9a8d4;
+        }
+
+        @media (min-width: 768px) {
+            .rules-dialog {
+                align-items: center;
+                padding: 2rem;
+            }
+
+            .rules-dialog-panel {
+                width: min(100%, 48rem);
+                max-height: min(86vh, 52rem);
+                border-radius: 1.6rem;
+                box-shadow: 0 30px 90px rgba(15, 23, 42, 0.34);
+            }
+
+            .rules-dialog-handle {
+                display: none;
+            }
+
+            .rules-dialog-header {
+                padding: 1.2rem 1.35rem 1rem;
+            }
+
+            .rules-dialog-body {
+                padding: 0 1.35rem 1.35rem;
+            }
+
+            .rules-dialog-footer {
+                padding: 0.9rem 1.35rem;
+            }
         }
 
         .action-dialog {
@@ -2313,6 +2611,31 @@
             <button type="button" class="action-dialog-close" data-action-dialog-close hidden>OK</button>
         </div>
     </div>
+    <div id="rules-dialog" class="rules-dialog" role="dialog" aria-modal="true" aria-labelledby="rules-dialog-title" hidden>
+        <button type="button" class="rules-dialog-backdrop" data-rules-close tabindex="-1" aria-label="Close league rules"></button>
+        <section class="rules-dialog-panel" aria-describedby="rules-dialog-description">
+            <div class="rules-dialog-handle" aria-hidden="true"></div>
+            <header class="rules-dialog-header">
+                <div>
+                    <p class="rules-dialog-eyebrow">League Reference</p>
+                    <h2 id="rules-dialog-title" class="rules-dialog-title">League Rules</h2>
+                    <p id="rules-dialog-description" class="sr-only">Always Smooth league constitution and rules</p>
+                </div>
+                <button type="button" class="rules-dialog-close" data-rules-close aria-label="Close league rules">
+                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </header>
+            <div class="rules-dialog-body">
+                <div id="rules-content" class="rules-accordion-list"></div>
+            </div>
+            <footer class="rules-dialog-footer">
+                <a id="rules-source-link" class="rules-source-link" href="https://docs.google.com/document/d/1Ekdl6QntwVpZQg_gyjiTab3Hv1RgsXXYjVC9PYSRmNM/edit" target="_blank" rel="noopener noreferrer">
+                    <span>View Original Constitution</span>
+                    <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 3h7v7m0-7L10 14M5 7v12h12v-5"></path></svg>
+                </a>
+            </footer>
+        </section>
+    </div>
     <div class="app-shell min-h-screen">
         <div id="status-banner" hidden class="mx-auto max-w-7xl px-4 pt-4 md:px-8">
             <div class="rounded-2xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-900 shadow-sm dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-100"></div>
@@ -2376,6 +2699,10 @@
                                 <button id="updated-at" type="button" class="rounded-full border border-slate-200 bg-white px-3 py-2 text-slate-700 shadow-sm transition hover:border-pink-500 hover:text-pink-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 sm:px-4" aria-label="Refresh standings">
                                     Syncing
                                 </button>
+                                <button id="rules-button" type="button" class="rules-trigger-pill" aria-haspopup="dialog" aria-controls="rules-dialog" aria-expanded="false">
+                                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 5.5A2.5 2.5 0 016.5 3H11v16H6.5A2.5 2.5 0 004 21.5v-16zM20 5.5A2.5 2.5 0 0017.5 3H13v16h4.5a2.5 2.5 0 012.5 2.5v-16z"></path></svg>
+                                    <span>Rules</span>
+                                </button>
                             </div>
                             <div class="draft-board-jump-wrap">
                                 <button type="button" data-jump-to-draft class="draft-board-jump-button">
@@ -2424,7 +2751,7 @@
     </div>
 
     <div class="bottom-tabs-overlay" aria-label="Primary navigation">
-        <span id="app-version-label" class="app-version-badge" aria-label="App version">App v2026.07.22.3</span>
+        <span id="app-version-label" class="app-version-badge" aria-label="App version">App v2026.07.22.4</span>
         <nav class="bottom-tab-nav" role="tablist" aria-label="App sections">
             <button id="tab-home" type="button" class="bottom-tab-button" role="tab" aria-selected="true" aria-controls="home-panel" data-app-tab="home">
                 <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 11.5L12 4l9 7.5M5.5 10.5V20h13v-9.5M9.5 20v-5h5v5"></path></svg>
@@ -2441,6 +2768,7 @@
         </nav>
     </div>
 
+    <script src="./rules.js"></script>
     <script src="./app.js"></script>
 </body>
 </html>

@@ -2,9 +2,9 @@
 
 ## Current Status
 
-* Last completed section: Weekly Captain rule tooltip; expanded team tiles now explain the 2× weekly scoring, manual Sleeper adjustment, and once-per-season player restriction.
-* Current section in progress: GitHub Pages/PWA deployment verification for the Captain tooltip and recent Home visual updates.
-* Next recommended task: Publish the frontend changes, then verify the Captain tooltip by tap, keyboard focus, and hover on phone/desktop.
+* Last completed section: In-app League Rules reference; Home now has a compact Rules pill that opens an accessible mobile sheet/desktop modal with one-at-a-time constitution accordions and a link to the source Google Doc.
+* Current section in progress: GitHub Pages/PWA deployment verification for the Rules sheet and recent Home visual updates.
+* Next recommended task: Publish the frontend changes, then verify Rules opening, accordion behavior, keyboard focus, dark mode, and the source-document link on phone/desktop.
 * Open risks: Hardcoded Apps Script deployment URL, simple JSONP/GET admin and betting write flows, public trust-based bet submission, fragile Google Sheets tab/column dependencies, fixed matchup sheet row offsets, no automated tests, and duplicated/legacy Apps Script paths.
 * Most relevant files: `SKILL.md`, `docs/index.html`, `docs/app.js`, `docs/service-worker.js`, `docs/manifest.webmanifest`, `Code.js`, `index.html`, `.clasp.json`, `.claspignore`.
 
@@ -199,6 +199,7 @@ Draft-board roster ID resolution:
 * Live config load from Apps Script with fallback defaults.
 * Live standings load from Apps Script with local cached fallback.
 * Home standings header season/week pills are populated from the `Settings` tab via `api=config`; missing Settings values render as `--` instead of hardcoded season/week numbers.
+* A compact Rules pill beside the Home season/week/sync metadata opens the structured `Always Smooth Constitution '26` in a full-height mobile sheet or centered desktop modal. Sections are accordion-based, only one remains open at a time, and the footer links to the original Google Doc.
 * Home and Betting timestamp pills double as refresh buttons to save mobile header space.
 * Home standings cards show weekly Captain state: compact `C` player badge on the primary card when selected, and a fuller Captain card plus starter picker inside the expanded accordion when Captain submissions are open.
 * The expanded Weekly Captain card includes an accessible info tooltip summarizing the 2× scoring rule, manual commissioner adjustment in Sleeper, and once-per-season player restriction.

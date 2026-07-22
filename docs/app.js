@@ -1,5 +1,5 @@
 const API_BASE_URL = 'https://script.google.com/macros/s/AKfycbwtM_NX16wFOHssvhvP2Iw7FI_7YcVgJ9-5DNbvNOblMxifawE4R-F_eiOLU1NsEggF/exec';
-const APP_VERSION = 'v2026.07.22.3';
+const APP_VERSION = 'v2026.07.22.4';
 const FALLBACK_PHOTO = 'https://images.unsplash.com/photo-1540747913346-19e32dc3e97e?q=80&w=600&auto=format&fit=crop';
 const THEME_KEY = 'theme';
 const CONFIG_CACHE_KEY = 'always-smooth-config';
@@ -2402,6 +2402,96 @@ function setupHomeShortcuts() {
   });
 }
 
+function renderRulesBlock(block) {
+  if (!block || typeof block !== 'object') return '';
+  if (block.type === 'heading') {
+    return `<h3 class="rules-block-heading">${escapeHtml(block.text || '')}</h3>`;
+  }
+  if (block.type === 'list') {
+    const items = Array.isArray(block.items) ? block.items : [];
+    return `<ul class="rules-block-list">${items.map((item) => `<li>${escapeHtml(item)}</li>`).join('')}</ul>`;
+  }
+  return `<p>${escapeHtml(block.text || '')}</p>`;
+}
+
+function renderLeagueRules() {
+  const content = document.getElementById('rules-content');
+  if (!content || typeof LEAGUE_RULES === 'undefined') return;
+  const sections = Array.isArray(LEAGUE_RULES.sections) ? LEAGUE_RULES.sections : [];
+  content.innerHTML = sections.map((section, index) => `
+    <details class="rules-accordion"${index === 0 ? ' open' : ''}>
+      <summary>${escapeHtml(section.title || 'League Rules')}</summary>
+      <div class="rules-accordion-content">
+        ${(Array.isArray(section.blocks) ? section.blocks : []).map(renderRulesBlock).join('')}
+      </div>
+    </details>
+  `).join('');
+
+  const sourceLink = document.getElementById('rules-source-link');
+  if (sourceLink && LEAGUE_RULES.sourceUrl) sourceLink.href = LEAGUE_RULES.sourceUrl;
+}
+
+function setupRulesDialog() {
+  const trigger = document.getElementById('rules-button');
+  const dialog = document.getElementById('rules-dialog');
+  const content = document.getElementById('rules-content');
+  if (!trigger || !dialog || !content) return;
+
+  renderLeagueRules();
+  let returnFocus = trigger;
+
+  const closeDialog = () => {
+    if (dialog.hidden) return;
+    dialog.hidden = true;
+    document.body.classList.remove('rules-dialog-open');
+    trigger.setAttribute('aria-expanded', 'false');
+    returnFocus?.focus();
+  };
+
+  const openDialog = () => {
+    returnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : trigger;
+    dialog.hidden = false;
+    document.body.classList.add('rules-dialog-open');
+    trigger.setAttribute('aria-expanded', 'true');
+    dialog.querySelector('.rules-dialog-close')?.focus();
+  };
+
+  trigger.addEventListener('click', openDialog);
+  dialog.querySelectorAll('[data-rules-close]').forEach((button) => {
+    button.addEventListener('click', closeDialog);
+  });
+
+  content.addEventListener('toggle', (event) => {
+    const openedSection = event.target.closest('.rules-accordion');
+    if (!openedSection?.open) return;
+    content.querySelectorAll('.rules-accordion[open]').forEach((section) => {
+      if (section !== openedSection) section.open = false;
+    });
+  }, true);
+
+  dialog.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      closeDialog();
+      return;
+    }
+    if (event.key !== 'Tab') return;
+
+    const focusable = Array.from(dialog.querySelectorAll('button:not([disabled]):not([tabindex="-1"]), a[href], summary'))
+      .filter((element) => !element.closest('[hidden]'));
+    if (!focusable.length) return;
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
+    }
+  });
+}
+
 function setActiveTab(tabName, shouldScroll = false) {
   const enabledTabs = MATCHUPS_TAB_ENABLED
     ? ['home', 'matchups', 'betting']
@@ -2485,6 +2575,7 @@ async function bootstrap() {
   setupInstallPrompt();
   setupScrollBehavior();
   setupHomeShortcuts();
+  setupRulesDialog();
   setupAppTabs();
   setupCaptainDialog();
   setupBettingControls();
