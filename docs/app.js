@@ -1,5 +1,5 @@
 const API_BASE_URL = 'https://script.google.com/macros/s/AKfycbwtM_NX16wFOHssvhvP2Iw7FI_7YcVgJ9-5DNbvNOblMxifawE4R-F_eiOLU1NsEggF/exec';
-const APP_VERSION = 'v2026.07.21.5';
+const APP_VERSION = 'v2026.07.21.6';
 const FALLBACK_PHOTO = 'https://images.unsplash.com/photo-1540747913346-19e32dc3e97e?q=80&w=600&auto=format&fit=crop';
 const THEME_KEY = 'theme';
 const CONFIG_CACHE_KEY = 'always-smooth-config';
@@ -733,14 +733,13 @@ function renderTeams(payload, isStale = false) {
               <p class="text-[10px] font-bold uppercase tracking-[0.22em] text-slate-400">Record</p>
               <p class="text-sm font-black text-slate-700 dark:text-slate-200">${recordWithStreak}</p>
             </div>
-            <div class="text-right">
+            <div class="team-pf-stat">
               <p class="text-[10px] font-bold uppercase tracking-[0.22em] text-slate-400">PF</p>
               <p class="text-sm font-black text-slate-700 dark:text-slate-200">${pointsFor}</p>
             </div>
           </div>
         </div>
         <div class="home-matchup-slot relative z-10" data-home-matchup-slot="${escapeHtml(team.teamName)}" data-home-matchup-owner="${escapeHtml(ownerName)}" hidden></div>
-        <div class="absolute -bottom-8 -right-8 h-28 w-28 rounded-full bg-pink-500/5 transition-colors group-hover:bg-pink-500/10"></div>
       </article>
     `;
   }).join('');

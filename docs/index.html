@@ -356,6 +356,43 @@
             transition: gap 0.3s ease;
         }
 
+        .team-pf-stat {
+            position: relative;
+            isolation: isolate;
+            text-align: right;
+        }
+
+        .team-pf-stat::before {
+            position: absolute;
+            z-index: 0;
+            top: 50%;
+            right: -0.7rem;
+            width: 4rem;
+            height: 4rem;
+            border-radius: 9999px;
+            background: radial-gradient(circle, rgba(236, 72, 153, 0.2) 0%, rgba(236, 72, 153, 0.08) 52%, transparent 73%);
+            content: '';
+            opacity: 0.85;
+            pointer-events: none;
+            transform: translateY(-50%);
+            transition: opacity 0.25s ease, transform 0.25s ease;
+        }
+
+        .team-pf-stat > * {
+            position: relative;
+            z-index: 1;
+        }
+
+        .owner-tile:hover .team-pf-stat::before,
+        .owner-tile[data-expanded="true"] .team-pf-stat::before {
+            opacity: 1;
+            transform: translateY(-50%) scale(1.08);
+        }
+
+        .dark .team-pf-stat::before {
+            background: radial-gradient(circle, rgba(244, 114, 182, 0.26) 0%, rgba(236, 72, 153, 0.1) 52%, transparent 73%);
+        }
+
         .home-matchup-slot[hidden] {
             display: none;
         }
@@ -2183,7 +2220,7 @@
     </div>
 
     <div class="bottom-tabs-overlay" aria-label="Primary navigation">
-        <span id="app-version-label" class="app-version-badge" aria-label="App version">App v2026.07.21.5</span>
+        <span id="app-version-label" class="app-version-badge" aria-label="App version">App v2026.07.21.6</span>
         <nav class="bottom-tab-nav" role="tablist" aria-label="App sections">
             <button id="tab-home" type="button" class="bottom-tab-button" role="tab" aria-selected="true" aria-controls="home-panel" data-app-tab="home">
                 <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 11.5L12 4l9 7.5M5.5 10.5V20h13v-9.5M9.5 20v-5h5v5"></path></svg>

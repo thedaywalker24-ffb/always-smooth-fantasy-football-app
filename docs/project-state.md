@@ -2,9 +2,9 @@
 
 ## Current Status
 
-* Last completed section: Editable Home announcement tile polish; announcement text is centered within the simple pink tile while the deployed `Teams!X3` read/write workflow remains unchanged.
-* Current section in progress: GitHub Pages/PWA verification for the announcement tile plus the recent navigation, audio, and Betting updates.
-* Next recommended task: Publish any pending GitHub Pages changes, then verify announcement editing/refresh behavior and the recent frontend updates on phone.
+* Last completed section: Home team-tile PF highlight polish; the old card-corner circle was replaced with a compact PF-localized halo that stays behind the PF label/value and is unaffected by the matchup strip.
+* Current section in progress: GitHub Pages/PWA verification for the PF highlight plus the recent announcement, navigation, audio, and Betting updates.
+* Next recommended task: Publish any pending GitHub Pages changes, then verify the PF halo in light/dark mode and the recent frontend updates on phone.
 * Open risks: Hardcoded Apps Script deployment URL, simple JSONP/GET admin and betting write flows, public trust-based bet submission, fragile Google Sheets tab/column dependencies, fixed matchup sheet row offsets, no automated tests, and duplicated/legacy Apps Script paths.
 * Most relevant files: `SKILL.md`, `docs/index.html`, `docs/app.js`, `docs/service-worker.js`, `docs/manifest.webmanifest`, `Code.js`, `index.html`, `.clasp.json`, `.claspignore`.
 
@@ -194,6 +194,7 @@ Draft-board roster ID resolution:
 * Splash screen and mobile-friendly banner.
 * The Always Smooth banner title is a keyboard-accessible audio easter egg. It restarts the bundled `docs/audio/always-smooth-easter-egg.mp3` clip on each press without rendering playback controls, and the service worker includes the clip in the PWA app shell.
 * Home displays a simple headerless pink announcement tile above the ticker. It reads `Teams!X3`, shows a neutral empty-state message when the cell is blank, and uses press-and-hold plus the existing admin code to edit only that whitelisted cell.
+* Each Home team tile highlights Points For with a small radial halo anchored to `.team-pf-stat`. The previous absolute bottom-right card circle was removed so the matchup strip cannot mask or displace the visual treatment.
 * Live config load from Apps Script with fallback defaults.
 * Live standings load from Apps Script with local cached fallback.
 * Home standings header season/week pills are populated from the `Settings` tab via `api=config`; missing Settings values render as `--` instead of hardcoded season/week numbers.
