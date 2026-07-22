@@ -1515,6 +1515,32 @@ function buildSleeperPlayerInfoMap_(spreadsheet) {
 }
 
 /**
+ * Builds a normalized full-name -> position lookup for supplemental player displays.
+ * @param {GoogleAppsScript.Spreadsheet.Spreadsheet} spreadsheet
+ * @return {Object<string, string>}
+ */
+function buildSleeperPlayerPositionByName_(spreadsheet) {
+  var map = {};
+  var sheet = spreadsheet.getSheetByName('Sleeper Players');
+  if (!sheet) return map;
+
+  var values = sheet.getDataRange().getDisplayValues();
+  if (values.length < 2) return map;
+  var headers = values[0].map(normalizeBettingOptionKey_);
+  var fullNameCol = headers.indexOf(normalizeBettingOptionKey_('Full Name'));
+  var positionCol = headers.indexOf(normalizeBettingOptionKey_('Position'));
+  if (fullNameCol === -1 || positionCol === -1) return map;
+
+  for (var r = 1; r < values.length; r++) {
+    var nameKey = normalizeBettingOptionKey_(getDisplayCell_(values[r], fullNameCol));
+    var position = getDisplayCell_(values[r], positionCol).toUpperCase();
+    if (nameKey && position && !map[nameKey]) map[nameKey] = position;
+  }
+
+  return map;
+}
+
+/**
  * Reads current Starter rows from Team Rosters and enriches them from Sleeper Players.
  * @param {GoogleAppsScript.Spreadsheet.Spreadsheet} spreadsheet
  * @return {{teamsByKey: Object<string, Object>, warnings: Array<string>}}
@@ -2980,7 +3006,7 @@ function doGet(e) {
  * Returns team standings from the "Rosters & Records" sheet for the client UI.
  * Column positions are resolved from the header row so minor layout changes stay safe.
  * @param {boolean} [includeDiagnostics] When true, payload includes `diagnostics` for photo/sheet troubleshooting (use ?debug=1 on the web app URL).
- * @return {{ teams: Array<{teamName: string, realName: string, record: string, streak: string, pointsFor: number, photoUrl: string, sleeperTeamImageUrl: string, teamMvpName: string, teamMvpImageUrl: string, turkeyWatch: string, trophies: string, beerTrophies: string, mulligan: boolean}>, announcement: string, updatedAt: string, error?: string, diagnostics?: Object }}
+ * @return {{ teams: Array<{teamName: string, realName: string, record: string, streak: string, pointsFor: number, photoUrl: string, sleeperTeamImageUrl: string, teamMvpName: string, teamMvpPosition: string, teamMvpImageUrl: string, turkeyWatch: string, trophies: string, beerTrophies: string, mulligan: boolean}>, announcement: string, updatedAt: string, error?: string, diagnostics?: Object }}
  */
 function getLeagueData(includeDiagnostics) {
   const wantDiag = includeDiagnostics === true;
@@ -3054,6 +3080,7 @@ function getLeagueData(includeDiagnostics) {
     const rows = rosterSheet.getRange(2, 1, lastRow - 1, lastCol).getValues();
     const photoBuild = buildTeamsSheetDataMap_(spreadsheet);
     const teamsSheetDataByTeamKey = photoBuild.map;
+    const playerPositionByName = buildSleeperPlayerPositionByName_(spreadsheet);
     const teams = [];
     const rosterKeysForDiag = [];
     let teamsWithPhotoUrl = 0;
@@ -3094,6 +3121,9 @@ function getLeagueData(includeDiagnostics) {
       const sleeperTeamImageUrl =
         teamSheetData && teamSheetData.sleeperTeamImageUrl ? teamSheetData.sleeperTeamImageUrl : '';
       const teamMvpName = teamSheetData && teamSheetData.teamMvpName ? teamSheetData.teamMvpName : '';
+      const teamMvpPosition = teamMvpName
+        ? playerPositionByName[normalizeBettingOptionKey_(teamMvpName)] || ''
+        : '';
       const teamMvpImageUrl =
         teamSheetData && teamSheetData.teamMvpImageUrl ? teamSheetData.teamMvpImageUrl : '';
       const turkeyWatch = teamSheetData && teamSheetData.turkeyWatch ? teamSheetData.turkeyWatch : '';
@@ -3115,6 +3145,7 @@ function getLeagueData(includeDiagnostics) {
         photoUrl: photoUrl,
         sleeperTeamImageUrl: sleeperTeamImageUrl,
         teamMvpName: teamMvpName,
+        teamMvpPosition: teamMvpPosition,
         teamMvpImageUrl: teamMvpImageUrl,
         turkeyWatch: turkeyWatch,
         trophies: trophies,

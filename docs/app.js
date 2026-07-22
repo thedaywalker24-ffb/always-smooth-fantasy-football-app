@@ -1,5 +1,5 @@
 const API_BASE_URL = 'https://script.google.com/macros/s/AKfycbwtM_NX16wFOHssvhvP2Iw7FI_7YcVgJ9-5DNbvNOblMxifawE4R-F_eiOLU1NsEggF/exec';
-const APP_VERSION = 'v2026.07.21.6';
+const APP_VERSION = 'v2026.07.22.1';
 const FALLBACK_PHOTO = 'https://images.unsplash.com/photo-1540747913346-19e32dc3e97e?q=80&w=600&auto=format&fit=crop';
 const THEME_KEY = 'theme';
 const CONFIG_CACHE_KEY = 'always-smooth-config';
@@ -444,11 +444,34 @@ function buildCaptainLookup(payload) {
   return lookup;
 }
 
-function getCaptainDetailsLabel(captain) {
-  return [captain?.position, captain?.nflTeam]
-    .map((value) => String(value || '').trim())
-    .filter(Boolean)
-    .join(' / ');
+function normalizePlayerPosition(position) {
+  const normalized = String(position || '').trim().toUpperCase().replace(/[^A-Z]/g, '');
+  if (normalized === 'DST' || normalized === 'D' || normalized === 'DEFENSE') return 'DEF';
+  if (normalized === 'PK') return 'K';
+  return ['QB', 'WR', 'RB', 'TE', 'DEF', 'K'].includes(normalized) ? normalized : '';
+}
+
+function renderPositionPill(position) {
+  const normalized = normalizePlayerPosition(position);
+  if (!normalized) return '';
+  return `<span class="player-position-pill player-position-pill--${normalized.toLowerCase()}">${normalized}</span>`;
+}
+
+function getPlayerTeamLabel(player) {
+  return String(player?.nflTeam || player?.team || '').trim();
+}
+
+function splitPlayerNameAndPosition(name, position) {
+  const rawName = String(name || '').trim();
+  const structuredPosition = normalizePlayerPosition(position);
+  if (structuredPosition) return { name: rawName, position: structuredPosition };
+
+  const match = rawName.match(/^(.*?)(?:\s*[-–—/]\s*|\s*\()((?:QB|WR|RB|TE|DEF|D\/ST|DST|K))\)?$/i);
+  if (!match) return { name: rawName, position: '' };
+  return {
+    name: match[1].trim(),
+    position: normalizePlayerPosition(match[2])
+  };
 }
 
 function getCaptainShortName(name) {
@@ -478,6 +501,7 @@ function renderCaptainPrimaryBadge(teamCaptain) {
       ${getCaptainImageMarkup(captain, 'captain-primary-photo')}
       <span class="captain-primary-mark">C</span>
       <span class="min-w-0 truncate">${escapeHtml(getCaptainShortName(captain.playerName))}</span>
+      ${renderPositionPill(captain.position)}
     </div>
   `;
 }
@@ -485,7 +509,7 @@ function renderCaptainPrimaryBadge(teamCaptain) {
 function renderCaptainOption(teamName, player, currentCaptain) {
   const isCurrent = currentCaptain && String(currentCaptain.playerId) === String(player.playerId);
   const disabled = player.usedEarlierThisSeason === true;
-  const detail = getCaptainDetailsLabel(player);
+  const teamLabel = getPlayerTeamLabel(player);
   const disabledAttr = disabled ? ' disabled' : '';
   const status = disabled
     ? player.disabledReason || 'Already used'
@@ -496,8 +520,11 @@ function renderCaptainOption(teamName, player, currentCaptain) {
     <button type="button" class="captain-player-option" data-captain-option data-team-name="${escapeHtml(teamName)}" data-player-id="${escapeHtml(player.playerId)}"${disabledAttr}>
       ${getCaptainImageMarkup(player, 'captain-option-photo')}
       <span class="min-w-0 flex-1">
-        <span class="captain-option-name">${escapeHtml(player.playerName)}</span>
-        ${detail ? `<span class="captain-option-detail">${escapeHtml(detail)}</span>` : ''}
+        <span class="player-name-with-position">
+          <span class="captain-option-name">${escapeHtml(player.playerName)}</span>
+          ${renderPositionPill(player.position)}
+        </span>
+        ${teamLabel ? `<span class="captain-option-detail">${escapeHtml(teamLabel)}</span>` : ''}
       </span>
       <span class="captain-option-status${disabled ? ' captain-option-status--disabled' : ''}">${escapeHtml(status)}</span>
     </button>
@@ -508,7 +535,7 @@ function renderCaptainDetail(teamCaptain, teamName) {
   const captain = teamCaptain?.currentCaptain;
   const isOpen = captainData?.isOpen === true;
   const players = Array.isArray(teamCaptain?.eligiblePlayers) ? teamCaptain.eligiblePlayers : [];
-  const detail = captain ? getCaptainDetailsLabel(captain) : '';
+  const teamLabel = captain ? getPlayerTeamLabel(captain) : '';
   const pickerId = `captain-picker-${normalizeBettingOptionKey(teamName)}`;
   const statusLabel = isOpen ? 'Open' : 'Locked';
 
@@ -520,8 +547,8 @@ function renderCaptainDetail(teamCaptain, teamName) {
           : '<span class="captain-detail-photo captain-player-fallback" aria-hidden="true">C</span>'}
         <div class="min-w-0 flex-1">
           <p class="captain-kicker">Weekly Captain</p>
-          <p class="captain-detail-name">${escapeHtml(captain?.playerName || 'No Captain selected')}</p>
-          ${detail ? `<p class="captain-detail-meta">${escapeHtml(detail)}</p>` : ''}
+          <p class="captain-detail-name player-name-with-position"><span class="truncate">${escapeHtml(captain?.playerName || 'No Captain selected')}</span>${renderPositionPill(captain?.position)}</p>
+          ${teamLabel ? `<p class="captain-detail-meta">${escapeHtml(teamLabel)}</p>` : ''}
         </div>
         <span class="captain-lock-pill">${escapeHtml(statusLabel)}</span>
       </div>
@@ -656,7 +683,8 @@ function renderTeams(payload, isStale = false) {
     const pointsFor = Math.round(Number(team.pointsFor || 0));
     const recordWithStreak = streakValue !== 'None' ? `${team.record} (${streakValue})` : team.record;
     const sleeperTeamImageUrl = team.sleeperTeamImageUrl || '';
-    const teamMvpName = team.teamMvpName || 'Not set';
+    const teamMvp = splitPlayerNameAndPosition(team.teamMvpName || 'Not set', team.teamMvpPosition);
+    const teamMvpName = teamMvp.name || 'Not set';
     const teamMvpImageUrl = team.teamMvpImageUrl || '';
     const trophies = String(team.trophies || '').trim();
     const ownerTrophiesMarkup = trophies ? `<span class="shrink-0">${escapeHtml(trophies)}</span>` : '';
@@ -700,7 +728,7 @@ function renderTeams(payload, isStale = false) {
                   <div class="team-stat-row">
                     <div>
                       <p class="text-[10px] font-bold uppercase tracking-[0.22em] text-pink-500/80">Team MVP</p>
-                      <p class="mt-1 text-sm font-black text-slate-950 dark:text-white">${teamMvpName}</p>
+                      <p class="player-name-with-position mt-1 text-sm font-black text-slate-950 dark:text-white"><span class="truncate">${escapeHtml(teamMvpName)}</span>${renderPositionPill(teamMvp.position)}</p>
                     </div>
                     <div class="shrink-0">
                       ${teamMvpImageUrl
@@ -1176,10 +1204,14 @@ function renderDraftOwnerLine(owner) {
 
 function renderSelectedPlayer(player) {
   if (!player) return '';
-  const details = [player.position, player.team].filter(Boolean).join(' / ');
+  const teamLabel = getPlayerTeamLabel(player);
   return `
     <div class="mt-3 rounded-2xl bg-emerald-50 px-3 py-2 text-xs font-black uppercase tracking-[0.12em] text-emerald-900 dark:bg-emerald-500/10 dark:text-emerald-100">
-      ${escapeHtml(player.name)}${details ? ` <span class="font-bold opacity-75">${escapeHtml(details)}</span>` : ''}
+      <span class="player-name-with-position">
+        <span class="truncate">${escapeHtml(player.name)}</span>
+        ${renderPositionPill(player.position)}
+        ${teamLabel ? `<span class="font-bold opacity-75">${escapeHtml(teamLabel)}</span>` : ''}
+      </span>
     </div>
   `;
 }

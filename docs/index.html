@@ -637,6 +637,62 @@
             box-shadow: 0 8px 20px rgba(236, 72, 153, 0.14);
         }
 
+        .player-name-with-position {
+            display: flex;
+            min-width: 0;
+            align-items: center;
+            gap: 0.4rem;
+        }
+
+        .player-name-with-position > :first-child {
+            min-width: 0;
+        }
+
+        .player-position-pill {
+            display: inline-flex;
+            flex: 0 0 auto;
+            align-items: center;
+            justify-content: center;
+            border-radius: 9999px;
+            padding: 0.2rem 0.42rem;
+            font-size: 0.56rem;
+            font-weight: 950;
+            letter-spacing: 0.08em;
+            line-height: 1;
+            text-transform: uppercase;
+            box-shadow: 0 4px 10px rgba(15, 23, 42, 0.12);
+        }
+
+        .player-position-pill--qb {
+            background: #2563eb;
+            color: #ffffff;
+        }
+
+        .player-position-pill--wr {
+            background: #facc15;
+            color: #422006;
+        }
+
+        .player-position-pill--rb {
+            background: #22c55e;
+            color: #052e16;
+        }
+
+        .player-position-pill--te {
+            background: #f97316;
+            color: #431407;
+        }
+
+        .player-position-pill--def {
+            background: #64748b;
+            color: #ffffff;
+        }
+
+        .player-position-pill--k {
+            background: #dc2626;
+            color: #ffffff;
+        }
+
         .captain-primary-slot[hidden],
         .captain-detail-slot[hidden],
         .captain-picker[hidden] {
@@ -2220,7 +2276,7 @@
     </div>
 
     <div class="bottom-tabs-overlay" aria-label="Primary navigation">
-        <span id="app-version-label" class="app-version-badge" aria-label="App version">App v2026.07.21.6</span>
+        <span id="app-version-label" class="app-version-badge" aria-label="App version">App v2026.07.22.1</span>
         <nav class="bottom-tab-nav" role="tablist" aria-label="App sections">
             <button id="tab-home" type="button" class="bottom-tab-button" role="tab" aria-selected="true" aria-controls="home-panel" data-app-tab="home">
                 <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 11.5L12 4l9 7.5M5.5 10.5V20h13v-9.5M9.5 20v-5h5v5"></path></svg>
