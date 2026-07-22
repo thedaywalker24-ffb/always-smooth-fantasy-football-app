@@ -2,9 +2,9 @@
 
 ## Current Status
 
-* Last completed section: Home Draft Board shortcut prominence; the former outline pill is now a full-width mobile gradient CTA with draft icon, clear label, down arrow, and restrained hover/press feedback.
-* Current section in progress: Apps Script and GitHub Pages/PWA deployment verification for player-position pills and the enhanced Draft Board shortcut.
-* Next recommended task: Deploy the backend and frontend changes, then verify the Draft Board CTA and all six position colors on phone in light/dark mode.
+* Last completed section: Weekly Captain rule tooltip; expanded team tiles now explain the 2× weekly scoring, manual Sleeper adjustment, and once-per-season player restriction.
+* Current section in progress: GitHub Pages/PWA deployment verification for the Captain tooltip and recent Home visual updates.
+* Next recommended task: Publish the frontend changes, then verify the Captain tooltip by tap, keyboard focus, and hover on phone/desktop.
 * Open risks: Hardcoded Apps Script deployment URL, simple JSONP/GET admin and betting write flows, public trust-based bet submission, fragile Google Sheets tab/column dependencies, fixed matchup sheet row offsets, no automated tests, and duplicated/legacy Apps Script paths.
 * Most relevant files: `SKILL.md`, `docs/index.html`, `docs/app.js`, `docs/service-worker.js`, `docs/manifest.webmanifest`, `Code.js`, `index.html`, `.clasp.json`, `.claspignore`.
 
@@ -183,6 +183,7 @@ Draft-board roster ID resolution:
 * `Submitted At` is written as a readable spreadsheet-timezone string, for example `Jun 5, 2026 2:14 PM MST`.
 * One-use-per-season is enforced by rejecting the same `Player ID` for the same `Team Name` in a different week of the same season.
 * Eligible Captain options come from `Team Rosters` rows where `Roster Type` is `Starter`; position/NFL team are enriched from `Sleeper Players` when available.
+* League rule: the selected Captain produces double (`2×`) points for that week. Sleeper does not apply this automatically; the commissioner manually updates the score in Sleeper.
 
 ## Completed Sections / Implemented Features
 
@@ -200,6 +201,7 @@ Draft-board roster ID resolution:
 * Home standings header season/week pills are populated from the `Settings` tab via `api=config`; missing Settings values render as `--` instead of hardcoded season/week numbers.
 * Home and Betting timestamp pills double as refresh buttons to save mobile header space.
 * Home standings cards show weekly Captain state: compact `C` player badge on the primary card when selected, and a fuller Captain card plus starter picker inside the expanded accordion when Captain submissions are open.
+* The expanded Weekly Captain card includes an accessible info tooltip summarizing the 2× scoring rule, manual commissioner adjustment in Sleeper, and once-per-season player restriction.
 * Player positions use shared compact color pills wherever structured position data accompanies a player name: QB blue, WR yellow, RB green, TE orange, DEF gray, and K red. Captain UI and completed draft picks use their existing position fields; Team MVP position is inferred from the `Sleeper Players` Full Name/Position columns.
 * Home ticker tape uses Rotoworld/NBC fantasy football headlines and ESPN public NFL scoreboard data through Apps Script; Feb-Aug renders headlines only, while Sep-Jan alternates two score items with one headline. The Rotoworld fetch tries the requested RSS URL, the page Atom feed, then the server-rendered player-news page as fallback. The HTML fallback parses each `PlayerNewsPost` independently so its headline and share link can appear in either order. The frontend duplicates ticker items in the marquee track for seamless CSS scrolling, pauses animation on hover/focus, and keeps the ticker sticky near the top of the viewport while scrolling the Home screen.
 * Team cards sorted by wins and points for. When `All Matchups` has a complete two-team matchup for a standing team, the Home standings card shows a compact bottom matchup strip with that team's thumbnail + current score, `vs`, the opponent score + thumbnail, and opponent name; teams without an active matchup hide the strip. Home matchup hydration matches either standings team name or standings owner/real name because `All Matchups` currently uses first names in its `Name` column.

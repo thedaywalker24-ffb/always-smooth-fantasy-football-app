@@ -760,6 +760,7 @@
         }
 
         .captain-detail-card {
+            position: relative;
             border: 1px solid rgba(255, 255, 255, 0.22);
             border-radius: 1.15rem;
             background: rgba(255, 255, 255, 0.74);
@@ -800,6 +801,72 @@
             letter-spacing: 0.18em;
             line-height: 1;
             text-transform: uppercase;
+        }
+
+        .captain-kicker-row {
+            display: flex;
+            align-items: center;
+            gap: 0.35rem;
+        }
+
+        .captain-rule-tooltip {
+            display: inline-flex;
+        }
+
+        .captain-rule-tooltip-button {
+            display: inline-flex;
+            width: 1rem;
+            height: 1rem;
+            align-items: center;
+            justify-content: center;
+            border: 1px solid rgba(236, 72, 153, 0.38);
+            border-radius: 9999px;
+            background: rgba(236, 72, 153, 0.1);
+            color: #db2777;
+            font-size: 0.62rem;
+            font-weight: 950;
+            line-height: 1;
+        }
+
+        .dark .captain-rule-tooltip-button {
+            border-color: rgba(244, 114, 182, 0.42);
+            background: rgba(236, 72, 153, 0.16);
+            color: #f9a8d4;
+        }
+
+        .captain-rule-tooltip-button:focus-visible {
+            outline: 2px solid rgba(236, 72, 153, 0.38);
+            outline-offset: 2px;
+        }
+
+        .captain-rule-tooltip-content {
+            position: absolute;
+            z-index: 30;
+            top: 2.45rem;
+            right: 0.8rem;
+            left: 0.8rem;
+            border: 1px solid rgba(236, 72, 153, 0.22);
+            border-radius: 0.85rem;
+            background: rgba(15, 23, 42, 0.96);
+            padding: 0.65rem 0.75rem;
+            color: #ffffff;
+            box-shadow: 0 14px 30px rgba(15, 23, 42, 0.24);
+            font-size: 0.7rem;
+            font-weight: 750;
+            line-height: 1.4;
+            opacity: 0;
+            pointer-events: none;
+            transform: translateY(-4px);
+            visibility: hidden;
+            transition: opacity 0.16s ease, transform 0.16s ease, visibility 0.16s ease;
+        }
+
+        .captain-rule-tooltip:hover .captain-rule-tooltip-content,
+        .captain-rule-tooltip:focus-within .captain-rule-tooltip-content,
+        .captain-rule-tooltip[data-open="true"] .captain-rule-tooltip-content {
+            opacity: 1;
+            transform: translateY(0);
+            visibility: visible;
         }
 
         .captain-detail-name {
@@ -2357,7 +2424,7 @@
     </div>
 
     <div class="bottom-tabs-overlay" aria-label="Primary navigation">
-        <span id="app-version-label" class="app-version-badge" aria-label="App version">App v2026.07.22.2</span>
+        <span id="app-version-label" class="app-version-badge" aria-label="App version">App v2026.07.22.3</span>
         <nav class="bottom-tab-nav" role="tablist" aria-label="App sections">
             <button id="tab-home" type="button" class="bottom-tab-button" role="tab" aria-selected="true" aria-controls="home-panel" data-app-tab="home">
                 <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 11.5L12 4l9 7.5M5.5 10.5V20h13v-9.5M9.5 20v-5h5v5"></path></svg>

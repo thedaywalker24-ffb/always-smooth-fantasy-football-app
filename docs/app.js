@@ -1,5 +1,5 @@
 const API_BASE_URL = 'https://script.google.com/macros/s/AKfycbwtM_NX16wFOHssvhvP2Iw7FI_7YcVgJ9-5DNbvNOblMxifawE4R-F_eiOLU1NsEggF/exec';
-const APP_VERSION = 'v2026.07.22.2';
+const APP_VERSION = 'v2026.07.22.3';
 const FALLBACK_PHOTO = 'https://images.unsplash.com/photo-1540747913346-19e32dc3e97e?q=80&w=600&auto=format&fit=crop';
 const THEME_KEY = 'theme';
 const CONFIG_CACHE_KEY = 'always-smooth-config';
@@ -537,6 +537,7 @@ function renderCaptainDetail(teamCaptain, teamName) {
   const players = Array.isArray(teamCaptain?.eligiblePlayers) ? teamCaptain.eligiblePlayers : [];
   const teamLabel = captain ? getPlayerTeamLabel(captain) : '';
   const pickerId = `captain-picker-${normalizeBettingOptionKey(teamName)}`;
+  const ruleTooltipId = `captain-rule-${normalizeBettingOptionKey(teamName)}`;
   const statusLabel = isOpen ? 'Open' : 'Locked';
 
   return `
@@ -546,7 +547,13 @@ function renderCaptainDetail(teamCaptain, teamName) {
           ? getCaptainImageMarkup(captain, 'captain-detail-photo')
           : '<span class="captain-detail-photo captain-player-fallback" aria-hidden="true">C</span>'}
         <div class="min-w-0 flex-1">
-          <p class="captain-kicker">Weekly Captain</p>
+          <div class="captain-kicker-row">
+            <p class="captain-kicker">Weekly Captain</p>
+            <span class="captain-rule-tooltip" data-captain-rule-tooltip>
+              <button type="button" class="captain-rule-tooltip-button" data-captain-rule-tooltip-button aria-label="Show Weekly Captain rule" aria-expanded="false" aria-controls="${ruleTooltipId}" aria-describedby="${ruleTooltipId}">i</button>
+              <span id="${ruleTooltipId}" class="captain-rule-tooltip-content" role="tooltip">Your Captain scores 2× points for the week. The commissioner applies the bonus manually in Sleeper. Each player can only be used once per season.</span>
+            </span>
+          </div>
           <p class="captain-detail-name player-name-with-position"><span class="truncate">${escapeHtml(captain?.playerName || 'No Captain selected')}</span>${renderPositionPill(captain?.position)}</p>
           ${teamLabel ? `<p class="captain-detail-meta">${escapeHtml(teamLabel)}</p>` : ''}
         </div>
@@ -802,6 +809,12 @@ function setupStandingsAccordion() {
   if (!grid || grid.dataset.accordionBound === 'true') return;
 
   grid.dataset.accordionBound = 'true';
+  const closeCaptainRuleTooltips = () => {
+    grid.querySelectorAll('[data-captain-rule-tooltip][data-open="true"]').forEach((openTooltip) => {
+      openTooltip.dataset.open = 'false';
+      openTooltip.querySelector('[data-captain-rule-tooltip-button]')?.setAttribute('aria-expanded', 'false');
+    });
+  };
   const toggleTile = (tile) => {
     if (!tile) return;
     const shouldExpand = tile.dataset.expanded !== 'true';
@@ -814,6 +827,21 @@ function setupStandingsAccordion() {
   };
 
   grid.addEventListener('click', (event) => {
+    const ruleTooltipButton = event.target.closest('[data-captain-rule-tooltip-button]');
+    if (ruleTooltipButton) {
+      event.preventDefault();
+      event.stopPropagation();
+      const tooltip = ruleTooltipButton.closest('[data-captain-rule-tooltip]');
+      const willOpen = tooltip?.dataset.open !== 'true';
+      closeCaptainRuleTooltips();
+      if (tooltip) tooltip.dataset.open = willOpen ? 'true' : 'false';
+      ruleTooltipButton.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
+      if (!willOpen) ruleTooltipButton.blur();
+      return;
+    }
+
+    closeCaptainRuleTooltips();
+
     const pickerToggle = event.target.closest('[data-captain-toggle-picker]');
     if (pickerToggle) {
       event.preventDefault();
@@ -845,6 +873,16 @@ function setupStandingsAccordion() {
     const tile = event.target.closest('[data-team-tile]');
     if (!tile || event.target.closest('a, button, input, select, textarea, summary')) return;
     toggleTile(tile);
+  });
+
+  grid.addEventListener('keydown', (event) => {
+    if (event.key !== 'Escape') return;
+    closeCaptainRuleTooltips();
+    if (event.target.matches('[data-captain-rule-tooltip-button]')) event.target.blur();
+  });
+
+  document.addEventListener('click', (event) => {
+    if (!grid.contains(event.target)) closeCaptainRuleTooltips();
   });
 }
 
