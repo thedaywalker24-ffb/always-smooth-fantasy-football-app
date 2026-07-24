@@ -1,5 +1,5 @@
 const API_BASE_URL = 'https://script.google.com/macros/s/AKfycbwtM_NX16wFOHssvhvP2Iw7FI_7YcVgJ9-5DNbvNOblMxifawE4R-F_eiOLU1NsEggF/exec';
-const APP_VERSION = 'v2026.07.22.4';
+const APP_VERSION = 'v2026.07.24.1';
 const FALLBACK_PHOTO = 'https://images.unsplash.com/photo-1540747913346-19e32dc3e97e?q=80&w=600&auto=format&fit=crop';
 const THEME_KEY = 'theme';
 const CONFIG_CACHE_KEY = 'always-smooth-config';
@@ -8,6 +8,7 @@ const TICKER_CACHE_KEY = 'always-smooth-ticker-data';
 const DRAFT_BOARD_CACHE_KEY = 'always-smooth-draft-board';
 const MATCHUPS_CACHE_KEY = 'always-smooth-matchups-data';
 const CAPTAIN_CACHE_KEY = 'always-smooth-captain-data';
+const WEEKLY_RECAP_CACHE_KEY = 'always-smooth-weekly-recap-data';
 const BETTING_BET_COUNT = 6;
 const MATCHUPS_TAB_ENABLED = false;
 const DEFAULT_CONFIG = {
@@ -34,6 +35,7 @@ let draftBoardData = null;
 let matchupsData = null;
 let matchupsDataIsStale = false;
 let captainData = null;
+let weeklyRecapData = null;
 let captainDialogTimer = null;
 let selectedBettingMemberRow = null;
 let bettingStatusMessage = '';
@@ -90,6 +92,7 @@ function fetchJsonp(path, params = {}) {
       'api/betting-data': 'betting-data',
       'api/draft-board': 'draft-board',
       'api/matchups-data': 'matchups-data',
+      'api/weekly-recap-data': 'weekly-recap-data',
       'api/captain-data': 'captain-data',
       'api/update-team-field': 'update-team-field',
       'api/submit-bets': 'submit-bets',
@@ -102,6 +105,7 @@ function fetchJsonp(path, params = {}) {
       'ticker-data': 20000,
       'draft-board': 30000,
       'matchups-data': 30000,
+      'weekly-recap-data': 30000,
       'captain-data': 30000,
       'submit-bets': 45000,
       'submit-captain': 45000,
@@ -646,13 +650,145 @@ async function submitCaptainPick(button) {
   }
 }
 
-function buildTeamInsight(team, index, leaderPoints) {
+function buildTeamInsight(team, leaderPoints) {
   const summary = parseRecord(team.record);
   const tiesText = summary.ties ? `, and ${summary.ties} tie${summary.ties === 1 ? '' : 's'}` : '';
-  const gapText = index === 0
+  const isPointsLeader = Math.abs(Number(team.pointsFor || 0) - Number(leaderPoints || 0)) <= 0.005;
+  const gapText = isPointsLeader
     ? 'sets the scoring pace for the league right now.'
     : `is ${formatPointsBehindLeader(team.pointsFor, leaderPoints).replace('-', '')} points off the league lead.`;
   return `${summary.wins} win${summary.wins === 1 ? '' : 's'}, ${summary.losses} loss${summary.losses === 1 ? '' : 'es'}${tiesText} through ${summary.games} game${summary.games === 1 ? '' : 's'} and ${gapText}`;
+}
+
+function getStableWeeklyPhrase(options, seed) {
+  if (!Array.isArray(options) || !options.length) return '';
+  let hash = 0;
+  String(seed || '').split('').forEach((character) => {
+    hash = ((hash * 31) + character.charCodeAt(0)) >>> 0;
+  });
+  return options[hash % options.length];
+}
+
+function formatWeeklyRecapScore(value) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return '0';
+  return numeric.toFixed(2).replace(/\.00$/, '').replace(/(\.\d)0$/, '$1');
+}
+
+function getWeeklyRecapTurkeyLine(turkeyWatch) {
+  const status = String(turkeyWatch || '').trim();
+  if (!status || status.toLowerCase() === 'none') return '';
+  if (status.includes('🦃')) return 'The Turkey shot is complete 🦃.';
+  const strikeCount = (status.match(/❎/g) || []).length;
+  if (strikeCount >= 3) return `Turkey Watch hit ${strikeCount} ❎, so a 🦃 shot is owed.`;
+  if (strikeCount === 2) return 'Turkey Watch sits at 2 ❎—one more triggers a 🦃 shot.';
+  if (strikeCount === 1) return 'Turkey Watch sits at 1 ❎.';
+  return `Turkey Watch: ${status}.`;
+}
+
+function getWeeklyRecapPlayerLine(nonpositiveStarters) {
+  const players = Array.isArray(nonpositiveStarters) ? nonpositiveStarters : [];
+  if (!players.length) return '';
+  if (players.length === 1) {
+    const player = players[0];
+    return `${player.playerName || 'A starter'} scored ${formatWeeklyRecapScore(player.points)} and added a ❎.`;
+  }
+  const names = players.slice(0, 2).map((player) => player.playerName || 'A starter');
+  const playerLabel = players.length === 2
+    ? `${names[0]} and ${names[1]}`
+    : `${names[0]}, ${names[1]}, and ${players.length - 2} more starters`;
+  return `${playerLabel} scored 0 or fewer, adding ${players.length} ❎.`;
+}
+
+function buildFinalizedWeeklyRecapSummary(recap, ownerName, season, week) {
+  const opponent = String(recap?.opponentTeamName || 'their opponent').trim();
+  const teamScore = formatWeeklyRecapScore(recap?.teamScore);
+  const opponentScore = formatWeeklyRecapScore(recap?.opponentScore);
+  const scoreline = `${teamScore}–${opponentScore}`;
+  const seed = `${season}-${week}-${recap?.teamName || ownerName}`;
+  const result = String(recap?.result || '').toLowerCase();
+  const outcomeOptions = result === 'win'
+    ? [
+        `${ownerName} beat ${opponent}, ${scoreline}.`,
+        `${ownerName} took down ${opponent}, ${scoreline}.`,
+        `${ownerName} handled ${opponent}, ${scoreline}.`
+      ]
+    : result === 'tie'
+      ? [
+          `${ownerName} finished even with ${opponent}, ${scoreline}.`,
+          `${ownerName} and ${opponent} could not be separated at ${scoreline}.`
+        ]
+      : [
+          `${ownerName} fell to ${opponent}, ${scoreline}.`,
+          `${ownerName} came up short against ${opponent}, ${scoreline}.`,
+          `${ownerName} took the loss to ${opponent}, ${scoreline}.`
+        ];
+  let outcome = getStableWeeklyPhrase(outcomeOptions, seed);
+  outcome += recap?.beerChugOwed
+    ? ' That was the league low, so a 🍺 chug video is owed.'
+    : ' No 🍺 duty this week.';
+
+  const playerLine = getWeeklyRecapPlayerLine(recap?.nonpositiveStarters);
+  const turkeyLine = getWeeklyRecapTurkeyLine(recap?.turkeyWatch);
+  const mulliganLine = recap?.mulliganAvailable
+    ? 'Mulligan still available.'
+    : 'Mulligan already used.';
+  return [outcome, playerLine, turkeyLine, mulliganLine].filter(Boolean).join(' ');
+}
+
+function buildWeeklyRecapLookup(payload) {
+  const lookup = {};
+  const teams = Array.isArray(payload?.teams) ? payload.teams : [];
+  teams.forEach((team) => {
+    [
+      normalizeClientTeamKey(team?.teamName),
+      normalizeClientTeamKey(team?.managerName)
+    ].filter(Boolean).forEach((key) => {
+      lookup[key] = team;
+    });
+  });
+  return lookup;
+}
+
+function renderWeeklyRecapSummaries(payload) {
+  if (!payload || payload.ok !== true || !Array.isArray(payload.teams)) return;
+  const lookup = buildWeeklyRecapLookup(payload);
+  document.querySelectorAll('[data-team-insight]').forEach((element) => {
+    const recap = [
+      normalizeClientTeamKey(element.dataset.teamInsight),
+      normalizeClientTeamKey(element.dataset.teamInsightOwner)
+    ].map((key) => lookup[key]).find(Boolean);
+    element.textContent = recap
+      ? buildFinalizedWeeklyRecapSummary(
+          recap,
+          element.dataset.teamInsightOwner || recap.managerName || recap.teamName,
+          payload.season,
+          payload.week
+        )
+      : element.dataset.teamInsightFallback || element.textContent;
+  });
+}
+
+async function loadWeeklyRecapData() {
+  const cached = getCachedJson(WEEKLY_RECAP_CACHE_KEY);
+  const configuredSeason = String(getCachedJson(CONFIG_CACHE_KEY)?.leagueSeason || '').trim();
+  const cachedSeason = String(cached?.season || '').trim();
+  if (cached && (!configuredSeason || !cachedSeason || cachedSeason === configuredSeason)) {
+    weeklyRecapData = cached;
+    renderWeeklyRecapSummaries(cached);
+  }
+
+  try {
+    const payload = await fetchJsonp('api/weekly-recap-data');
+    if (!payload || payload.ok !== true) {
+      throw new Error(payload?.error || 'Weekly recap data could not be loaded.');
+    }
+    weeklyRecapData = payload;
+    setCachedJson(WEEKLY_RECAP_CACHE_KEY, payload);
+    renderWeeklyRecapSummaries(payload);
+  } catch (error) {
+    console.warn('Finalized weekly recaps could not be loaded.', error);
+  }
 }
 
 function renderAnnouncement(payload) {
@@ -669,7 +805,7 @@ function renderAnnouncement(payload) {
 function renderTeams(payload, isStale = false) {
   const grid = document.getElementById('standings-grid');
   const teams = Array.isArray(payload?.teams) ? payload.teams : [];
-  const leaderPoints = Number(teams[0]?.pointsFor || 0);
+  const leaderPoints = teams.reduce((leader, team) => Math.max(leader, Number(team?.pointsFor || 0)), 0);
   document.getElementById('updated-at').textContent = formatCompactTimestamp(payload?.updatedAt);
   renderAnnouncement(payload);
 
@@ -700,7 +836,7 @@ function renderTeams(payload, isStale = false) {
     const beerTrophies = beerTrophiesValue || 'None';
     const mulliganLabel = team.mulligan ? '✅' : '❎';
     const teamPanelId = `team-panel-${index}`;
-    const teamInsight = buildTeamInsight(team, index, leaderPoints);
+    const teamInsight = buildTeamInsight(team, leaderPoints);
     const teamExpandCardStyle = sleeperTeamImageUrl
       ? `style="background-image: url('${sleeperTeamImageUrl.replace(/'/g, '%27')}');"`
       : '';
@@ -757,7 +893,7 @@ function renderTeams(payload, isStale = false) {
                     <p class="text-base font-black text-slate-950 dark:text-white">${escapeHtml(beerTrophies)}</p>
                   </div>
                 </div>
-                <p class="pt-4 text-xs font-semibold leading-relaxed text-slate-600 dark:text-white/80">${ownerName} has ${teamInsight}</p>
+                <p class="pt-4 text-xs font-semibold leading-relaxed text-slate-600 dark:text-white/80" data-team-insight="${escapeHtml(team.teamName)}" data-team-insight-owner="${escapeHtml(ownerName)}" data-team-insight-fallback="${escapeHtml(`${ownerName} has ${teamInsight}`)}">${escapeHtml(`${ownerName} has ${teamInsight}`)}</p>
                 </div>
               </div>
             </div>
@@ -784,6 +920,9 @@ function renderTeams(payload, isStale = false) {
   }
   if (captainData) {
     renderCaptainSummaries(captainData);
+  }
+  if (weeklyRecapData) {
+    renderWeeklyRecapSummaries(weeklyRecapData);
   }
 
   if (isStale) {
@@ -2587,6 +2726,7 @@ async function bootstrap() {
     await loadStandings();
     loadHomeMatchupsData();
     loadCaptainData();
+    loadWeeklyRecapData();
   });
   applyConfig(DEFAULT_CONFIG);
   loadTickerData();
@@ -2601,6 +2741,7 @@ async function bootstrap() {
   await loadStandings();
   loadHomeMatchupsData();
   loadCaptainData();
+  loadWeeklyRecapData();
   loadDraftBoardData();
   await dismissSplash();
 }

@@ -2,9 +2,9 @@
 
 ## Current Status
 
-* Last completed section: In-app League Rules reference; Home now has a compact Rules pill that opens an accessible mobile sheet/desktop modal with one-at-a-time constitution accordions and a link to the source Google Doc.
-* Current section in progress: GitHub Pages/PWA deployment verification for the Rules sheet and recent Home visual updates.
-* Next recommended task: Publish the frontend changes, then verify Rules opening, accordion behavior, keyboard focus, dark mode, and the source-document link on phone/desktop.
+* Last completed section: Commissioner-finalized weekly team recaps; Home team summaries now cover the latest finalized matchup result, league-low beer duty, nonpositive starters/strikes, Turkey Watch, and mulligan availability.
+* Current section in progress: Apps Script and GitHub Pages/PWA deployment verification for weekly recaps and the recent Home updates.
+* Next recommended task: Publish the backend before the frontend, finalize one completed week from the spreadsheet menu, then verify all active team recap summaries on phone/desktop.
 * Open risks: Hardcoded Apps Script deployment URL, simple JSONP/GET admin and betting write flows, public trust-based bet submission, fragile Google Sheets tab/column dependencies, fixed matchup sheet row offsets, no automated tests, and duplicated/legacy Apps Script paths.
 * Most relevant files: `SKILL.md`, `docs/index.html`, `docs/app.js`, `docs/service-worker.js`, `docs/manifest.webmanifest`, `Code.js`, `index.html`, `.clasp.json`, `.claspignore`.
 
@@ -52,6 +52,7 @@ Current routes handled by `Code.js#doGet`:
 * `api=betting-data` / `betting-data`: weekly betting prompts, members, current picks, results, input option metadata from `App Data Collection`, and the current offseason/in-season mode used for leaderboard visibility.
 * `api=draft-board` / `draft-board`: upcoming rookie draft board payload compiled from Sleeper draft metadata, traded picks, optional selected picks, and `Rosters & Records` roster ID mappings.
 * `api=matchups-data` / `matchups-data`: matchup tile payload grouped from the `All Matchups` sheet by `Matchup ID`; incomplete groups are excluded.
+* `api=weekly-recap-data` / `weekly-recap-data`: latest commissioner-finalized recap snapshot for the configured season from `Weekly Recaps`.
 * `api=captain-data` / `captain-data`: weekly Captain open/closed state, current Captain picks, eligible current starters, and season-used Captain history from `Weekly Captains` plus `Team Rosters`.
 * `api=submit-bets` / `submit-bets`: public league-member betting write route limited to `App Data Collection!B2:G11`.
 * `api=submit-captain` / `submit-captain`: public weekly Captain write route that upserts one Captain per `Season + Week + Team Name`.
@@ -73,6 +74,7 @@ Known tabs and dependencies:
 * `Sleeper Players`: player lookup data for roster population.
 * `Team Rosters`: generated roster output.
 * `Weekly Captains`: auditable weekly Captain picks written by the app.
+* `Weekly Recaps`: generated, auditable season/week snapshots used by Home team summaries.
 * `Draft Results`: generated draft pick output.
 * `Upcoming Draft Board`: generated offseason rookie draft board snapshot written by the Apps Script menu action `Build Upcoming Draft Board`.
 * `App Data Collection`: weekly betting prompts, member picks, results, input mappings, option banks, and helper-cleared submission range.
@@ -206,6 +208,7 @@ Draft-board roster ID resolution:
 * Player positions use shared compact color pills wherever structured position data accompanies a player name: QB blue, WR yellow, RB green, TE orange, DEF gray, and K red. Captain UI and completed draft picks use their existing position fields; Team MVP position is inferred from the `Sleeper Players` Full Name/Position columns.
 * Home ticker tape uses Rotoworld/NBC fantasy football headlines and ESPN public NFL scoreboard data through Apps Script; Feb-Aug renders headlines only, while Sep-Jan alternates two score items with one headline. The Rotoworld fetch tries the requested RSS URL, the page Atom feed, then the server-rendered player-news page as fallback. The HTML fallback parses each `PlayerNewsPost` independently so its headline and share link can appear in either order. The frontend duplicates ticker items in the marquee track for seamless CSS scrolling, pauses animation on hover/focus, and keeps the ticker sticky near the top of the viewport while scrolling the Home screen.
 * Team cards sorted by wins and points for. When `All Matchups` has a complete two-team matchup for a standing team, the Home standings card shows a compact bottom matchup strip with that team's thumbnail + current score, `vs`, the opponent score + thumbnail, and opponent name; teams without an active matchup hide the strip. Home matchup hydration matches either standings team name or standings owner/real name because `All Matchups` currently uses first names in its `Name` column.
+* Expanded team-card summaries retain their standings-based fallback until the commissioner runs `Finalize Weekly Recap` after scores are final. The latest finalized season/week snapshot then supplies a stable, varied matchup result sentence plus league-low 🍺 duty, each starting player at `0` or below and its ❎, current Turkey Watch status, and whether the mulligan remains available. Re-running finalization for the same week replaces that snapshot rather than duplicating it.
 * Expandable standings cards with supplemental stats: team MVP, mulligan, turkey watch, beer trophies, background team image, and manager photo; trophies display inline with the manager name.
 * Expanded team-card detail panels use a light glass overlay in light mode and a darker cinematic overlay in dark mode.
 * Press-and-hold admin edit for `Beer Trophies`, writing to `Teams` column S after Apps Script admin-code validation.
@@ -246,16 +249,16 @@ Draft-board roster ID resolution:
 
 ## Likely Current Priorities
 
-* Finish verifying and publishing the current Betting tab polish on GitHub Pages/PWA.
-* Build weekly matchups in the GitHub Pages frontend from existing Apps Script/spreadsheet data.
+* Publish and verify the weekly recap backend/frontend flow.
+* Finalize a completed test week and compare recap outcomes against Sleeper and the Teams sheet.
 * Continue expanding the weekly betting workflow only within the existing Google Sheets-backed contract.
 * Reduce fragile sheet assumptions where practical and document the rest.
 
 ## Recommended Next 3 Steps
 
-1. Publish GitHub Pages and verify the Android PWA picks up the latest service worker/cache version.
-2. Test the compact Betting member picker, tile accent, team-option avatar dropdown, and a normal submission flow on phone.
-3. Build the next frontend section, likely weekly matchups, using existing Apps Script/spreadsheet data.
+1. Push and redeploy Apps Script, then publish GitHub Pages and verify the PWA reports app version `v2026.07.24.1`.
+2. After a week is final, update Turkey Watch/mulligan values as needed and run `Always Smooth League > Finalize Weekly Recap`.
+3. Compare every active team's recap with the final Sleeper matchup, including a league-low tie and any `0`/negative starter edge cases.
 
 ## Notes For Future Sessions
 

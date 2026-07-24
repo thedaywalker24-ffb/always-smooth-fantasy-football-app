@@ -18,6 +18,7 @@ function onOpen(e) {
     // .addItem('Click to refresh Team Records', 'getSleeperStandings')
     .addItem('Refresh Team Rosters', 'fetchAndPopulateRosters')
     .addItem('Refresh Matchups', 'fetchMatchupData')
+    .addItem('Finalize Weekly Recap', 'finalizeWeeklyRecap')
     .addItem('Retrieve Draft Data', 'fetchDraftPicksData')
     .addItem('Build Upcoming Draft Board', 'buildUpcomingDraftBoardSheet')
     .addItem('Fetch Player Data', 'fetchSleeperPlayers')
@@ -96,6 +97,27 @@ const WEEKLY_CAPTAINS_HEADERS = [
   'NFL Team',
   'Player Image URL',
   'Submitted At'
+];
+/** Sheet tab containing commissioner-finalized weekly outcomes for Home recaps */
+const WEEKLY_RECAPS_SHEET = 'Weekly Recaps';
+const WEEKLY_RECAPS_HEADERS = [
+  'Season',
+  'Week',
+  'Roster ID',
+  'Team Name',
+  'Manager Name',
+  'Matchup ID',
+  'Opponent Roster ID',
+  'Opponent Team Name',
+  'Team Score',
+  'Opponent Score',
+  'Result',
+  'League Low Score',
+  'Beer Chug Owed',
+  'Nonpositive Starters JSON',
+  'Turkey Watch',
+  'Mulligan Available',
+  'Finalized At'
 ];
 /** 0-based column index when "Streak" header is missing (column G) */
 const ROSTERS_STREAK_COL_FALLBACK = 6;
@@ -1498,6 +1520,7 @@ function buildSleeperPlayerInfoMap_(spreadsheet) {
   if (values.length < 2) return map;
   var headers = values[0].map(normalizeBettingOptionKey_);
   var playerIdCol = headers.indexOf(normalizeBettingOptionKey_('Player ID'));
+  var fullNameCol = headers.indexOf(normalizeBettingOptionKey_('Full Name'));
   var positionCol = headers.indexOf(normalizeBettingOptionKey_('Position'));
   var teamCol = headers.indexOf(normalizeBettingOptionKey_('Team'));
   if (playerIdCol === -1) return map;
@@ -1506,6 +1529,7 @@ function buildSleeperPlayerInfoMap_(spreadsheet) {
     var playerId = getDisplayCell_(values[r], playerIdCol);
     if (!playerId) continue;
     map[playerId] = {
+      playerName: getDisplayCell_(values[r], fullNameCol),
       position: getDisplayCell_(values[r], positionCol),
       nflTeam: getDisplayCell_(values[r], teamCol)
     };
@@ -2580,6 +2604,336 @@ function getMatchupsData_(spreadsheet) {
 }
 
 /**
+ * Creates the finalized weekly recap sheet when needed and repairs its header row.
+ * @param {GoogleAppsScript.Spreadsheet.Spreadsheet} spreadsheet
+ * @return {GoogleAppsScript.Spreadsheet.Sheet}
+ */
+function ensureWeeklyRecapsSheet_(spreadsheet) {
+  var sheet = spreadsheet.getSheetByName(WEEKLY_RECAPS_SHEET);
+  if (!sheet) sheet = spreadsheet.insertSheet(WEEKLY_RECAPS_SHEET);
+
+  var headerRange = sheet.getRange(1, 1, 1, WEEKLY_RECAPS_HEADERS.length);
+  var headers = headerRange.getDisplayValues()[0];
+  var headersMatch = WEEKLY_RECAPS_HEADERS.every(function (header, index) {
+    return normalizeBettingOptionKey_(headers[index]) === normalizeBettingOptionKey_(header);
+  });
+  if (!headersMatch) {
+    headerRange.setValues([WEEKLY_RECAPS_HEADERS]).setFontWeight('bold');
+    sheet.setFrozenRows(1);
+    sheet.autoResizeColumns(1, WEEKLY_RECAPS_HEADERS.length);
+  }
+  return sheet;
+}
+
+/**
+ * Converts one Sleeper matchup roster entry into a finalized recap record.
+ * @param {Object} item
+ * @param {Object} opponent
+ * @param {Object<string, Object>} ownersByRosterId
+ * @param {Object<string, Object>} playerInfoById
+ * @param {Object<string, Object>} teamsSheetDataByKey
+ * @param {number} leagueLowScore
+ * @return {Object}
+ */
+function buildFinalizedWeeklyRecapTeam_(
+  item,
+  opponent,
+  ownersByRosterId,
+  playerInfoById,
+  teamsSheetDataByKey,
+  leagueLowScore
+) {
+  var rosterId = normalizeSleeperRosterId_(item.roster_id);
+  var opponentRosterId = normalizeSleeperRosterId_(opponent.roster_id);
+  var owner = resolveDraftOwner_(ownersByRosterId, rosterId);
+  var opponentOwner = resolveDraftOwner_(ownersByRosterId, opponentRosterId);
+  var teamScore = Number(item.points || 0);
+  var opponentScore = Number(opponent.points || 0);
+  var scoreGap = teamScore - opponentScore;
+  var result = Math.abs(scoreGap) <= 0.005 ? 'tie' : scoreGap > 0 ? 'win' : 'loss';
+  var starters = Array.isArray(item.starters) ? item.starters : [];
+  var starterPoints = Array.isArray(item.starters_points) ? item.starters_points : [];
+  var nonpositiveStarters = [];
+
+  starters.forEach(function (playerId, index) {
+    var normalizedPlayerId = String(playerId || '').trim();
+    if (!normalizedPlayerId || normalizedPlayerId === '0') return;
+    var points = Number(starterPoints[index] || 0);
+    if (points > 0) return;
+    var playerInfo = playerInfoById[normalizedPlayerId] || {};
+    nonpositiveStarters.push({
+      playerId: normalizedPlayerId,
+      playerName: playerInfo.playerName || 'Player ' + normalizedPlayerId,
+      position: playerInfo.position || '',
+      nflTeam: playerInfo.nflTeam || '',
+      points: Math.round(points * 100) / 100
+    });
+  });
+
+  var teamKey = normalizeTeamNameKey_(owner.teamName);
+  var supplemental = teamKey ? teamsSheetDataByKey[teamKey] : null;
+  return {
+    rosterId: rosterId,
+    teamName: owner.teamName || 'Roster ' + rosterId,
+    managerName: owner.managerName || '',
+    matchupId: String(item.matchup_id || '').trim(),
+    opponentRosterId: opponentRosterId,
+    opponentTeamName: opponentOwner.teamName || 'Roster ' + opponentRosterId,
+    teamScore: Math.round(teamScore * 100) / 100,
+    opponentScore: Math.round(opponentScore * 100) / 100,
+    result: result,
+    leagueLowScore: Math.round(leagueLowScore * 100) / 100,
+    beerChugOwed: Math.abs(teamScore - leagueLowScore) <= 0.005,
+    nonpositiveStarters: nonpositiveStarters,
+    turkeyWatch: supplemental && supplemental.turkeyWatch ? supplemental.turkeyWatch : '',
+    mulliganAvailable: !!(supplemental && supplemental.mulligan === true)
+  };
+}
+
+/**
+ * Fetches the configured week's final Sleeper matchup data and replaces that
+ * season/week snapshot in Weekly Recaps. Re-running is idempotent.
+ * @param {GoogleAppsScript.Spreadsheet.Spreadsheet} spreadsheet
+ * @return {Object}
+ */
+function finalizeWeeklyRecap_(spreadsheet) {
+  if (!spreadsheet) throw new Error('No spreadsheet is available.');
+  var season = getLeagueSeason_(spreadsheet);
+  var week = getLeagueWeek_(spreadsheet);
+  var leagueId = getLeagueId_(spreadsheet);
+  if (!season || !week) throw new Error('Settings season and week are required.');
+  if (!leagueId) throw new Error('Settings league ID is required.');
+
+  var url = 'https://api.sleeper.app/v1/league/' + encodeURIComponent(leagueId) +
+    '/matchups/' + encodeURIComponent(week);
+  var sleeperMatchups = fetchSleeperJson_(url);
+  if (!Array.isArray(sleeperMatchups) || !sleeperMatchups.length) {
+    throw new Error('Sleeper returned no matchup data for Week ' + week + '.');
+  }
+
+  var groups = {};
+  sleeperMatchups.forEach(function (item) {
+    var matchupId = String(item && item.matchup_id || '').trim();
+    if (!matchupId) return;
+    if (!groups[matchupId]) groups[matchupId] = [];
+    groups[matchupId].push(item);
+  });
+
+  var completeGroups = Object.keys(groups).map(function (matchupId) {
+    return groups[matchupId];
+  }).filter(function (teams) {
+    return teams.length === 2;
+  });
+  if (!completeGroups.length) {
+    throw new Error('No complete two-team matchups were available for Week ' + week + '.');
+  }
+
+  var activeTeams = [];
+  completeGroups.forEach(function (teams) {
+    activeTeams.push(teams[0], teams[1]);
+  });
+  var leagueLowScore = activeTeams.reduce(function (lowest, item) {
+    return Math.min(lowest, Number(item.points || 0));
+  }, Infinity);
+
+  var ownersByRosterId = buildRosterIdDisplayLookup_(spreadsheet).byRosterId;
+  var playerInfoById = buildSleeperPlayerInfoMap_(spreadsheet);
+  var teamsSheetDataByKey = buildTeamsSheetDataMap_(spreadsheet).map;
+  var finalizedAt = new Date().toISOString();
+  var recapTeams = [];
+  completeGroups.forEach(function (teams) {
+    recapTeams.push(buildFinalizedWeeklyRecapTeam_(
+      teams[0],
+      teams[1],
+      ownersByRosterId,
+      playerInfoById,
+      teamsSheetDataByKey,
+      leagueLowScore
+    ));
+    recapTeams.push(buildFinalizedWeeklyRecapTeam_(
+      teams[1],
+      teams[0],
+      ownersByRosterId,
+      playerInfoById,
+      teamsSheetDataByKey,
+      leagueLowScore
+    ));
+  });
+
+  var newRows = recapTeams.map(function (team) {
+    return [
+      season,
+      week,
+      team.rosterId,
+      team.teamName,
+      team.managerName,
+      team.matchupId,
+      team.opponentRosterId,
+      team.opponentTeamName,
+      team.teamScore,
+      team.opponentScore,
+      team.result,
+      team.leagueLowScore,
+      team.beerChugOwed,
+      JSON.stringify(team.nonpositiveStarters),
+      team.turkeyWatch,
+      team.mulliganAvailable,
+      finalizedAt
+    ];
+  });
+
+  var sheet = ensureWeeklyRecapsSheet_(spreadsheet);
+  var existingRows = sheet.getLastRow() > 1
+    ? sheet.getRange(2, 1, sheet.getLastRow() - 1, WEEKLY_RECAPS_HEADERS.length).getValues()
+    : [];
+  var retainedRows = existingRows.filter(function (row) {
+    return String(row[0] || '').trim() !== String(season) ||
+      String(row[1] || '').trim() !== String(week);
+  });
+  var combinedRows = retainedRows.concat(newRows);
+  combinedRows.sort(function (a, b) {
+    var seasonOrder = String(a[0] || '').localeCompare(String(b[0] || ''), undefined, { numeric: true });
+    if (seasonOrder) return seasonOrder;
+    var weekOrder = Number(a[1] || 0) - Number(b[1] || 0);
+    if (weekOrder) return weekOrder;
+    return String(a[3] || '').localeCompare(String(b[3] || ''));
+  });
+
+  if (sheet.getLastRow() > 1) {
+    sheet.getRange(2, 1, sheet.getLastRow() - 1, WEEKLY_RECAPS_HEADERS.length).clearContent();
+  }
+  if (combinedRows.length) {
+    sheet.getRange(2, 1, combinedRows.length, WEEKLY_RECAPS_HEADERS.length).setValues(combinedRows);
+    sheet.getRange(2, 9, combinedRows.length, 2).setNumberFormat('0.00');
+    sheet.getRange(2, 12, combinedRows.length, 1).setNumberFormat('0.00');
+  }
+  sheet.autoResizeColumns(1, WEEKLY_RECAPS_HEADERS.length);
+  SpreadsheetApp.flush();
+
+  return {
+    ok: true,
+    sheetName: WEEKLY_RECAPS_SHEET,
+    season: season,
+    week: week,
+    teamCount: recapTeams.length,
+    matchupCount: completeGroups.length,
+    leagueLowScore: Math.round(leagueLowScore * 100) / 100,
+    finalizedAt: finalizedAt
+  };
+}
+
+/**
+ * Spreadsheet-menu wrapper for finalized weekly recap snapshots.
+ * @return {Object}
+ */
+function finalizeWeeklyRecap() {
+  var spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+  try {
+    var result = finalizeWeeklyRecap_(spreadsheet);
+    Browser.msgBox(
+      'Weekly recap finalized for ' + result.season + ' Week ' + result.week +
+      ' with ' + result.teamCount + ' active teams.'
+    );
+    return result;
+  } catch (error) {
+    Browser.msgBox('Weekly recap could not be finalized: ' + (error.message || String(error)));
+    throw error;
+  }
+}
+
+/**
+ * Returns the latest finalized weekly recap for the configured season.
+ * @param {GoogleAppsScript.Spreadsheet.Spreadsheet} spreadsheet
+ * @return {Object}
+ */
+function getWeeklyRecapData_(spreadsheet) {
+  var empty = function () {
+    return {
+      ok: true,
+      sheetName: WEEKLY_RECAPS_SHEET,
+      season: getLeagueSeason_(spreadsheet),
+      week: '',
+      teams: [],
+      updatedAt: new Date().toISOString()
+    };
+  };
+  if (!spreadsheet) return empty();
+
+  var sheet = spreadsheet.getSheetByName(WEEKLY_RECAPS_SHEET);
+  if (!sheet || sheet.getLastRow() < 2) return empty();
+  var lastCol = Math.max(sheet.getLastColumn(), WEEKLY_RECAPS_HEADERS.length);
+  var values = sheet.getRange(1, 1, sheet.getLastRow(), lastCol).getDisplayValues();
+  var headers = values[0].map(normalizeBettingOptionKey_);
+  var col = function (header) {
+    return headers.indexOf(normalizeBettingOptionKey_(header));
+  };
+  var requiredHeaders = ['Season', 'Week', 'Team Name', 'Opponent Team Name', 'Team Score', 'Opponent Score'];
+  var missing = requiredHeaders.filter(function (header) {
+    return col(header) === -1;
+  });
+  if (missing.length) {
+    return {
+      ok: false,
+      error: WEEKLY_RECAPS_SHEET + ' is missing headers: ' + missing.join(', ') + '.',
+      teams: [],
+      updatedAt: new Date().toISOString()
+    };
+  }
+
+  var configuredSeason = getLeagueSeason_(spreadsheet);
+  var rows = values.slice(1).filter(function (row) {
+    return getDisplayCell_(row, col('Season')) &&
+      (!configuredSeason || getDisplayCell_(row, col('Season')) === String(configuredSeason));
+  });
+  if (!rows.length) return empty();
+
+  var latestWeek = rows.reduce(function (latest, row) {
+    var candidate = Number(getDisplayCell_(row, col('Week')) || 0);
+    return candidate > latest ? candidate : latest;
+  }, 0);
+  var latestRows = rows.filter(function (row) {
+    return Number(getDisplayCell_(row, col('Week')) || 0) === latestWeek;
+  });
+  var latestFinalizedAt = '';
+  var teams = latestRows.map(function (row) {
+    var nonpositiveStarters = [];
+    try {
+      nonpositiveStarters = JSON.parse(getDisplayCell_(row, col('Nonpositive Starters JSON')) || '[]');
+    } catch (error) {
+      nonpositiveStarters = [];
+    }
+    var finalizedAt = getDisplayCell_(row, col('Finalized At'));
+    if (finalizedAt > latestFinalizedAt) latestFinalizedAt = finalizedAt;
+    return {
+      rosterId: getDisplayCell_(row, col('Roster ID')),
+      teamName: getDisplayCell_(row, col('Team Name')),
+      managerName: getDisplayCell_(row, col('Manager Name')),
+      matchupId: getDisplayCell_(row, col('Matchup ID')),
+      opponentRosterId: getDisplayCell_(row, col('Opponent Roster ID')),
+      opponentTeamName: getDisplayCell_(row, col('Opponent Team Name')),
+      teamScore: Number(getDisplayCell_(row, col('Team Score')) || 0),
+      opponentScore: Number(getDisplayCell_(row, col('Opponent Score')) || 0),
+      result: getDisplayCell_(row, col('Result')),
+      leagueLowScore: Number(getDisplayCell_(row, col('League Low Score')) || 0),
+      beerChugOwed: normalizeBooleanCell_(getDisplayCell_(row, col('Beer Chug Owed'))),
+      nonpositiveStarters: Array.isArray(nonpositiveStarters) ? nonpositiveStarters : [],
+      turkeyWatch: getDisplayCell_(row, col('Turkey Watch')),
+      mulliganAvailable: normalizeBooleanCell_(getDisplayCell_(row, col('Mulligan Available'))),
+      finalizedAt: finalizedAt
+    };
+  });
+
+  return {
+    ok: true,
+    sheetName: WEEKLY_RECAPS_SHEET,
+    season: configuredSeason || getDisplayCell_(latestRows[0], col('Season')),
+    week: String(latestWeek),
+    teams: teams,
+    updatedAt: latestFinalizedAt || new Date().toISOString()
+  };
+}
+
+/**
  * @param {string} url
  * @return {*}
  */
@@ -2959,6 +3313,10 @@ function doGet(e) {
 
   if (path === 'matchups-data' || path === 'api/matchups-data' || apiName === 'matchups-data') {
     return createApiOutput_(getMatchupsData_(spreadsheet), callbackName);
+  }
+
+  if (path === 'weekly-recap-data' || path === 'api/weekly-recap-data' || apiName === 'weekly-recap-data') {
+    return createApiOutput_(getWeeklyRecapData_(spreadsheet), callbackName);
   }
 
   if (path === 'captain-data' || path === 'api/captain-data' || apiName === 'captain-data') {
