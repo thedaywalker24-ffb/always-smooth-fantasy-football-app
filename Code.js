@@ -1236,6 +1236,46 @@ function buildBettingSeasonTotals_(spreadsheet) {
 }
 
 /**
+ * Resolves a Betting member label to a stable Sleeper roster identity. Exact
+ * team/manager matches win; unique first-name/prefix matches are a fallback.
+ * @param {string} memberName
+ * @param {Object<string, Object>} ownersByRosterId
+ * @return {{rosterId: string, profileKey: string}}
+ */
+function resolveBettingMemberIdentity_(memberName, ownersByRosterId) {
+  var memberKey = normalizeBettingOptionKey_(memberName);
+  if (!memberKey) return { rosterId: '', profileKey: '' };
+  var exactMatches = [];
+  var prefixMatches = [];
+
+  Object.keys(ownersByRosterId || {}).forEach(function (rosterId) {
+    var owner = ownersByRosterId[rosterId] || {};
+    var aliases = [owner.teamName, owner.managerName]
+      .map(normalizeBettingOptionKey_)
+      .filter(Boolean);
+    if (aliases.indexOf(memberKey) !== -1) {
+      exactMatches.push(rosterId);
+      return;
+    }
+    if (aliases.some(function (alias) {
+      return alias.indexOf(memberKey) === 0 || memberKey.indexOf(alias) === 0;
+    })) {
+      prefixMatches.push(rosterId);
+    }
+  });
+
+  var matches = exactMatches.length ? exactMatches : prefixMatches;
+  var uniqueMatches = matches.filter(function (rosterId, index) {
+    return matches.indexOf(rosterId) === index;
+  });
+  var resolvedRosterId = uniqueMatches.length === 1 ? uniqueMatches[0] : '';
+  return {
+    rosterId: resolvedRosterId,
+    profileKey: resolvedRosterId ? 'roster:' + resolvedRosterId : ''
+  };
+}
+
+/**
  * @param {GoogleAppsScript.Spreadsheet.Spreadsheet} spreadsheet
  * @return {Object}
  */
@@ -1273,6 +1313,7 @@ function getBettingData_(spreadsheet) {
         return String(value || '').trim();
       });
     var members = [];
+    var ownersByRosterId = buildRosterIdDisplayLookup_(spreadsheet, false).byRosterId;
 
     for (var r = 0; r < BETTING_MEMBER_COUNT; r++) {
       var name = String(membersRaw[r][0] || '').trim();
@@ -1287,9 +1328,12 @@ function getBettingData_(spreadsheet) {
         seasonTotals.byKey[memberKey] !== undefined
           ? seasonTotals.byKey[memberKey]
           : (seasonTotals.byIndex[r] || '');
+      var identity = resolveBettingMemberIdentity_(name, ownersByRosterId);
       members.push({
         row: BETTING_MEMBER_START_ROW + r,
         name: name,
+        rosterId: identity.rosterId,
+        profileKey: identity.profileKey,
         photoUrl: photoUrl,
         seasonBetsWon: seasonBetsWon,
         picks: picks,
@@ -1939,10 +1983,12 @@ function fetchSleeperJson_(url) {
 
 /**
  * @param {GoogleAppsScript.Spreadsheet.Spreadsheet} spreadsheet
+ * @param {boolean} [includePhotos=true]
  * @return {{byRosterId: Object<string, Object>, diagnostics: Object}}
  */
-function buildRosterIdDisplayLookup_(spreadsheet) {
+function buildRosterIdDisplayLookup_(spreadsheet, includePhotos) {
   var byRosterId = {};
+  var shouldIncludePhotos = includePhotos !== false;
   var diagnostics = {
     sheetFound: false,
     rosterRows: 0,
@@ -1972,7 +2018,7 @@ function buildRosterIdDisplayLookup_(spreadsheet) {
     return { byRosterId: byRosterId, diagnostics: diagnostics };
   }
 
-  var teamsSheetData = buildTeamsSheetDataMap_(spreadsheet).map;
+  var teamsSheetData = shouldIncludePhotos ? buildTeamsSheetDataMap_(spreadsheet).map : {};
   var rows = sheet.getRange(2, 1, lastRow - 1, lastCol).getValues();
   diagnostics.rosterRows = rows.length;
 
@@ -1985,14 +2031,16 @@ function buildRosterIdDisplayLookup_(spreadsheet) {
     var managerName = displayNameCol >= 0 ? String(row[displayNameCol] || '').trim() : '';
     var teamKey = normalizeTeamNameKey_(teamName);
     var teamSheetData = teamKey ? teamsSheetData[teamKey] : null;
-    var rawPhoto =
-      teamSheetData && teamSheetData.managerPhotoUrl
+    var rawPhoto = '';
+    if (shouldIncludePhotos) {
+      rawPhoto = teamSheetData && teamSheetData.managerPhotoUrl
         ? teamSheetData.managerPhotoUrl
         : teamAvatarCol >= 0 && looksLikePhotoUrl_(row[teamAvatarCol])
           ? String(row[teamAvatarCol]).trim()
           : userAvatarCol >= 0 && looksLikePhotoUrl_(row[userAvatarCol])
             ? String(row[userAvatarCol]).trim()
             : '';
+    }
 
     byRosterId[rosterId] = {
       rosterId: rosterId,
@@ -3649,6 +3697,7 @@ function getLeagueData(includeDiagnostics) {
 
     const headers = rosterSheet.getRange(1, 1, 1, lastCol).getValues()[0];
     const teamNameCol = headers.indexOf('Team Name');
+    const rosterIdCol = headers.indexOf('Roster ID');
     const realNameCol = findRostersDisplayNameColumn_(headers);
     const recordCol = headers.indexOf('W-L Record');
     const streakCol =
@@ -3676,6 +3725,10 @@ function getLeagueData(includeDiagnostics) {
 
       const teamName = String(rawTeamName).trim();
       const teamKey = normalizeTeamNameKey_(teamName);
+      const rosterId =
+        rosterIdCol >= 0 && rosterIdCol < row.length
+          ? normalizeSleeperRosterId_(row[rosterIdCol])
+          : '';
       const rawRealName = realNameCol >= 0 && realNameCol < row.length ? row[realNameCol] : '';
       const rawRecord = row[recordCol];
       const rawStreak = streakCol >= 0 && streakCol < row.length ? row[streakCol] : '';
@@ -3723,6 +3776,10 @@ function getLeagueData(includeDiagnostics) {
       teams.push({
         teamName: teamName,
         realName: realName,
+        rosterId: rosterId,
+        profileKey: rosterId
+          ? 'roster:' + rosterId
+          : 'owner:' + normalizeBettingOptionKey_(realName || teamName),
         record: record,
         streak: streak,
         pointsFor: Math.round(pointsFor * 100) / 100,

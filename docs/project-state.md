@@ -2,9 +2,9 @@
 
 ## Current Status
 
-* Last completed section: Historical player-level matchup scoring; matchup refresh/finalization now records starter and bench output in `Matchup Player Scores` and marks zero/negative starters with ❎.
-* Current section in progress: Apps Script and GitHub Pages/PWA deployment verification for player scores, weekly recaps, and the recent Home updates.
-* Next recommended task: Publish the backend before the frontend, then use a completed week to verify the player ledger and finalized team recap summaries.
+* Last completed section: Remembered device profile; first-time visitors choose their team, which is then pinned and highlighted in Standings and Betting without changing its true league rank.
+* Current section in progress: Apps Script and GitHub Pages/PWA deployment verification for remembered profiles, player scores, weekly recaps, and recent Home updates.
+* Next recommended task: Publish the backend before the frontend, then verify first-visit selection, persistence, team switching, and cross-view pinning on phone/desktop.
 * Open risks: Hardcoded Apps Script deployment URL, simple JSONP/GET admin and betting write flows, public trust-based bet submission, fragile Google Sheets tab/column dependencies, fixed matchup sheet row offsets, no automated tests, and duplicated/legacy Apps Script paths.
 * Most relevant files: `SKILL.md`, `docs/index.html`, `docs/app.js`, `docs/service-worker.js`, `docs/manifest.webmanifest`, `Code.js`, `index.html`, `.clasp.json`, `.claspignore`.
 
@@ -47,9 +47,9 @@ Because cross-origin Apps Script requests are constrained, `docs/app.js` uses JS
 Current routes handled by `Code.js#doGet`:
 
 * `api=config` / `config`: frontend branding, season, week, header image, icon URL.
-* `api=league-data` / `league-data`: standings/team cards payload plus the league-wide announcement from `Teams!X3`.
+* `api=league-data` / `league-data`: standings/team cards payload, stable roster/profile identifiers, and the league-wide announcement from `Teams!X3`.
 * `api=ticker-data` / `ticker-data`: Rotoworld/NBC fantasy football headlines plus ESPN scoreboard payload. Offseason uses headlines; in-season interleaves NFL scores with headlines.
-* `api=betting-data` / `betting-data`: weekly betting prompts, members, current picks, results, input option metadata from `App Data Collection`, and the current offseason/in-season mode used for leaderboard visibility.
+* `api=betting-data` / `betting-data`: weekly betting prompts, members, current picks, results, input option metadata, stable roster/profile identifiers where member matching resolves, and the current offseason/in-season mode used for leaderboard visibility.
 * `api=draft-board` / `draft-board`: upcoming rookie draft board payload compiled from Sleeper draft metadata, traded picks, optional selected picks, and `Rosters & Records` roster ID mappings.
 * `api=matchups-data` / `matchups-data`: matchup tile payload grouped from the `All Matchups` sheet by `Matchup ID`; incomplete groups are excluded.
 * `api=weekly-recap-data` / `weekly-recap-data`: latest commissioner-finalized recap snapshot for the configured season from `Weekly Recaps`.
@@ -201,6 +201,7 @@ Draft-board roster ID resolution:
 * Each Home team tile highlights Points For with a small radial halo anchored to `.team-pf-stat`. The previous absolute bottom-right card circle was removed so the matchup strip cannot mask or displace the visual treatment.
 * Live config load from Apps Script with fallback defaults.
 * Live standings load from Apps Script with local cached fallback.
+* On first successful standings load, a faux-profile dialog asks which team belongs to the current device. The choice is stored under `always-smooth-member-profile-v1`, pins and highlights that team first while preserving its true rank badge, and similarly prioritizes the matching Betting member. Home and Betting expose a `My Team` control for changing the preference.
 * Home standings header season/week pills are populated from the `Settings` tab via `api=config`; missing Settings values render as `--` instead of hardcoded season/week numbers.
 * A compact Rules pill beside the Home season/week/sync metadata opens the structured `Always Smooth Constitution '26` in a full-height mobile sheet or centered desktop modal. Sections are accordion-based, only one remains open at a time, and the footer links to the original Google Doc.
 * Home and Betting timestamp pills double as refresh buttons to save mobile header space.
@@ -258,7 +259,7 @@ Draft-board roster ID resolution:
 
 ## Recommended Next 3 Steps
 
-1. Push and redeploy Apps Script, then publish GitHub Pages and verify the PWA reports app version `v2026.07.28.1`.
+1. Push and redeploy Apps Script, then publish GitHub Pages and verify the PWA reports app version `v2026.07.28.2`.
 2. After a week is final, update Turkey Watch/mulligan values as needed and run `Update Records > Finalize Weekly Recap`.
 3. Compare every active team's recap with the final Sleeper matchup, including a league-low tie and any `0`/negative starter edge cases.
 

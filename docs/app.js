@@ -1,5 +1,5 @@
 const API_BASE_URL = 'https://script.google.com/macros/s/AKfycbwtM_NX16wFOHssvhvP2Iw7FI_7YcVgJ9-5DNbvNOblMxifawE4R-F_eiOLU1NsEggF/exec';
-const APP_VERSION = 'v2026.07.28.1';
+const APP_VERSION = 'v2026.07.28.2';
 const FALLBACK_PHOTO = 'https://images.unsplash.com/photo-1540747913346-19e32dc3e97e?q=80&w=600&auto=format&fit=crop';
 const THEME_KEY = 'theme';
 const CONFIG_CACHE_KEY = 'always-smooth-config';
@@ -9,6 +9,7 @@ const DRAFT_BOARD_CACHE_KEY = 'always-smooth-draft-board';
 const MATCHUPS_CACHE_KEY = 'always-smooth-matchups-data';
 const CAPTAIN_CACHE_KEY = 'always-smooth-captain-data';
 const WEEKLY_RECAP_CACHE_KEY = 'always-smooth-weekly-recap-data';
+const MEMBER_PROFILE_KEY = 'always-smooth-member-profile-v1';
 const BETTING_BET_COUNT = 6;
 const MATCHUPS_TAB_ENABLED = false;
 const DEFAULT_CONFIG = {
@@ -36,6 +37,11 @@ let matchupsData = null;
 let matchupsDataIsStale = false;
 let captainData = null;
 let weeklyRecapData = null;
+let leagueData = null;
+let leagueDataIsStale = false;
+let memberProfile = null;
+let profileDialogPreviousFocus = null;
+let memberProfilePromptShown = false;
 let captainDialogTimer = null;
 let selectedBettingMemberRow = null;
 let bettingStatusMessage = '';
@@ -360,6 +366,130 @@ function formatPointsBehindLeader(pointsFor, leaderPoints) {
 
 function normalizeClientTeamKey(name) {
   return String(name || '').trim().toLowerCase().replace(/\s+/g, ' ');
+}
+
+function normalizeMemberIdentityKey(value) {
+  return String(value || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+
+function loadMemberProfile() {
+  try {
+    const raw = localStorage.getItem(MEMBER_PROFILE_KEY);
+    if (!raw) return null;
+    const profile = JSON.parse(raw);
+    return profile && typeof profile === 'object' && (
+      profile.profileKey || profile.rosterId || profile.teamName || profile.ownerName
+    ) ? profile : null;
+  } catch (error) {
+    console.warn('Remembered team preference could not be loaded.', error);
+    return null;
+  }
+}
+
+function saveMemberProfile(profile) {
+  memberProfile = profile;
+  try {
+    localStorage.setItem(MEMBER_PROFILE_KEY, JSON.stringify(profile));
+  } catch (error) {
+    console.warn('Remembered team preference could not be saved.', error);
+  }
+  updateMemberProfileButton();
+}
+
+function getTeamProfileKey(team) {
+  const rosterId = String(team?.rosterId || '').trim();
+  if (team?.profileKey) return String(team.profileKey);
+  if (rosterId) return `roster:${rosterId}`;
+  const ownerKey = normalizeMemberIdentityKey(team?.realName);
+  return ownerKey
+    ? `owner:${ownerKey}`
+    : `team:${normalizeMemberIdentityKey(team?.teamName)}`;
+}
+
+function doesTeamMatchMemberProfile(team, profile = memberProfile) {
+  if (!team || !profile) return false;
+  const teamProfileKey = getTeamProfileKey(team);
+  if (profile.profileKey && teamProfileKey === profile.profileKey) return true;
+  if (profile.rosterId && String(team.rosterId || '') === String(profile.rosterId)) return true;
+  const ownerKey = normalizeMemberIdentityKey(team.realName);
+  const teamKey = normalizeMemberIdentityKey(team.teamName);
+  return Boolean(
+    (ownerKey && ownerKey === normalizeMemberIdentityKey(profile.ownerName)) ||
+    (teamKey && teamKey === normalizeMemberIdentityKey(profile.teamName))
+  );
+}
+
+function doesBettingMemberMatchProfile(member, profile = memberProfile) {
+  if (!member || !profile) return false;
+  if (profile.bettingMemberRow && Number(member.row) === Number(profile.bettingMemberRow)) return true;
+  if (profile.profileKey && member.profileKey && member.profileKey === profile.profileKey) return true;
+  if (profile.rosterId && member.rosterId && String(member.rosterId) === String(profile.rosterId)) return true;
+  const memberKey = normalizeMemberIdentityKey(member.name);
+  const ownerKey = normalizeMemberIdentityKey(profile.ownerName);
+  const teamKey = normalizeMemberIdentityKey(profile.teamName);
+  return Boolean(
+    memberKey && (
+      memberKey === ownerKey ||
+      memberKey === teamKey ||
+      (ownerKey && (ownerKey.startsWith(memberKey) || memberKey.startsWith(ownerKey)))
+    )
+  );
+}
+
+function pinRememberedItemFirst(items, matchesProfile) {
+  const list = Array.isArray(items) ? items.slice() : [];
+  if (!memberProfile) return list;
+  return list
+    .map((item, index) => ({ item, index, mine: matchesProfile(item) }))
+    .sort((a, b) => Number(b.mine) - Number(a.mine) || a.index - b.index)
+    .map(({ item }) => item);
+}
+
+function buildMemberProfileFromTeam(team) {
+  return {
+    profileKey: getTeamProfileKey(team),
+    rosterId: String(team?.rosterId || '').trim(),
+    teamName: String(team?.teamName || '').trim(),
+    ownerName: String(team?.realName || '').trim(),
+    photoUrl: String(team?.photoUrl || '').trim(),
+    bettingMemberRow: '',
+    chosenAt: new Date().toISOString()
+  };
+}
+
+function reconcileMemberProfileWithTeams(teams) {
+  if (!memberProfile) return null;
+  const matchedTeam = (Array.isArray(teams) ? teams : []).find((team) => (
+    doesTeamMatchMemberProfile(team)
+  ));
+  if (!matchedTeam) return null;
+  const refreshedProfile = {
+    ...memberProfile,
+    profileKey: getTeamProfileKey(matchedTeam),
+    rosterId: String(matchedTeam.rosterId || memberProfile.rosterId || '').trim(),
+    teamName: String(matchedTeam.teamName || memberProfile.teamName || '').trim(),
+    ownerName: String(matchedTeam.realName || memberProfile.ownerName || '').trim(),
+    photoUrl: String(matchedTeam.photoUrl || memberProfile.photoUrl || '').trim()
+  };
+  if (JSON.stringify(refreshedProfile) !== JSON.stringify(memberProfile)) {
+    saveMemberProfile(refreshedProfile);
+  }
+  return matchedTeam;
+}
+
+function reconcileMemberProfileWithBettingMembers(members) {
+  if (!memberProfile) return null;
+  const matchedMember = (Array.isArray(members) ? members : []).find((member) => (
+    doesBettingMemberMatchProfile(member)
+  ));
+  if (!matchedMember) return null;
+  if (Number(memberProfile.bettingMemberRow) !== Number(matchedMember.row)) {
+    saveMemberProfile({
+      ...memberProfile,
+      bettingMemberRow: Number(matchedMember.row)
+    });
+  }
+  return matchedMember;
 }
 
 function formatMatchupScore(value) {
@@ -802,9 +932,143 @@ function renderAnnouncement(payload) {
   tile.hidden = false;
 }
 
+function updateMemberProfileButton() {
+  const button = document.getElementById('profile-button');
+  const label = document.getElementById('profile-button-label');
+  if (!button || !label) return;
+  label.textContent = memberProfile ? 'My Team' : 'Choose Team';
+  button.setAttribute(
+    'aria-label',
+    memberProfile
+      ? `Change remembered team. Currently ${memberProfile.teamName || memberProfile.ownerName || 'selected'}.`
+      : 'Choose and remember your team on this device.'
+  );
+}
+
+function renderMemberProfileChoices() {
+  const root = document.getElementById('profile-team-options');
+  const teams = Array.isArray(leagueData?.teams) ? leagueData.teams : [];
+  if (!root) return;
+  root.innerHTML = teams.map((team, index) => {
+    const selected = doesTeamMatchMemberProfile(team);
+    const profileKey = getTeamProfileKey(team);
+    const photoUrl = team.photoUrl || FALLBACK_PHOTO;
+    return `
+      <button type="button" class="profile-team-option" data-profile-team-key="${escapeHtml(profileKey)}" aria-pressed="${selected ? 'true' : 'false'}">
+        <img class="profile-team-option-photo" src="${escapeHtml(photoUrl)}" alt="" onerror="this.src='${FALLBACK_PHOTO}';this.onerror=null;">
+        <span class="min-w-0">
+          <span class="profile-team-option-rank">Rank ${index + 1}</span>
+          <span class="profile-team-option-name block">${escapeHtml(team.teamName || 'Unnamed Team')}</span>
+          <span class="profile-team-option-owner block">${escapeHtml(team.realName || 'Manager not set')}</span>
+        </span>
+      </button>
+    `;
+  }).join('');
+}
+
+function openMemberProfileDialog() {
+  const dialog = document.getElementById('profile-dialog');
+  const button = document.getElementById('profile-button');
+  const closeButton = dialog?.querySelector('.profile-dialog-close');
+  if (!dialog || !Array.isArray(leagueData?.teams) || !leagueData.teams.length) return;
+  profileDialogPreviousFocus = document.activeElement;
+  memberProfilePromptShown = true;
+  renderMemberProfileChoices();
+  closeButton.hidden = !memberProfile;
+  dialog.hidden = false;
+  document.body.classList.add('profile-dialog-open');
+  button?.setAttribute('aria-expanded', 'true');
+  window.setTimeout(() => {
+    const target = dialog.querySelector('[data-profile-team-key][aria-pressed="true"]') ||
+      dialog.querySelector('[data-profile-team-key]');
+    target?.focus();
+  }, 0);
+}
+
+function closeMemberProfileDialog(force = false) {
+  const dialog = document.getElementById('profile-dialog');
+  const button = document.getElementById('profile-button');
+  if (!dialog || (!memberProfile && !force)) return;
+  dialog.hidden = true;
+  document.body.classList.remove('profile-dialog-open');
+  button?.setAttribute('aria-expanded', 'false');
+  if (profileDialogPreviousFocus instanceof HTMLElement) {
+    profileDialogPreviousFocus.focus();
+  }
+  profileDialogPreviousFocus = null;
+}
+
+function selectMemberProfileTeam(profileKey) {
+  const teams = Array.isArray(leagueData?.teams) ? leagueData.teams : [];
+  const team = teams.find((candidate) => getTeamProfileKey(candidate) === profileKey);
+  if (!team) return;
+  saveMemberProfile(buildMemberProfileFromTeam(team));
+  closeMemberProfileDialog(true);
+  renderTeams(leagueData, leagueDataIsStale);
+  if (bettingData) {
+    reconcileMemberProfileWithBettingMembers(bettingData.members);
+    renderBetting();
+  }
+}
+
+function setupMemberProfile() {
+  const dialog = document.getElementById('profile-dialog');
+  const button = document.getElementById('profile-button');
+  if (!dialog || !button) return;
+  memberProfile = loadMemberProfile();
+  updateMemberProfileButton();
+
+  button.addEventListener('click', openMemberProfileDialog);
+  document.addEventListener('click', (event) => {
+    if (event.target.closest('[data-profile-open]')) {
+      openMemberProfileDialog();
+    }
+  });
+  dialog.addEventListener('click', (event) => {
+    const teamButton = event.target.closest('[data-profile-team-key]');
+    if (teamButton) {
+      selectMemberProfileTeam(teamButton.dataset.profileTeamKey);
+      return;
+    }
+    if (event.target.closest('[data-profile-close]')) {
+      closeMemberProfileDialog();
+    }
+  });
+  document.addEventListener('keydown', (event) => {
+    if (dialog.hidden) return;
+    if (event.key === 'Escape') {
+      closeMemberProfileDialog();
+      return;
+    }
+    if (event.key === 'Tab') {
+      const focusable = Array.from(dialog.querySelectorAll(
+        '[data-profile-team-key], .profile-dialog-close:not([hidden])'
+      ));
+      if (!focusable.length) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    }
+  });
+}
+
 function renderTeams(payload, isStale = false) {
   const grid = document.getElementById('standings-grid');
   const teams = Array.isArray(payload?.teams) ? payload.teams : [];
+  leagueData = payload;
+  leagueDataIsStale = isStale;
+  const matchedProfileTeam = reconcileMemberProfileWithTeams(teams);
+  const rankedTeams = teams.map((team, index) => ({ ...team, leagueRank: index + 1 }));
+  const displayTeams = pinRememberedItemFirst(
+    rankedTeams,
+    (team) => doesTeamMatchMemberProfile(team)
+  );
   const leaderPoints = teams.reduce((leader, team) => Math.max(leader, Number(team?.pointsFor || 0)), 0);
   document.getElementById('updated-at').textContent = formatCompactTimestamp(payload?.updatedAt);
   renderAnnouncement(payload);
@@ -819,9 +1083,11 @@ function renderTeams(payload, isStale = false) {
     return;
   }
 
-  grid.innerHTML = teams.map((team, index) => {
+  grid.innerHTML = displayTeams.map((team, index) => {
     const photoUrl = team.photoUrl || FALLBACK_PHOTO;
     const ownerName = team.realName || 'Owner not set';
+    const isMemberTeam = doesTeamMatchMemberProfile(team);
+    const memberTeamMarkup = isMemberTeam ? '<span class="member-team-label shrink-0">Your Team</span>' : '';
     const streakValue = team.streak || 'None';
     const pointsFor = Math.round(Number(team.pointsFor || 0));
     const recordWithStreak = streakValue !== 'None' ? `${team.record} (${streakValue})` : team.record;
@@ -841,17 +1107,17 @@ function renderTeams(payload, isStale = false) {
       ? `style="background-image: url('${sleeperTeamImageUrl.replace(/'/g, '%27')}');"`
       : '';
     return `
-      <article class="owner-tile glass-panel group relative overflow-hidden rounded-3xl border border-slate-200 bg-white/90 p-6 shadow-sm hover:border-pink-500/40 hover:shadow-xl dark:border-pink-500/10 dark:bg-slate-900/70" data-team-tile data-expanded="false">
+      <article class="owner-tile${isMemberTeam ? ' owner-tile--mine' : ''} glass-panel group relative overflow-hidden rounded-3xl border border-slate-200 bg-white/90 p-6 shadow-sm hover:border-pink-500/40 hover:shadow-xl dark:border-pink-500/10 dark:bg-slate-900/70" data-team-tile data-expanded="false">
         <div class="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-pink-500 via-rose-400 to-orange-300"></div>
         <div class="team-card-shell">
           <div class="relative z-10 flex items-start gap-4">
             <div class="relative shrink-0">
               <img src="${photoUrl}" class="manager-photo" alt="${team.teamName}" onerror="this.src='${FALLBACK_PHOTO}';this.onerror=null;">
-              <div class="absolute -bottom-1 -right-1 flex h-6 min-w-6 items-center justify-center rounded-full border-2 border-white bg-slate-900 px-1.5 text-[10px] font-black text-white shadow-sm dark:border-slate-900 dark:bg-pink-500">${index + 1}</div>
+              <div class="absolute -bottom-1 -right-1 flex h-6 min-w-6 items-center justify-center rounded-full border-2 border-white bg-slate-900 px-1.5 text-[10px] font-black text-white shadow-sm dark:border-slate-900 dark:bg-pink-500">${team.leagueRank}</div>
             </div>
             <div class="min-w-0 flex-1">
               <h3 class="truncate text-lg font-black italic uppercase leading-none tracking-tight text-slate-900 transition-colors group-hover:text-pink-500 dark:text-white">${team.teamName}</h3>
-              <p class="mt-2 flex min-w-0 items-center gap-1 text-sm font-semibold text-pink-500 dark:text-pink-400"><span class="truncate">${ownerName}</span>${ownerTrophiesMarkup}</p>
+              <p class="mt-2 flex min-w-0 flex-wrap items-center gap-1.5 text-sm font-semibold text-pink-500 dark:text-pink-400"><span class="truncate">${ownerName}</span>${ownerTrophiesMarkup}${memberTeamMarkup}</p>
               <div class="captain-primary-slot mt-3" data-captain-primary-slot="${escapeHtml(team.teamName)}" hidden></div>
             </div>
           </div>
@@ -923,6 +1189,9 @@ function renderTeams(payload, isStale = false) {
   }
   if (weeklyRecapData) {
     renderWeeklyRecapSummaries(weeklyRecapData);
+  }
+  if ((!memberProfile || !matchedProfileTeam) && !memberProfilePromptShown) {
+    openMemberProfileDialog();
   }
 
   if (isStale) {
@@ -1946,6 +2215,7 @@ function renderBettingHeader(actionsMarkup = '') {
         <div class="flex flex-wrap gap-2 text-xs font-black uppercase tracking-[0.14em] sm:gap-3 sm:tracking-[0.18em]">
           <button type="button" data-betting-refresh class="rounded-full border border-slate-200 bg-white px-3 py-2 text-slate-700 shadow-sm transition hover:border-pink-500 hover:text-pink-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 sm:px-4" aria-label="Refresh betting data">${escapeHtml(formatCompactTimestamp(bettingData?.updatedAt))}</button>
           ${bettingData?.resultsPosted ? '<span class="rounded-full bg-emerald-500 px-4 py-2 text-white shadow-lg shadow-emerald-500/20">Finalized</span>' : '<span class="rounded-full bg-pink-500 px-4 py-2 text-white shadow-lg shadow-pink-500/20">Open</span>'}
+          <button type="button" data-profile-open class="rounded-full border border-pink-200 bg-pink-50 px-3 py-2 text-pink-600 shadow-sm transition hover:border-pink-500 hover:bg-pink-500 hover:text-white dark:border-pink-500/30 dark:bg-pink-500/10 dark:text-pink-300 sm:px-4">${memberProfile ? 'My Team' : 'Choose Team'}</button>
         </div>
       </div>
       ${actions}
@@ -1963,8 +2233,14 @@ function renderBettingMemberPicker() {
     return;
   }
 
-  const memberCards = bettingData.members.map((member) => `
-    <button type="button" data-betting-member-row="${member.row}" class="betting-member-tile glass-panel group min-h-32 rounded-2xl border border-slate-200 bg-white/90 px-3 py-4 text-center shadow-sm transition hover:border-pink-500/40 hover:shadow-xl dark:border-slate-800 dark:bg-slate-900/70" aria-label="${escapeHtml(member.name)} ${member.submitted ? 'submitted' : 'open'}">
+  const displayMembers = pinRememberedItemFirst(
+    bettingData.members,
+    (member) => doesBettingMemberMatchProfile(member)
+  );
+  const memberCards = displayMembers.map((member) => {
+    const isMemberTeam = doesBettingMemberMatchProfile(member);
+    return `
+    <button type="button" data-betting-member-row="${member.row}" class="betting-member-tile${isMemberTeam ? ' betting-member-tile--mine' : ''} glass-panel group min-h-32 rounded-2xl border border-slate-200 bg-white/90 px-3 py-4 text-center shadow-sm transition hover:border-pink-500/40 hover:shadow-xl dark:border-slate-800 dark:bg-slate-900/70" aria-label="${escapeHtml(member.name)} ${member.submitted ? 'submitted' : 'open'}${isMemberTeam ? ', your team' : ''}">
       <span class="betting-member-tile-accent absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-pink-500 via-rose-400 to-orange-300" aria-hidden="true"></span>
       <div class="betting-member-tile-content flex h-full min-w-0 flex-col items-center justify-center gap-3">
         <div class="betting-member-tile-head">
@@ -1973,11 +2249,15 @@ function renderBettingMemberPicker() {
         </div>
         <div class="w-full min-w-0">
           <p class="truncate text-sm font-black italic uppercase leading-tight tracking-tight text-slate-900 group-hover:text-pink-500 dark:text-white">${escapeHtml(member.name)}</p>
-          <span class="${member.submitted ? 'bg-emerald-500 text-white' : 'border border-slate-200 bg-white text-slate-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300'} mt-2 inline-flex rounded-full px-2.5 py-1 text-[9px] font-black uppercase tracking-[0.14em]">${member.submitted ? 'In' : 'Open'}</span>
+          <div class="mt-2 flex flex-wrap items-center justify-center gap-1.5">
+            <span class="${member.submitted ? 'bg-emerald-500 text-white' : 'border border-slate-200 bg-white text-slate-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300'} inline-flex rounded-full px-2.5 py-1 text-[9px] font-black uppercase tracking-[0.14em]">${member.submitted ? 'In' : 'Open'}</span>
+            ${isMemberTeam ? '<span class="member-team-label">Your Team</span>' : ''}
+          </div>
         </div>
       </div>
     </button>
-  `).join('');
+  `;
+  }).join('');
 
   root.innerHTML = `
     <div class="space-y-6">
@@ -2177,6 +2457,7 @@ async function loadBettingData() {
       throw new Error(payload?.error || 'Betting data could not be loaded.');
     }
     bettingData = payload;
+    reconcileMemberProfileWithBettingMembers(payload.members);
     if (selectedBettingMemberRow && !getCurrentBettingMember()) {
       selectedBettingMemberRow = null;
     }
@@ -2715,6 +2996,7 @@ async function bootstrap() {
   setupScrollBehavior();
   setupHomeShortcuts();
   setupRulesDialog();
+  setupMemberProfile();
   setupAppTabs();
   setupCaptainDialog();
   setupBettingControls();
