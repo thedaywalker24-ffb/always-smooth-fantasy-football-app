@@ -17,7 +17,7 @@ function onOpen(e) {
     .addItem('Refresh Team Records', 'updateRostersAndRecordsData')
     // .addItem('Click to refresh Team Records', 'getSleeperStandings')
     .addItem('Refresh Team Rosters', 'fetchAndPopulateRosters')
-    .addItem('Refresh Matchups', 'fetchMatchupData')
+    .addItem('Refresh Matchups + Player Scores', 'fetchMatchupData')
     .addItem('Finalize Weekly Recap', 'finalizeWeeklyRecap')
     .addItem('Retrieve Draft Data', 'fetchDraftPicksData')
     .addItem('Build Upcoming Draft Board', 'buildUpcomingDraftBoardSheet')
@@ -118,6 +118,28 @@ const WEEKLY_RECAPS_HEADERS = [
   'Turkey Watch',
   'Mulligan Available',
   'Finalized At'
+];
+/** Historical player-level matchup ledger written by matchup refresh/finalization */
+const MATCHUP_PLAYER_SCORES_SHEET = 'Matchup Player Scores';
+const MATCHUP_PLAYER_SCORES_HEADERS = [
+  'Season',
+  'Week',
+  'Matchup ID',
+  'Roster ID',
+  'Team Name',
+  'Manager Name',
+  'Opponent Roster ID',
+  'Opponent Team Name',
+  'Team Score',
+  'Opponent Score',
+  'Player ID',
+  'Player Name',
+  'Position',
+  'NFL Team',
+  'Lineup Status',
+  'Player Points',
+  'Strike ❎',
+  'Synced At'
 ];
 /** 0-based column index when "Streak" header is missing (column G) */
 const ROSTERS_STREAK_COL_FALLBACK = 6;
@@ -2604,6 +2626,197 @@ function getMatchupsData_(spreadsheet) {
 }
 
 /**
+ * Creates the historical player-level matchup ledger when needed and repairs
+ * its generated header row.
+ * @param {GoogleAppsScript.Spreadsheet.Spreadsheet} spreadsheet
+ * @return {GoogleAppsScript.Spreadsheet.Sheet}
+ */
+function ensureMatchupPlayerScoresSheet_(spreadsheet) {
+  var sheet = spreadsheet.getSheetByName(MATCHUP_PLAYER_SCORES_SHEET);
+  if (!sheet) sheet = spreadsheet.insertSheet(MATCHUP_PLAYER_SCORES_SHEET);
+
+  var headerRange = sheet.getRange(1, 1, 1, MATCHUP_PLAYER_SCORES_HEADERS.length);
+  var headers = headerRange.getDisplayValues()[0];
+  var headersMatch = MATCHUP_PLAYER_SCORES_HEADERS.every(function (header, index) {
+    return normalizeBettingOptionKey_(headers[index]) === normalizeBettingOptionKey_(header);
+  });
+  if (!headersMatch) {
+    headerRange
+      .setValues([MATCHUP_PLAYER_SCORES_HEADERS])
+      .setFontWeight('bold')
+      .setBackground('#ec4899')
+      .setFontColor('#ffffff');
+    sheet.setFrozenRows(1);
+    sheet.autoResizeColumns(1, MATCHUP_PLAYER_SCORES_HEADERS.length);
+  }
+  return sheet;
+}
+
+/**
+ * Builds player-level matchup rows from the Sleeper matchup response. Starters
+ * at 0 or below receive a visible strike marker; bench players never do.
+ * @param {GoogleAppsScript.Spreadsheet.Spreadsheet} spreadsheet
+ * @param {Array<Object>} sleeperMatchups
+ * @param {string|number} season
+ * @param {string|number} week
+ * @return {Array<Array<*>>}
+ */
+function buildMatchupPlayerScoreRows_(spreadsheet, sleeperMatchups, season, week) {
+  var ownersByRosterId = buildRosterIdDisplayLookup_(spreadsheet).byRosterId;
+  var playerInfoById = buildSleeperPlayerInfoMap_(spreadsheet);
+  var matchupGroups = {};
+  var syncedAt = new Date().toISOString();
+
+  sleeperMatchups.forEach(function (item) {
+    var matchupId = String(item && item.matchup_id || '').trim();
+    if (!matchupId) return;
+    if (!matchupGroups[matchupId]) matchupGroups[matchupId] = [];
+    matchupGroups[matchupId].push(item);
+  });
+
+  var rows = [];
+  sleeperMatchups.forEach(function (item) {
+    if (!item) return;
+    var rosterId = normalizeSleeperRosterId_(item.roster_id);
+    var matchupId = String(item.matchup_id || '').trim();
+    if (!rosterId || !matchupId) return;
+
+    var owner = resolveDraftOwner_(ownersByRosterId, rosterId);
+    var matchupTeams = matchupGroups[matchupId] || [];
+    var opponent = matchupTeams.filter(function (candidate) {
+      return normalizeSleeperRosterId_(candidate && candidate.roster_id) !== rosterId;
+    })[0] || null;
+    var opponentRosterId = opponent ? normalizeSleeperRosterId_(opponent.roster_id) : '';
+    var opponentOwner = opponent
+      ? resolveDraftOwner_(ownersByRosterId, opponentRosterId)
+      : { teamName: '', managerName: '' };
+    var starters = Array.isArray(item.starters) ? item.starters : [];
+    var rosterPlayers = Array.isArray(item.players) ? item.players : [];
+    var playersPoints = item.players_points && typeof item.players_points === 'object'
+      ? item.players_points
+      : {};
+    var starterPoints = Array.isArray(item.starters_points) ? item.starters_points : [];
+    var starterIndexById = {};
+    var orderedPlayerIds = [];
+    var seenPlayerIds = {};
+
+    var addPlayerId = function (playerId) {
+      var normalizedPlayerId = String(playerId || '').trim();
+      if (!normalizedPlayerId || normalizedPlayerId === '0' || seenPlayerIds[normalizedPlayerId]) return;
+      seenPlayerIds[normalizedPlayerId] = true;
+      orderedPlayerIds.push(normalizedPlayerId);
+    };
+    starters.forEach(function (playerId, index) {
+      var normalizedPlayerId = String(playerId || '').trim();
+      if (normalizedPlayerId && normalizedPlayerId !== '0') {
+        starterIndexById[normalizedPlayerId] = index;
+      }
+      addPlayerId(playerId);
+    });
+    rosterPlayers.forEach(addPlayerId);
+    Object.keys(playersPoints).forEach(addPlayerId);
+
+    orderedPlayerIds.forEach(function (playerId) {
+      var isStarter = Object.prototype.hasOwnProperty.call(starterIndexById, playerId);
+      var rawPoints = '';
+      if (Object.prototype.hasOwnProperty.call(playersPoints, playerId)) {
+        rawPoints = playersPoints[playerId];
+      } else if (isStarter && starterPoints[starterIndexById[playerId]] !== undefined) {
+        rawPoints = starterPoints[starterIndexById[playerId]];
+      }
+      var numericPoints = Number(rawPoints);
+      var hasPoints = rawPoints !== '' && rawPoints !== null && rawPoints !== undefined && isFinite(numericPoints);
+      var playerInfo = playerInfoById[playerId] || {};
+      rows.push([
+        String(season || '').trim(),
+        String(week || '').trim(),
+        matchupId,
+        rosterId,
+        owner.teamName || 'Roster ' + rosterId,
+        owner.managerName || '',
+        opponentRosterId,
+        opponentOwner.teamName || '',
+        Math.round(Number(item.points || 0) * 100) / 100,
+        opponent ? Math.round(Number(opponent.points || 0) * 100) / 100 : '',
+        playerId,
+        playerInfo.playerName || 'Player ' + playerId,
+        playerInfo.position || '',
+        playerInfo.nflTeam || '',
+        isStarter ? 'Starter' : 'Bench',
+        hasPoints ? Math.round(numericPoints * 100) / 100 : '',
+        isStarter && hasPoints && numericPoints <= 0 ? '❎' : '',
+        syncedAt
+      ]);
+    });
+  });
+  return rows;
+}
+
+/**
+ * Replaces one season/week in the player-score ledger while preserving history.
+ * @param {GoogleAppsScript.Spreadsheet.Spreadsheet} spreadsheet
+ * @param {Array<Object>} sleeperMatchups
+ * @param {string|number} season
+ * @param {string|number} week
+ * @return {{sheetName: string, playerCount: number, strikeCount: number}}
+ */
+function upsertMatchupPlayerScores_(spreadsheet, sleeperMatchups, season, week) {
+  var sheet = ensureMatchupPlayerScoresSheet_(spreadsheet);
+  var newRows = buildMatchupPlayerScoreRows_(spreadsheet, sleeperMatchups, season, week);
+  var existingRows = sheet.getLastRow() > 1
+    ? sheet.getRange(
+        2,
+        1,
+        sheet.getLastRow() - 1,
+        MATCHUP_PLAYER_SCORES_HEADERS.length
+      ).getValues()
+    : [];
+  var retainedRows = existingRows.filter(function (row) {
+    return String(row[0] || '').trim() !== String(season || '').trim() ||
+      String(row[1] || '').trim() !== String(week || '').trim();
+  });
+  var combinedRows = retainedRows.concat(newRows);
+  combinedRows.sort(function (a, b) {
+    var seasonOrder = String(a[0] || '').localeCompare(String(b[0] || ''), undefined, { numeric: true });
+    if (seasonOrder) return seasonOrder;
+    var weekOrder = Number(a[1] || 0) - Number(b[1] || 0);
+    if (weekOrder) return weekOrder;
+    var matchupOrder = Number(a[2] || 0) - Number(b[2] || 0);
+    if (matchupOrder) return matchupOrder;
+    var rosterOrder = Number(a[3] || 0) - Number(b[3] || 0);
+    if (rosterOrder) return rosterOrder;
+    if (a[14] !== b[14]) return a[14] === 'Starter' ? -1 : 1;
+    return String(a[11] || '').localeCompare(String(b[11] || ''));
+  });
+
+  if (sheet.getLastRow() > 1) {
+    sheet.getRange(
+      2,
+      1,
+      sheet.getLastRow() - 1,
+      MATCHUP_PLAYER_SCORES_HEADERS.length
+    ).clearContent();
+  }
+  if (combinedRows.length) {
+    sheet.getRange(
+      2,
+      1,
+      combinedRows.length,
+      MATCHUP_PLAYER_SCORES_HEADERS.length
+    ).setValues(combinedRows);
+    sheet.getRange(2, 9, combinedRows.length, 2).setNumberFormat('0.00');
+    sheet.getRange(2, 16, combinedRows.length, 1).setNumberFormat('0.00');
+  }
+  sheet.autoResizeColumns(1, MATCHUP_PLAYER_SCORES_HEADERS.length);
+
+  return {
+    sheetName: MATCHUP_PLAYER_SCORES_SHEET,
+    playerCount: newRows.length,
+    strikeCount: newRows.filter(function (row) { return row[16] === '❎'; }).length
+  };
+}
+
+/**
  * Creates the finalized weekly recap sheet when needed and repairs its header row.
  * @param {GoogleAppsScript.Spreadsheet.Spreadsheet} spreadsheet
  * @return {GoogleAppsScript.Spreadsheet.Sheet}
@@ -2658,7 +2871,10 @@ function buildFinalizedWeeklyRecapTeam_(
   starters.forEach(function (playerId, index) {
     var normalizedPlayerId = String(playerId || '').trim();
     if (!normalizedPlayerId || normalizedPlayerId === '0') return;
-    var points = Number(starterPoints[index] || 0);
+    var rawPoints = starterPoints[index];
+    if (rawPoints === '' || rawPoints === null || rawPoints === undefined) return;
+    var points = Number(rawPoints);
+    if (!isFinite(points)) return;
     if (points > 0) return;
     var playerInfo = playerInfoById[normalizedPlayerId] || {};
     nonpositiveStarters.push({
@@ -2727,6 +2943,12 @@ function finalizeWeeklyRecap_(spreadsheet) {
   if (!completeGroups.length) {
     throw new Error('No complete two-team matchups were available for Week ' + week + '.');
   }
+  var playerScoreResult = upsertMatchupPlayerScores_(
+    spreadsheet,
+    sleeperMatchups,
+    season,
+    week
+  );
 
   var activeTeams = [];
   completeGroups.forEach(function (teams) {
@@ -2818,6 +3040,8 @@ function finalizeWeeklyRecap_(spreadsheet) {
     teamCount: recapTeams.length,
     matchupCount: completeGroups.length,
     leagueLowScore: Math.round(leagueLowScore * 100) / 100,
+    playerCount: playerScoreResult.playerCount,
+    strikeCount: playerScoreResult.strikeCount,
     finalizedAt: finalizedAt
   };
 }
@@ -2832,7 +3056,9 @@ function finalizeWeeklyRecap() {
     var result = finalizeWeeklyRecap_(spreadsheet);
     Browser.msgBox(
       'Weekly recap finalized for ' + result.season + ' Week ' + result.week +
-      ' with ' + result.teamCount + ' active teams.'
+      ' with ' + result.teamCount + ' active teams. ' +
+      result.playerCount + ' player scores were saved, including ' +
+      result.strikeCount + ' strike' + (result.strikeCount === 1 ? '' : 's') + '.'
     );
     return result;
   } catch (error) {
@@ -3625,15 +3851,17 @@ function matchUserIdsToTeamNames() {
 }
 
 function fetchMatchupData() {
-  var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('API Data');
-  var leagueId = getLeagueId_(SpreadsheetApp.getActiveSpreadsheet());
-  var week_no = sheet.getRange('A19').getValue(); // Get week_no from cell A19
+  var spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = spreadsheet.getSheetByName('API Data');
+  if (!sheet) throw new Error('API Data sheet was not found.');
+  var leagueId = getLeagueId_(spreadsheet);
+  var week_no = sheet.getRange('A19').getValue() || getLeagueWeek_(spreadsheet);
+  if (!week_no) throw new Error('Set the matchup week in API Data!A19 or Settings!B3.');
   // var week_no = (sheet.getRange('A19').getValue()) - 1; // Use this when var startRow = 265 is active
   var url = `https://api.sleeper.app/v1/league/${leagueId}/matchups/${week_no}`;
-  
-  var response = UrlFetchApp.fetch(url);
-  var data = JSON.parse(response.getContentText());
-  
+  var data = fetchSleeperJson_(url);
+  if (!Array.isArray(data)) throw new Error('Sleeper returned an invalid matchup response.');
+
   // var startRow = 265; // switch to this temporarily when transitioning weeks
   var startRow = 278;
   var startCol = 2; // Column B
@@ -3649,6 +3877,21 @@ function fetchMatchupData() {
       sheet.getRange(row, startCol + 13 + i).setValue(item.starters_points[i] !== undefined ? item.starters_points[i] : 0);
     }
   });
+
+  var playerScoreResult = upsertMatchupPlayerScores_(
+    spreadsheet,
+    data,
+    getLeagueSeason_(spreadsheet),
+    week_no
+  );
+  spreadsheet.toast(
+    playerScoreResult.playerCount + ' player scores synced for Week ' + week_no +
+      '; ' + playerScoreResult.strikeCount + ' current strike candidate' +
+      (playerScoreResult.strikeCount === 1 ? '' : 's') + '.',
+    'Matchups refreshed',
+    8
+  );
+  return playerScoreResult;
 }
 
 /**

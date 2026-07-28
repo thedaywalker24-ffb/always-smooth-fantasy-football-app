@@ -135,14 +135,24 @@
         }
 
         .announcement-tile {
-            border: 1px solid rgba(244, 114, 182, 0.72);
+            position: relative;
+            overflow: hidden;
+            border: 1px solid rgba(255, 255, 255, 0.28);
             border-radius: 1.5rem;
-            background: linear-gradient(135deg, #ec4899, #db2777);
+            background: linear-gradient(135deg, #ec4899 0%, #f43f5e 56%, #f97316 100%);
             padding: 1.15rem 1.35rem;
             color: #ffffff;
-            box-shadow: 0 16px 38px rgba(219, 39, 119, 0.24);
+            box-shadow: 0 16px 38px rgba(236, 72, 153, 0.28);
             cursor: default;
             user-select: none;
+        }
+
+        .announcement-tile::before {
+            position: absolute;
+            inset: 0;
+            background: radial-gradient(circle at 12% 0%, rgba(255, 255, 255, 0.2), transparent 38%);
+            content: "";
+            pointer-events: none;
         }
 
         .announcement-tile[aria-busy="true"] {
@@ -150,6 +160,7 @@
         }
 
         .announcement-tile p {
+            position: relative;
             margin: 0;
             font-size: 0.98rem;
             font-weight: 850;

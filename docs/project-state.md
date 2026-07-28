@@ -2,9 +2,9 @@
 
 ## Current Status
 
-* Last completed section: Commissioner-finalized weekly team recaps; Home team summaries now cover the latest finalized matchup result, league-low beer duty, nonpositive starters/strikes, Turkey Watch, and mulligan availability.
-* Current section in progress: Apps Script and GitHub Pages/PWA deployment verification for weekly recaps and the recent Home updates.
-* Next recommended task: Publish the backend before the frontend, finalize one completed week from the spreadsheet menu, then verify all active team recap summaries on phone/desktop.
+* Last completed section: Historical player-level matchup scoring; matchup refresh/finalization now records starter and bench output in `Matchup Player Scores` and marks zero/negative starters with ❎.
+* Current section in progress: Apps Script and GitHub Pages/PWA deployment verification for player scores, weekly recaps, and the recent Home updates.
+* Next recommended task: Publish the backend before the frontend, then use a completed week to verify the player ledger and finalized team recap summaries.
 * Open risks: Hardcoded Apps Script deployment URL, simple JSONP/GET admin and betting write flows, public trust-based bet submission, fragile Google Sheets tab/column dependencies, fixed matchup sheet row offsets, no automated tests, and duplicated/legacy Apps Script paths.
 * Most relevant files: `SKILL.md`, `docs/index.html`, `docs/app.js`, `docs/service-worker.js`, `docs/manifest.webmanifest`, `Code.js`, `index.html`, `.clasp.json`, `.claspignore`.
 
@@ -75,6 +75,7 @@ Known tabs and dependencies:
 * `Team Rosters`: generated roster output.
 * `Weekly Captains`: auditable weekly Captain picks written by the app.
 * `Weekly Recaps`: generated, auditable season/week snapshots used by Home team summaries.
+* `Matchup Player Scores`: generated historical player-level matchup ledger with starter/bench status, weekly points, and strike candidates.
 * `Draft Results`: generated draft pick output.
 * `Upcoming Draft Board`: generated offseason rookie draft board snapshot written by the Apps Script menu action `Build Upcoming Draft Board`.
 * `App Data Collection`: weekly betting prompts, member picks, results, input mappings, option banks, and helper-cleared submission range.
@@ -196,7 +197,7 @@ Draft-board roster ID resolution:
 * Light/dark/system theme toggle with local preference.
 * Splash screen and mobile-friendly banner.
 * The Always Smooth banner title is a keyboard-accessible audio easter egg. It restarts the bundled `docs/audio/always-smooth-easter-egg.mp3` clip on each press without rendering playback controls, and the service worker includes the clip in the PWA app shell.
-* Home displays a simple headerless pink announcement tile above the ticker. It reads `Teams!X3`, shows a neutral empty-state message when the cell is blank, and uses press-and-hold plus the existing admin code to edit only that whitelisted cell.
+* Home displays a simple headerless announcement tile above the ticker using the Draft Board shortcut's pink-to-rose-to-orange gradient theme. It reads `Teams!X3`, shows a neutral empty-state message when the cell is blank, and uses press-and-hold plus the existing admin code to edit only that whitelisted cell.
 * Each Home team tile highlights Points For with a small radial halo anchored to `.team-pf-stat`. The previous absolute bottom-right card circle was removed so the matchup strip cannot mask or displace the visual treatment.
 * Live config load from Apps Script with fallback defaults.
 * Live standings load from Apps Script with local cached fallback.
@@ -224,6 +225,7 @@ Draft-board roster ID resolution:
 * Removed the original GitHub Pages explainer tiles (`Install Friendly` and `Live Sheet Data`) from the bottom of Home so the page stays focused on league content.
 * Apps Script menu action `Build Upcoming Draft Board` creates/refreshes a normalized `Upcoming Draft Board` sheet snapshot using the same compiled draft-board payload.
 * Apps Script spreadsheet menu for league data operations.
+* `Refresh Matchups + Player Scores` preserves the legacy `API Data` matchup import while also replacing the selected season/week in `Matchup Player Scores`. Each row includes team/opponent totals, player identity/position, starter or bench status, individual output, and a visible ❎ for starters currently at `0` or below. Historical weeks remain intact.
 * Sleeper sync functions for members, records, rosters, players, matchups, and draft picks.
 * Defensive helpers for Google Drive image URLs and missing settings.
 * Documented deployment runbook for changes spanning Apps Script, GitHub Pages, and git.
@@ -241,7 +243,7 @@ Draft-board roster ID resolution:
 * Frontend deploy URL for Apps Script is hardcoded in `docs/app.js`.
 * Admin writes use a simple JSONP/GET route protected by `ALWAYS_SMOOTH_ADMIN_CODE`; keep editable fields low-risk and whitelisted.
 * Betting submissions use a public JSONP/GET route and trust known league members not to submit for each other; server validation limits writes to the configured member rows and bet columns.
-* `fetchMatchupData` writes to hardcoded row `278` and reads week number from `API Data!A19`.
+* `fetchMatchupData` still writes its legacy block to hardcoded `API Data` row `278`; the selected week prefers `API Data!A19` and only falls back to `Settings!B3`.
 * Expanded team-card styling is split between `docs/index.html` CSS overlays/row glass and `docs/app.js` rendered Tailwind text classes; keep both light/dark paths aligned.
 * Root `index.html` and `docs/index.html` can drift because one is Apps Script templated and one is GitHub Pages static.
 * `Code2.gs.js` appears to duplicate/precede the more complete `fetchSleeperPlayers` implementation in `Code.js`.
@@ -256,8 +258,8 @@ Draft-board roster ID resolution:
 
 ## Recommended Next 3 Steps
 
-1. Push and redeploy Apps Script, then publish GitHub Pages and verify the PWA reports app version `v2026.07.24.1`.
-2. After a week is final, update Turkey Watch/mulligan values as needed and run `Always Smooth League > Finalize Weekly Recap`.
+1. Push and redeploy Apps Script, then publish GitHub Pages and verify the PWA reports app version `v2026.07.28.1`.
+2. After a week is final, update Turkey Watch/mulligan values as needed and run `Update Records > Finalize Weekly Recap`.
 3. Compare every active team's recap with the final Sleeper matchup, including a league-low tie and any `0`/negative starter edge cases.
 
 ## Notes For Future Sessions
