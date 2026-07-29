@@ -2,9 +2,9 @@
 
 ## Current Status
 
-* Last completed section: Captain onboarding; the five-step welcome tour now introduces the Captain rule, while users who completed the earlier tour receive a separate one-time Captain callout.
-* Current section in progress: GitHub Pages/PWA deployment verification for Captain onboarding, remembered profiles, player scores, weekly recaps, and recent Home updates.
-* Next recommended task: Publish the frontend, then verify new-user and existing-user Captain introductions, team-card expansion, completion/dismiss persistence, and tour replay on phone/desktop.
+* Last completed section: Day-aware NFL ticker; Sunday/Monday favor scores, Tuesday/Wednesday show news, and Thursday-Saturday favor news while retaining only active/final games.
+* Current section in progress: Apps Script and GitHub Pages/PWA deployment verification for the ticker cadence, Captain onboarding, remembered profiles, player scores, and weekly recaps.
+* Next recommended task: Push and redeploy Apps Script, publish the frontend, then verify the ticker mode labels and item mix on the deployed app.
 * Open risks: Hardcoded Apps Script deployment URL, simple JSONP/GET admin and betting write flows, public trust-based bet submission, fragile Google Sheets tab/column dependencies, fixed matchup sheet row offsets, no automated tests, and duplicated/legacy Apps Script paths.
 * Most relevant files: `SKILL.md`, `docs/index.html`, `docs/app.js`, `docs/service-worker.js`, `docs/manifest.webmanifest`, `Code.js`, `index.html`, `.clasp.json`, `.claspignore`.
 
@@ -201,6 +201,7 @@ Draft-board roster ID resolution:
 * Each Home team tile highlights Points For with a small radial halo anchored to `.team-pf-stat`. The previous absolute bottom-right card circle was removed so the matchup strip cannot mask or displace the visual treatment.
 * Live config load from Apps Script with fallback defaults.
 * Live standings load from Apps Script with local cached fallback.
+* The NFL ticker cadence is day-aware during the season: Sunday/Monday interleave two active/final ESPN score items with one Rotoworld headline; Tuesday/Wednesday request headlines only; Thursday-Saturday lead with two headlines and include one active/final score. Scheduled `0–0` games are excluded throughout the week. Offseason remains headline-only. The response exposes `contentMode` so the frontend can label the current mix.
 * On first successful standings load, a faux-profile dialog asks which team belongs to the current device. The choice is stored under `always-smooth-member-profile-v1`, pins and highlights that team first while preserving its true rank badge, and similarly prioritizes the matching Betting member. Home and Betting expose a `My Team` control for changing the preference.
 * Immediately after a device's first team selection, a dependency-free five-step coach-mark tour spotlights the announcement/ticker area, remembered team card, expanded Captain section, Draft Board shortcut, and Betting tab. It supports Skip, Back, Next/Done, keyboard navigation, reduced motion, automatic scrolling, responsive callout placement, and replay from Home or Betting. Completion/skip state is stored under `always-smooth-onboarding-v1`.
 * The Captain tour step uses the exact rule summary: “Choose one starter as your Captain. Their points count 2× for that week, with the commissioner applying the adjustment manually in Sleeper. Each player can only be captain once per season.” Users who already completed/skipped welcome onboarding receive a separate one-time Captain-only callout stored under `always-smooth-captain-intro-v1`; it expands their team card but never opens the picker or selects a player.
@@ -261,7 +262,7 @@ Draft-board roster ID resolution:
 
 ## Recommended Next 3 Steps
 
-1. Publish GitHub Pages and verify the PWA reports app version `v2026.07.29.2`.
+1. Push/redeploy Apps Script, publish GitHub Pages, and verify the PWA reports app version `v2026.07.29.3`.
 2. After a week is final, update Turkey Watch/mulligan values as needed and run `Update Records > Finalize Weekly Recap`.
 3. Compare every active team's recap with the final Sleeper matchup, including a league-low tie and any `0`/negative starter edge cases.
 

@@ -3461,6 +3461,13 @@ function getEspnScoreTickerItems_() {
       event.status.type.detail
         ? String(event.status.type.detail).trim()
         : 'Scheduled';
+    var state =
+      event &&
+      event.status &&
+      event.status.type &&
+      event.status.type.state
+        ? String(event.status.type.state).trim().toLowerCase()
+        : '';
     var eventUrl =
       event &&
       event.links &&
@@ -3472,20 +3479,90 @@ function getEspnScoreTickerItems_() {
     items.push({
       type: 'score',
       text: awayTeam + ' ' + awayScore + ' @ ' + homeTeam + ' ' + homeScore + ' (' + detail + ')',
-      url: eventUrl
+      url: eventUrl,
+      state: state
     });
   });
   return items;
 }
 
 /**
- * Unified ticker feed. Offseason shows headlines only; in-season blends
- * two score items followed by one headline item.
+ * Interleaves two ticker lists without dropping the remainder of either list.
+ * @param {Array<Object>} primary
+ * @param {Array<Object>} secondary
+ * @param {number} primaryBatchSize
+ * @param {number} secondaryBatchSize
+ * @return {Array<Object>}
+ */
+function interleaveTickerItems_(primary, secondary, primaryBatchSize, secondaryBatchSize) {
+  var items = [];
+  var primaryIndex = 0;
+  var secondaryIndex = 0;
+  var primaryBatch = Math.max(1, Number(primaryBatchSize) || 1);
+  var secondaryBatch = Math.max(1, Number(secondaryBatchSize) || 1);
+
+  while (primaryIndex < primary.length || secondaryIndex < secondary.length) {
+    for (var i = 0; i < primaryBatch && primaryIndex < primary.length; i++) {
+      items.push(primary[primaryIndex]);
+      primaryIndex++;
+    }
+    for (var j = 0; j < secondaryBatch && secondaryIndex < secondary.length; j++) {
+      items.push(secondary[secondaryIndex]);
+      secondaryIndex++;
+    }
+  }
+  return items;
+}
+
+/**
+ * Determines which ticker content matters for the current part of an NFL week.
+ * Sunday/Monday are score-led, Tuesday/Wednesday are news-only, and the days
+ * leading into Sunday are news-led with only active/final games mixed in.
+ * @param {Date} now
+ * @param {boolean} offseason
+ * @return {Object}
+ */
+function getTickerSchedule_(now, offseason) {
+  if (offseason) {
+    return {
+      contentMode: 'headlines',
+      fetchScores: false,
+      includeScheduledScores: false
+    };
+  }
+
+  var day = now.getDay();
+  if (day === 0 || day === 1) {
+    return {
+      contentMode: 'score-forward',
+      fetchScores: true,
+      includeScheduledScores: false
+    };
+  }
+  if (day === 2 || day === 3) {
+    return {
+      contentMode: 'news',
+      fetchScores: false,
+      includeScheduledScores: false
+    };
+  }
+  return {
+    contentMode: 'news-with-scores',
+    fetchScores: true,
+    includeScheduledScores: false
+  };
+}
+
+/**
+ * Unified ticker feed. Offseason shows headlines only. During the season,
+ * Sunday/Monday favor active/final scores, Tuesday/Wednesday show news, and
+ * Thursday through Saturday favor news while retaining active/final games.
  * @return {Object}
  */
 function getTickerItems() {
   var now = new Date();
   var offseason = isNflOffseason_(now);
+  var schedule = getTickerSchedule_(now, offseason);
   var warnings = [];
   var headlines = [];
   var scores = [];
@@ -3496,7 +3573,7 @@ function getTickerItems() {
     warnings.push('NFL headlines could not be loaded: ' + (err.message || String(err)));
   }
 
-  if (!offseason) {
+  if (schedule.fetchScores) {
     try {
       scores = getEspnScoreTickerItems_();
     } catch (err) {
@@ -3504,26 +3581,18 @@ function getTickerItems() {
     }
   }
 
+  var relevantScores = schedule.includeScheduledScores
+    ? scores
+    : scores.filter(function (item) {
+      return item.state === 'in' || item.state === 'post';
+    });
   var items = [];
-  if (offseason || !scores.length) {
-    items = headlines;
+  if (schedule.contentMode === 'score-forward' && relevantScores.length) {
+    items = interleaveTickerItems_(relevantScores, headlines, 2, 1);
+  } else if (schedule.contentMode === 'news-with-scores' && relevantScores.length) {
+    items = interleaveTickerItems_(headlines, relevantScores, 2, 1);
   } else {
-    var scoreIndex = 0;
-    var headlineIndex = 0;
-    while (scoreIndex < scores.length || headlineIndex < headlines.length) {
-      for (var i = 0; i < 2 && scoreIndex < scores.length; i++) {
-        items.push(scores[scoreIndex]);
-        scoreIndex++;
-      }
-      if (headlineIndex < headlines.length) {
-        items.push(headlines[headlineIndex]);
-        headlineIndex++;
-      }
-      if (scoreIndex >= scores.length && headlineIndex < headlines.length) {
-        items.push(headlines[headlineIndex]);
-        headlineIndex++;
-      }
-    }
+    items = headlines;
   }
 
   if (!items.length && warnings.length) {
@@ -3531,9 +3600,10 @@ function getTickerItems() {
       ok: false,
       error: warnings.join(' '),
       mode: offseason ? 'offseason' : 'in-season',
+      contentMode: schedule.contentMode,
       items: [],
       headlineCount: headlines.length,
-      scoreCount: scores.length,
+      scoreCount: relevantScores.length,
       warnings: warnings,
       updatedAt: now.toISOString()
     };
@@ -3542,9 +3612,10 @@ function getTickerItems() {
   return {
     ok: true,
     mode: offseason ? 'offseason' : 'in-season',
+    contentMode: schedule.contentMode,
     items: items,
     headlineCount: headlines.length,
-    scoreCount: scores.length,
+    scoreCount: relevantScores.length,
     warnings: warnings,
     updatedAt: now.toISOString()
   };

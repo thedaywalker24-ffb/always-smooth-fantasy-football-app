@@ -1,5 +1,5 @@
 const API_BASE_URL = 'https://script.google.com/macros/s/AKfycbwtM_NX16wFOHssvhvP2Iw7FI_7YcVgJ9-5DNbvNOblMxifawE4R-F_eiOLU1NsEggF/exec';
-const APP_VERSION = 'v2026.07.29.2';
+const APP_VERSION = 'v2026.07.29.3';
 const FALLBACK_PHOTO = 'https://images.unsplash.com/photo-1540747913346-19e32dc3e97e?q=80&w=600&auto=format&fit=crop';
 const THEME_KEY = 'theme';
 const CONFIG_CACHE_KEY = 'always-smooth-config';
@@ -1894,10 +1894,18 @@ function renderTicker(payload, isStale = false) {
 
   const segmentMarkup = items.map(getTickerItemMarkup).join('');
   const duration = Math.max(28, Math.min(96, items.length * 5));
+  const tickerLabelByMode = {
+    'score-forward': 'NFL Scores + News',
+    'news-with-scores': 'NFL News + Scores',
+    news: 'NFL News',
+    headlines: 'NFL Headlines'
+  };
+  const tickerLabel = tickerLabelByMode[payload?.contentMode] ||
+    (payload?.mode === 'in-season' ? 'NFL Live' : 'NFL Headlines');
   root.innerHTML = `
-    <div class="ticker" style="--ticker-duration: ${duration}s;" data-mode="${escapeHtml(payload?.mode || 'offseason')}" aria-label="NFL ticker">
+    <div class="ticker" style="--ticker-duration: ${duration}s;" data-mode="${escapeHtml(payload?.contentMode || payload?.mode || 'offseason')}" aria-label="NFL ticker">
       <div class="ticker-meta" aria-hidden="true">
-        <span>${payload?.mode === 'in-season' ? 'NFL Live' : 'NFL Headlines'}</span>
+        <span>${tickerLabel}</span>
         ${isStale ? '<span>Cached</span>' : ''}
       </div>
       <div class="ticker-track">
