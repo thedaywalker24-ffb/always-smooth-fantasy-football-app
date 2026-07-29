@@ -2,9 +2,9 @@
 
 ## Current Status
 
-* Last completed section: Native first-time walkthrough; after choosing a team, new users receive a four-step spotlight tour of Home, their pinned team, Draft Board, and Betting, with Skip/Back/Next and permanent replay controls.
-* Current section in progress: GitHub Pages/PWA deployment verification for onboarding, remembered profiles, player scores, weekly recaps, and recent Home updates.
-* Next recommended task: Publish the frontend, then verify first-run profile selection through tour completion, skipping, replay, scrolling, and tab switching on phone/desktop.
+* Last completed section: Captain onboarding; the five-step welcome tour now introduces the Captain rule, while users who completed the earlier tour receive a separate one-time Captain callout.
+* Current section in progress: GitHub Pages/PWA deployment verification for Captain onboarding, remembered profiles, player scores, weekly recaps, and recent Home updates.
+* Next recommended task: Publish the frontend, then verify new-user and existing-user Captain introductions, team-card expansion, completion/dismiss persistence, and tour replay on phone/desktop.
 * Open risks: Hardcoded Apps Script deployment URL, simple JSONP/GET admin and betting write flows, public trust-based bet submission, fragile Google Sheets tab/column dependencies, fixed matchup sheet row offsets, no automated tests, and duplicated/legacy Apps Script paths.
 * Most relevant files: `SKILL.md`, `docs/index.html`, `docs/app.js`, `docs/service-worker.js`, `docs/manifest.webmanifest`, `Code.js`, `index.html`, `.clasp.json`, `.claspignore`.
 
@@ -202,7 +202,8 @@ Draft-board roster ID resolution:
 * Live config load from Apps Script with fallback defaults.
 * Live standings load from Apps Script with local cached fallback.
 * On first successful standings load, a faux-profile dialog asks which team belongs to the current device. The choice is stored under `always-smooth-member-profile-v1`, pins and highlights that team first while preserving its true rank badge, and similarly prioritizes the matching Betting member. Home and Betting expose a `My Team` control for changing the preference.
-* Immediately after a device's first team selection, a dependency-free four-step coach-mark tour spotlights the announcement/ticker area, remembered team card, Draft Board shortcut, and Betting tab. It supports Skip, Back, Next/Done, keyboard navigation, reduced motion, automatic scrolling, responsive callout placement, and replay from Home or Betting. Completion/skip state is stored under `always-smooth-onboarding-v1`.
+* Immediately after a device's first team selection, a dependency-free five-step coach-mark tour spotlights the announcement/ticker area, remembered team card, expanded Captain section, Draft Board shortcut, and Betting tab. It supports Skip, Back, Next/Done, keyboard navigation, reduced motion, automatic scrolling, responsive callout placement, and replay from Home or Betting. Completion/skip state is stored under `always-smooth-onboarding-v1`.
+* The Captain tour step uses the exact rule summary: “Choose one starter as your Captain. Their points count 2× for that week, with the commissioner applying the adjustment manually in Sleeper. Each player can only be captain once per season.” Users who already completed/skipped welcome onboarding receive a separate one-time Captain-only callout stored under `always-smooth-captain-intro-v1`; it expands their team card but never opens the picker or selects a player.
 * Home standings header season/week pills are populated from the `Settings` tab via `api=config`; missing Settings values render as `--` instead of hardcoded season/week numbers.
 * A compact Rules pill beside the Home season/week/sync metadata opens the structured `Always Smooth Constitution '26` in a full-height mobile sheet or centered desktop modal. Sections are accordion-based, only one remains open at a time, and the footer links to the original Google Doc.
 * Home and Betting timestamp pills double as refresh buttons to save mobile header space.
@@ -260,7 +261,7 @@ Draft-board roster ID resolution:
 
 ## Recommended Next 3 Steps
 
-1. Publish GitHub Pages and verify the PWA reports app version `v2026.07.29.1`.
+1. Publish GitHub Pages and verify the PWA reports app version `v2026.07.29.2`.
 2. After a week is final, update Turkey Watch/mulligan values as needed and run `Update Records > Finalize Weekly Recap`.
 3. Compare every active team's recap with the final Sleeper matchup, including a league-low tie and any `0`/negative starter edge cases.
 

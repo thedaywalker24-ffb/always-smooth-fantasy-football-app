@@ -1,5 +1,5 @@
 const API_BASE_URL = 'https://script.google.com/macros/s/AKfycbwtM_NX16wFOHssvhvP2Iw7FI_7YcVgJ9-5DNbvNOblMxifawE4R-F_eiOLU1NsEggF/exec';
-const APP_VERSION = 'v2026.07.29.1';
+const APP_VERSION = 'v2026.07.29.2';
 const FALLBACK_PHOTO = 'https://images.unsplash.com/photo-1540747913346-19e32dc3e97e?q=80&w=600&auto=format&fit=crop';
 const THEME_KEY = 'theme';
 const CONFIG_CACHE_KEY = 'always-smooth-config';
@@ -11,6 +11,7 @@ const CAPTAIN_CACHE_KEY = 'always-smooth-captain-data';
 const WEEKLY_RECAP_CACHE_KEY = 'always-smooth-weekly-recap-data';
 const MEMBER_PROFILE_KEY = 'always-smooth-member-profile-v1';
 const ONBOARDING_KEY = 'always-smooth-onboarding-v1';
+const CAPTAIN_INTRO_KEY = 'always-smooth-captain-intro-v1';
 const BETTING_BET_COUNT = 6;
 const MATCHUPS_TAB_ENABLED = false;
 const DEFAULT_CONFIG = {
@@ -20,6 +21,14 @@ const DEFAULT_CONFIG = {
   leagueSeason: '',
   leagueWeek: '',
   headerImageSrc: FALLBACK_PHOTO
+};
+const CAPTAIN_TOUR_STEP = {
+  tab: 'home',
+  target: '.owner-tile--mine [data-captain-detail-slot]:not([hidden]) .captain-detail-card',
+  fallbackTarget: '.owner-tile--mine',
+  prepare: 'expand-member-team',
+  title: 'Meet the Captain Rule',
+  message: 'Choose one starter as your Captain. Their points count 2× for that week, with the commissioner applying the adjustment manually in Sleeper. Each player can only be captain once per season.'
 };
 const APP_TOUR_STEPS = [
   {
@@ -36,6 +45,7 @@ const APP_TOUR_STEPS = [
     title: 'Your Team, Up Front',
     message: 'Your team is pinned first and marked “Your Team,” while the rank badge still shows its true place in the standings. Tap any tile to reveal more details.'
   },
+  CAPTAIN_TOUR_STEP,
   {
     tab: 'home',
     target: '[data-jump-to-draft]',
@@ -77,6 +87,9 @@ let appTourStepIndex = -1;
 let appTourPreviousFocus = null;
 let appTourPositionFrame = null;
 let appTourScheduled = false;
+let activeAppTourSteps = APP_TOUR_STEPS;
+let appTourMode = 'welcome';
+let captainIntroScheduled = false;
 let captainDialogTimer = null;
 let selectedBettingMemberRow = null;
 let bettingStatusMessage = '';
@@ -720,7 +733,7 @@ function renderCaptainDetail(teamCaptain, teamName) {
             <p class="captain-kicker">Weekly Captain</p>
             <span class="captain-rule-tooltip" data-captain-rule-tooltip>
               <button type="button" class="captain-rule-tooltip-button" data-captain-rule-tooltip-button aria-label="Show Weekly Captain rule" aria-expanded="false" aria-controls="${ruleTooltipId}" aria-describedby="${ruleTooltipId}">i</button>
-              <span id="${ruleTooltipId}" class="captain-rule-tooltip-content" role="tooltip">Your Captain scores 2× points for the week. The commissioner applies the bonus manually in Sleeper. Each player can only be used once per season.</span>
+              <span id="${ruleTooltipId}" class="captain-rule-tooltip-content" role="tooltip">Choose one starter as your Captain. Their points count 2× for that week, with the commissioner applying the adjustment manually in Sleeper. Each player can only be captain once per season.</span>
             </span>
           </div>
           <p class="captain-detail-name player-name-with-position"><span class="truncate">${escapeHtml(captain?.playerName || 'No Captain selected')}</span>${renderPositionPill(captain?.position)}</p>
@@ -762,6 +775,7 @@ function renderCaptainSummaries(payload) {
     slot.hidden = false;
     slot.innerHTML = renderCaptainDetail(teamCaptain, teamName);
   });
+  scheduleCaptainIntroIfNeeded();
 }
 
 async function loadCaptainData() {
@@ -1138,6 +1152,26 @@ function rememberAppTourResult(status) {
   }
 }
 
+function hasSeenCaptainIntro() {
+  try {
+    return Boolean(localStorage.getItem(CAPTAIN_INTRO_KEY));
+  } catch (error) {
+    return false;
+  }
+}
+
+function rememberCaptainIntroResult(status) {
+  try {
+    localStorage.setItem(CAPTAIN_INTRO_KEY, JSON.stringify({
+      version: 1,
+      status: status,
+      recordedAt: new Date().toISOString()
+    }));
+  } catch (error) {
+    console.warn('Captain introduction preference could not be saved.', error);
+  }
+}
+
 function getAppTourTarget(step) {
   if (!step) return null;
   const target = document.querySelector(step.target);
@@ -1155,11 +1189,17 @@ function elementHasFixedAncestor(element) {
   return false;
 }
 
+function prepareAppTourStep(step) {
+  if (step?.prepare !== 'expand-member-team') return;
+  const memberTile = document.querySelector('.owner-tile--mine');
+  if (memberTile) setExpandedTeamTile(memberTile, true);
+}
+
 function positionAppTour() {
   const tour = document.getElementById('app-tour');
   const spotlight = document.getElementById('app-tour-spotlight');
   const card = document.getElementById('app-tour-card');
-  const step = APP_TOUR_STEPS[appTourStepIndex];
+  const step = activeAppTourSteps[appTourStepIndex];
   if (!tour || tour.hidden || !spotlight || !card || !step) return;
 
   const target = getAppTourTarget(step);
@@ -1204,24 +1244,33 @@ function queueAppTourPosition() {
 
 function renderAppTourStep() {
   const tour = document.getElementById('app-tour');
-  const step = APP_TOUR_STEPS[appTourStepIndex];
+  const step = activeAppTourSteps[appTourStepIndex];
   if (!tour || !step) return;
   setActiveTab(step.tab, false);
+  prepareAppTourStep(step);
 
   const stepLabel = document.getElementById('app-tour-step-label');
   const title = document.getElementById('app-tour-title');
   const message = document.getElementById('app-tour-message');
   const dots = document.getElementById('app-tour-dots');
   const backButton = tour.querySelector('[data-tour-back]');
+  const skipButton = tour.querySelector('[data-tour-skip]');
   const nextButton = tour.querySelector('[data-tour-next]');
-  stepLabel.textContent = `Step ${appTourStepIndex + 1} of ${APP_TOUR_STEPS.length}`;
+  stepLabel.textContent = appTourMode === 'captain'
+    ? 'New League Rule'
+    : `Step ${appTourStepIndex + 1} of ${activeAppTourSteps.length}`;
   title.textContent = step.title;
   message.textContent = step.message;
-  dots.innerHTML = APP_TOUR_STEPS.map((_, index) => (
+  dots.innerHTML = activeAppTourSteps.map((_, index) => (
     `<span class="app-tour-dot"${index === appTourStepIndex ? ' aria-current="step"' : ''}></span>`
   )).join('');
   backButton.hidden = appTourStepIndex === 0;
-  nextButton.textContent = appTourStepIndex === APP_TOUR_STEPS.length - 1 ? 'Done' : 'Next';
+  skipButton.textContent = appTourMode === 'captain' ? 'Dismiss' : 'Skip';
+  nextButton.textContent = appTourMode === 'captain'
+    ? 'Got It'
+    : appTourStepIndex === activeAppTourSteps.length - 1
+      ? 'Done'
+      : 'Next';
 
   const target = getAppTourTarget(step);
   const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -1237,7 +1286,7 @@ function renderAppTourStep() {
   nextButton.focus();
 }
 
-function startAppTour() {
+function startAppTour(mode = 'welcome') {
   const tour = document.getElementById('app-tour');
   if (
     !tour ||
@@ -1247,8 +1296,11 @@ function startAppTour() {
     !leagueData.teams.length
   ) return;
   appTourScheduled = false;
+  captainIntroScheduled = false;
   closeMemberProfileDialog(true);
   appTourPreviousFocus = document.activeElement;
+  appTourMode = mode === 'captain' ? 'captain' : 'welcome';
+  activeAppTourSteps = appTourMode === 'captain' ? [CAPTAIN_TOUR_STEP] : APP_TOUR_STEPS;
   appTourStepIndex = 0;
   tour.hidden = false;
   renderAppTourStep();
@@ -1257,10 +1309,16 @@ function startAppTour() {
 function finishAppTour(status = 'completed') {
   const tour = document.getElementById('app-tour');
   if (!tour || tour.hidden) return;
-  rememberAppTourResult(status);
+  if (appTourMode === 'captain') {
+    rememberCaptainIntroResult(status);
+  } else {
+    rememberAppTourResult(status);
+    rememberCaptainIntroResult(status === 'completed' ? 'covered-by-welcome' : 'welcome-skipped');
+  }
   tour.hidden = true;
   appTourStepIndex = -1;
   appTourScheduled = false;
+  captainIntroScheduled = false;
   if (appTourPositionFrame) {
     window.cancelAnimationFrame(appTourPositionFrame);
     appTourPositionFrame = null;
@@ -1271,7 +1329,7 @@ function finishAppTour(status = 'completed') {
 
 function moveAppTour(direction) {
   const nextIndex = appTourStepIndex + direction;
-  if (nextIndex >= APP_TOUR_STEPS.length) {
+  if (nextIndex >= activeAppTourSteps.length) {
     finishAppTour('completed');
     return;
   }
@@ -1311,6 +1369,43 @@ function scheduleAppTourIfNeeded() {
   attemptStart(0);
 }
 
+function scheduleCaptainIntroIfNeeded() {
+  if (
+    !memberProfile ||
+    !hasSeenAppTour() ||
+    hasSeenCaptainIntro() ||
+    !captainData ||
+    captainData.ok !== true ||
+    captainIntroScheduled ||
+    appTourStepIndex >= 0
+  ) return;
+  captainIntroScheduled = true;
+  const attemptStart = (attempt) => {
+    window.setTimeout(() => {
+      if (hasSeenCaptainIntro()) {
+        captainIntroScheduled = false;
+        return;
+      }
+      const splash = document.getElementById('app-splash');
+      const profileDialog = document.getElementById('profile-dialog');
+      if (
+        appTourStepIndex >= 0 ||
+        (splash && !splash.classList.contains('is-hidden')) ||
+        (profileDialog && !profileDialog.hidden)
+      ) {
+        if (attempt < 12) {
+          attemptStart(attempt + 1);
+        } else {
+          captainIntroScheduled = false;
+        }
+        return;
+      }
+      startAppTour('captain');
+    }, attempt ? 300 : 650);
+  };
+  attemptStart(0);
+}
+
 function setupAppTour() {
   const tour = document.getElementById('app-tour');
   if (!tour) return;
@@ -1318,7 +1413,7 @@ function setupAppTour() {
   tour.querySelector('[data-tour-back]')?.addEventListener('click', () => moveAppTour(-1));
   tour.querySelector('[data-tour-skip]')?.addEventListener('click', () => finishAppTour('skipped'));
   document.addEventListener('click', (event) => {
-    if (event.target.closest('[data-tour-replay]')) startAppTour();
+    if (event.target.closest('[data-tour-replay]')) startAppTour('welcome');
   });
   document.addEventListener('keydown', (event) => {
     if (tour.hidden) return;
