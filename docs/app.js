@@ -1,5 +1,5 @@
 const API_BASE_URL = 'https://script.google.com/macros/s/AKfycbwtM_NX16wFOHssvhvP2Iw7FI_7YcVgJ9-5DNbvNOblMxifawE4R-F_eiOLU1NsEggF/exec';
-const APP_VERSION = 'v2026.07.28.2';
+const APP_VERSION = 'v2026.07.29.1';
 const FALLBACK_PHOTO = 'https://images.unsplash.com/photo-1540747913346-19e32dc3e97e?q=80&w=600&auto=format&fit=crop';
 const THEME_KEY = 'theme';
 const CONFIG_CACHE_KEY = 'always-smooth-config';
@@ -10,6 +10,7 @@ const MATCHUPS_CACHE_KEY = 'always-smooth-matchups-data';
 const CAPTAIN_CACHE_KEY = 'always-smooth-captain-data';
 const WEEKLY_RECAP_CACHE_KEY = 'always-smooth-weekly-recap-data';
 const MEMBER_PROFILE_KEY = 'always-smooth-member-profile-v1';
+const ONBOARDING_KEY = 'always-smooth-onboarding-v1';
 const BETTING_BET_COUNT = 6;
 const MATCHUPS_TAB_ENABLED = false;
 const DEFAULT_CONFIG = {
@@ -20,6 +21,36 @@ const DEFAULT_CONFIG = {
   leagueWeek: '',
   headerImageSrc: FALLBACK_PHOTO
 };
+const APP_TOUR_STEPS = [
+  {
+    tab: 'home',
+    target: '#announcement-tile',
+    fallbackTarget: '#ticker-section',
+    title: 'Your League HQ',
+    message: 'Announcements and the live ticker keep the latest league business and NFL news at the top of Home.'
+  },
+  {
+    tab: 'home',
+    target: '.owner-tile--mine',
+    fallbackTarget: '#standings-grid',
+    title: 'Your Team, Up Front',
+    message: 'Your team is pinned first and marked “Your Team,” while the rank badge still shows its true place in the standings. Tap any tile to reveal more details.'
+  },
+  {
+    tab: 'home',
+    target: '[data-jump-to-draft]',
+    fallbackTarget: '#draft-board-section',
+    title: 'Jump to the Draft',
+    message: 'Use this shortcut to reach the rookie Draft Board, where picks, trades, and unresolved slots stay easy to scan.'
+  },
+  {
+    tab: 'betting',
+    target: '#tab-betting',
+    fallbackTarget: '#betting-panel',
+    title: 'Weekly Betting',
+    message: 'Your Betting profile is pinned first too. Choose it to make weekly picks, review submission status, and see results once they are finalized.'
+  }
+];
 
 let deferredInstallPrompt = null;
 let lastScrollTop = 0;
@@ -42,6 +73,10 @@ let leagueDataIsStale = false;
 let memberProfile = null;
 let profileDialogPreviousFocus = null;
 let memberProfilePromptShown = false;
+let appTourStepIndex = -1;
+let appTourPreviousFocus = null;
+let appTourPositionFrame = null;
+let appTourScheduled = false;
 let captainDialogTimer = null;
 let selectedBettingMemberRow = null;
 let bettingStatusMessage = '';
@@ -1002,6 +1037,7 @@ function selectMemberProfileTeam(profileKey) {
   const teams = Array.isArray(leagueData?.teams) ? leagueData.teams : [];
   const team = teams.find((candidate) => getTeamProfileKey(candidate) === profileKey);
   if (!team) return;
+  markAppTourPendingIfNeeded();
   saveMemberProfile(buildMemberProfileFromTeam(team));
   closeMemberProfileDialog(true);
   renderTeams(leagueData, leagueDataIsStale);
@@ -1009,6 +1045,7 @@ function selectMemberProfileTeam(profileKey) {
     reconcileMemberProfileWithBettingMembers(bettingData.members);
     renderBetting();
   }
+  scheduleAppTourIfNeeded();
 }
 
 function setupMemberProfile() {
@@ -1056,6 +1093,266 @@ function setupMemberProfile() {
       }
     }
   });
+}
+
+function getAppTourState() {
+  try {
+    const raw = localStorage.getItem(ONBOARDING_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch (error) {
+    return null;
+  }
+}
+
+function hasSeenAppTour() {
+  const state = getAppTourState();
+  return state?.status === 'completed' || state?.status === 'skipped';
+}
+
+function isAppTourPending() {
+  return getAppTourState()?.status === 'pending';
+}
+
+function markAppTourPendingIfNeeded() {
+  if (getAppTourState()) return;
+  try {
+    localStorage.setItem(ONBOARDING_KEY, JSON.stringify({
+      version: 1,
+      status: 'pending',
+      recordedAt: new Date().toISOString()
+    }));
+  } catch (error) {
+    console.warn('Walkthrough preference could not be initialized.', error);
+  }
+}
+
+function rememberAppTourResult(status) {
+  try {
+    localStorage.setItem(ONBOARDING_KEY, JSON.stringify({
+      version: 1,
+      status: status,
+      recordedAt: new Date().toISOString()
+    }));
+  } catch (error) {
+    console.warn('Walkthrough preference could not be saved.', error);
+  }
+}
+
+function getAppTourTarget(step) {
+  if (!step) return null;
+  const target = document.querySelector(step.target);
+  if (target && !target.hidden && target.getClientRects().length) return target;
+  const fallback = document.querySelector(step.fallbackTarget);
+  return fallback && !fallback.hidden && fallback.getClientRects().length ? fallback : null;
+}
+
+function elementHasFixedAncestor(element) {
+  let current = element;
+  while (current && current !== document.body) {
+    if (window.getComputedStyle(current).position === 'fixed') return true;
+    current = current.parentElement;
+  }
+  return false;
+}
+
+function positionAppTour() {
+  const tour = document.getElementById('app-tour');
+  const spotlight = document.getElementById('app-tour-spotlight');
+  const card = document.getElementById('app-tour-card');
+  const step = APP_TOUR_STEPS[appTourStepIndex];
+  if (!tour || tour.hidden || !spotlight || !card || !step) return;
+
+  const target = getAppTourTarget(step);
+  const viewportWidth = window.innerWidth;
+  const viewportHeight = window.innerHeight;
+  const padding = 8;
+  const edge = 8;
+  const rect = target
+    ? target.getBoundingClientRect()
+    : {
+        left: viewportWidth * 0.2,
+        right: viewportWidth * 0.8,
+        top: viewportHeight * 0.3,
+        bottom: viewportHeight * 0.55,
+        width: viewportWidth * 0.6,
+        height: viewportHeight * 0.25
+      };
+  const left = Math.max(edge, rect.left - padding);
+  const top = Math.max(edge, rect.top - padding);
+  const right = Math.min(viewportWidth - edge, rect.right + padding);
+  const bottom = Math.min(viewportHeight - edge, rect.bottom + padding);
+
+  spotlight.style.left = `${left}px`;
+  spotlight.style.top = `${top}px`;
+  spotlight.style.width = `${Math.max(44, right - left)}px`;
+  spotlight.style.height = `${Math.max(44, bottom - top)}px`;
+  spotlight.style.borderRadius = target
+    ? window.getComputedStyle(target).borderRadius || '1.25rem'
+    : '1.25rem';
+  card.dataset.placement = (top + bottom) / 2 > viewportHeight / 2 ? 'top' : 'bottom';
+}
+
+function queueAppTourPosition() {
+  const tour = document.getElementById('app-tour');
+  if (!tour || tour.hidden) return;
+  if (appTourPositionFrame) window.cancelAnimationFrame(appTourPositionFrame);
+  appTourPositionFrame = window.requestAnimationFrame(() => {
+    appTourPositionFrame = null;
+    positionAppTour();
+  });
+}
+
+function renderAppTourStep() {
+  const tour = document.getElementById('app-tour');
+  const step = APP_TOUR_STEPS[appTourStepIndex];
+  if (!tour || !step) return;
+  setActiveTab(step.tab, false);
+
+  const stepLabel = document.getElementById('app-tour-step-label');
+  const title = document.getElementById('app-tour-title');
+  const message = document.getElementById('app-tour-message');
+  const dots = document.getElementById('app-tour-dots');
+  const backButton = tour.querySelector('[data-tour-back]');
+  const nextButton = tour.querySelector('[data-tour-next]');
+  stepLabel.textContent = `Step ${appTourStepIndex + 1} of ${APP_TOUR_STEPS.length}`;
+  title.textContent = step.title;
+  message.textContent = step.message;
+  dots.innerHTML = APP_TOUR_STEPS.map((_, index) => (
+    `<span class="app-tour-dot"${index === appTourStepIndex ? ' aria-current="step"' : ''}></span>`
+  )).join('');
+  backButton.hidden = appTourStepIndex === 0;
+  nextButton.textContent = appTourStepIndex === APP_TOUR_STEPS.length - 1 ? 'Done' : 'Next';
+
+  const target = getAppTourTarget(step);
+  const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (target && !elementHasFixedAncestor(target)) {
+    target.scrollIntoView({
+      behavior: reduceMotion ? 'auto' : 'smooth',
+      block: 'center',
+      inline: 'nearest'
+    });
+  }
+  positionAppTour();
+  window.setTimeout(positionAppTour, reduceMotion ? 20 : 380);
+  nextButton.focus();
+}
+
+function startAppTour() {
+  const tour = document.getElementById('app-tour');
+  if (
+    !tour ||
+    appTourStepIndex >= 0 ||
+    !memberProfile ||
+    !Array.isArray(leagueData?.teams) ||
+    !leagueData.teams.length
+  ) return;
+  appTourScheduled = false;
+  closeMemberProfileDialog(true);
+  appTourPreviousFocus = document.activeElement;
+  appTourStepIndex = 0;
+  tour.hidden = false;
+  renderAppTourStep();
+}
+
+function finishAppTour(status = 'completed') {
+  const tour = document.getElementById('app-tour');
+  if (!tour || tour.hidden) return;
+  rememberAppTourResult(status);
+  tour.hidden = true;
+  appTourStepIndex = -1;
+  appTourScheduled = false;
+  if (appTourPositionFrame) {
+    window.cancelAnimationFrame(appTourPositionFrame);
+    appTourPositionFrame = null;
+  }
+  if (appTourPreviousFocus instanceof HTMLElement) appTourPreviousFocus.focus();
+  appTourPreviousFocus = null;
+}
+
+function moveAppTour(direction) {
+  const nextIndex = appTourStepIndex + direction;
+  if (nextIndex >= APP_TOUR_STEPS.length) {
+    finishAppTour('completed');
+    return;
+  }
+  if (nextIndex < 0) return;
+  appTourStepIndex = nextIndex;
+  renderAppTourStep();
+}
+
+function scheduleAppTourIfNeeded() {
+  if (
+    !memberProfile ||
+    !isAppTourPending() ||
+    hasSeenAppTour() ||
+    appTourScheduled ||
+    appTourStepIndex >= 0
+  ) return;
+  appTourScheduled = true;
+  const attemptStart = (attempt) => {
+    window.setTimeout(() => {
+      if (hasSeenAppTour() || appTourStepIndex >= 0) {
+        appTourScheduled = false;
+        return;
+      }
+      const splash = document.getElementById('app-splash');
+      const profileDialog = document.getElementById('profile-dialog');
+      if ((splash && !splash.classList.contains('is-hidden')) || (profileDialog && !profileDialog.hidden)) {
+        if (attempt < 12) {
+          attemptStart(attempt + 1);
+        } else {
+          appTourScheduled = false;
+        }
+        return;
+      }
+      startAppTour();
+    }, attempt ? 300 : 450);
+  };
+  attemptStart(0);
+}
+
+function setupAppTour() {
+  const tour = document.getElementById('app-tour');
+  if (!tour) return;
+  tour.querySelector('[data-tour-next]')?.addEventListener('click', () => moveAppTour(1));
+  tour.querySelector('[data-tour-back]')?.addEventListener('click', () => moveAppTour(-1));
+  tour.querySelector('[data-tour-skip]')?.addEventListener('click', () => finishAppTour('skipped'));
+  document.addEventListener('click', (event) => {
+    if (event.target.closest('[data-tour-replay]')) startAppTour();
+  });
+  document.addEventListener('keydown', (event) => {
+    if (tour.hidden) return;
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      finishAppTour('skipped');
+      return;
+    }
+    if (event.key === 'ArrowRight') {
+      event.preventDefault();
+      moveAppTour(1);
+      return;
+    }
+    if (event.key === 'ArrowLeft') {
+      event.preventDefault();
+      moveAppTour(-1);
+      return;
+    }
+    if (event.key !== 'Tab') return;
+    const focusable = Array.from(tour.querySelectorAll(
+      '[data-tour-skip], [data-tour-back]:not([hidden]), [data-tour-next]'
+    ));
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
+    }
+  });
+  window.addEventListener('resize', queueAppTourPosition);
+  window.addEventListener('scroll', queueAppTourPosition, { passive: true });
 }
 
 function renderTeams(payload, isStale = false) {
@@ -1192,6 +1489,8 @@ function renderTeams(payload, isStale = false) {
   }
   if ((!memberProfile || !matchedProfileTeam) && !memberProfilePromptShown) {
     openMemberProfileDialog();
+  } else if (memberProfile && matchedProfileTeam && isAppTourPending()) {
+    scheduleAppTourIfNeeded();
   }
 
   if (isStale) {
@@ -2216,6 +2515,7 @@ function renderBettingHeader(actionsMarkup = '') {
           <button type="button" data-betting-refresh class="rounded-full border border-slate-200 bg-white px-3 py-2 text-slate-700 shadow-sm transition hover:border-pink-500 hover:text-pink-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 sm:px-4" aria-label="Refresh betting data">${escapeHtml(formatCompactTimestamp(bettingData?.updatedAt))}</button>
           ${bettingData?.resultsPosted ? '<span class="rounded-full bg-emerald-500 px-4 py-2 text-white shadow-lg shadow-emerald-500/20">Finalized</span>' : '<span class="rounded-full bg-pink-500 px-4 py-2 text-white shadow-lg shadow-pink-500/20">Open</span>'}
           <button type="button" data-profile-open class="rounded-full border border-pink-200 bg-pink-50 px-3 py-2 text-pink-600 shadow-sm transition hover:border-pink-500 hover:bg-pink-500 hover:text-white dark:border-pink-500/30 dark:bg-pink-500/10 dark:text-pink-300 sm:px-4">${memberProfile ? 'My Team' : 'Choose Team'}</button>
+          <button type="button" data-tour-replay class="rounded-full border border-slate-200 bg-white px-3 py-2 text-slate-600 shadow-sm transition hover:border-pink-500 hover:text-pink-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 sm:px-4">Tour</button>
         </div>
       </div>
       ${actions}
@@ -2997,6 +3297,7 @@ async function bootstrap() {
   setupHomeShortcuts();
   setupRulesDialog();
   setupMemberProfile();
+  setupAppTour();
   setupAppTabs();
   setupCaptainDialog();
   setupBettingControls();

@@ -184,7 +184,8 @@
         #status-banner[hidden],
         .action-dialog[hidden],
         .rules-dialog[hidden],
-        .profile-dialog[hidden] {
+        .profile-dialog[hidden],
+        .app-tour[hidden] {
             display: none;
         }
 
@@ -441,6 +442,190 @@
         @media (max-width: 430px) {
             .profile-team-grid {
                 grid-template-columns: minmax(0, 1fr);
+            }
+        }
+
+        .app-tour {
+            position: fixed;
+            inset: 0;
+            z-index: 130;
+            pointer-events: none;
+        }
+
+        .app-tour-blocker {
+            position: fixed;
+            inset: 0;
+            pointer-events: auto;
+            touch-action: none;
+        }
+
+        .app-tour-spotlight {
+            position: fixed;
+            z-index: 1;
+            border: 3px solid rgba(255, 255, 255, 0.94);
+            border-radius: 1.25rem;
+            box-shadow:
+                0 0 0 9999px rgba(2, 6, 23, 0.76),
+                0 0 0 7px rgba(236, 72, 153, 0.38),
+                0 18px 50px rgba(2, 6, 23, 0.38);
+            pointer-events: none;
+            transition: top 0.28s ease, left 0.28s ease, width 0.28s ease, height 0.28s ease, border-radius 0.18s ease;
+        }
+
+        .app-tour-card {
+            position: fixed;
+            left: 50%;
+            z-index: 2;
+            width: min(calc(100vw - 2rem), 24rem);
+            overflow: hidden;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 1.35rem;
+            background: rgba(248, 250, 252, 0.98);
+            color: #0f172a;
+            box-shadow: 0 28px 80px rgba(2, 6, 23, 0.46);
+            pointer-events: auto;
+            transform: translateX(-50%);
+        }
+
+        .app-tour-card[data-placement="top"] {
+            top: max(1rem, env(safe-area-inset-top));
+        }
+
+        .app-tour-card[data-placement="bottom"] {
+            bottom: calc(6.25rem + env(safe-area-inset-bottom));
+        }
+
+        .dark .app-tour-card {
+            border-color: rgba(244, 114, 182, 0.24);
+            background: rgba(15, 23, 42, 0.98);
+            color: #f8fafc;
+        }
+
+        .app-tour-accent {
+            height: 0.32rem;
+            background: linear-gradient(90deg, #ec4899, #f43f5e, #f97316);
+        }
+
+        .app-tour-content {
+            padding: 1.1rem 1.15rem 1.15rem;
+        }
+
+        .app-tour-progress-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 1rem;
+        }
+
+        .app-tour-step-label {
+            color: #ec4899;
+            font-size: 0.62rem;
+            font-weight: 950;
+            letter-spacing: 0.18em;
+            text-transform: uppercase;
+        }
+
+        .app-tour-dots {
+            display: flex;
+            gap: 0.28rem;
+        }
+
+        .app-tour-dot {
+            width: 0.38rem;
+            height: 0.38rem;
+            border-radius: 9999px;
+            background: #cbd5e1;
+        }
+
+        .app-tour-dot[aria-current="step"] {
+            width: 1rem;
+            background: linear-gradient(90deg, #ec4899, #f97316);
+        }
+
+        .dark .app-tour-dot {
+            background: #475569;
+        }
+
+        .dark .app-tour-dot[aria-current="step"] {
+            background: linear-gradient(90deg, #ec4899, #f97316);
+        }
+
+        .app-tour-title {
+            margin-top: 0.72rem;
+            font-size: 1.28rem;
+            font-weight: 950;
+            font-style: italic;
+            line-height: 1;
+            text-transform: uppercase;
+        }
+
+        .app-tour-message {
+            margin-top: 0.58rem;
+            color: #475569;
+            font-size: 0.82rem;
+            font-weight: 700;
+            line-height: 1.5;
+        }
+
+        .dark .app-tour-message {
+            color: #cbd5e1;
+        }
+
+        .app-tour-actions {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 0.65rem;
+            margin-top: 1rem;
+        }
+
+        .app-tour-actions-group {
+            display: flex;
+            align-items: center;
+            gap: 0.55rem;
+        }
+
+        .app-tour-button {
+            border: 1px solid #e2e8f0;
+            border-radius: 9999px;
+            background: #ffffff;
+            padding: 0.62rem 0.88rem;
+            color: #475569;
+            font-size: 0.66rem;
+            font-weight: 950;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+        }
+
+        .app-tour-button:hover,
+        .app-tour-button:focus-visible {
+            border-color: #ec4899;
+            color: #db2777;
+        }
+
+        .app-tour-button--primary {
+            border-color: transparent;
+            background: linear-gradient(135deg, #ec4899, #f43f5e 56%, #f97316);
+            color: #ffffff;
+            box-shadow: 0 10px 24px rgba(236, 72, 153, 0.24);
+        }
+
+        .app-tour-button--primary:hover,
+        .app-tour-button--primary:focus-visible {
+            border-color: transparent;
+            color: #ffffff;
+            filter: brightness(1.05);
+        }
+
+        .dark .app-tour-button:not(.app-tour-button--primary) {
+            border-color: #334155;
+            background: #0f172a;
+            color: #cbd5e1;
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            .app-tour-spotlight {
+                transition: none;
             }
         }
 
@@ -2855,6 +3040,28 @@
             </div>
         </section>
     </div>
+    <div id="app-tour" class="app-tour" role="dialog" aria-modal="true" aria-labelledby="app-tour-title" aria-describedby="app-tour-message" hidden>
+        <div class="app-tour-blocker" aria-hidden="true"></div>
+        <div id="app-tour-spotlight" class="app-tour-spotlight" aria-hidden="true"></div>
+        <section id="app-tour-card" class="app-tour-card" data-placement="bottom" aria-live="polite">
+            <div class="app-tour-accent" aria-hidden="true"></div>
+            <div class="app-tour-content">
+                <div class="app-tour-progress-row">
+                    <p id="app-tour-step-label" class="app-tour-step-label">Step 1 of 4</p>
+                    <div id="app-tour-dots" class="app-tour-dots" aria-hidden="true"></div>
+                </div>
+                <h2 id="app-tour-title" class="app-tour-title">Welcome</h2>
+                <p id="app-tour-message" class="app-tour-message"></p>
+                <div class="app-tour-actions">
+                    <button type="button" class="app-tour-button" data-tour-skip>Skip</button>
+                    <div class="app-tour-actions-group">
+                        <button type="button" class="app-tour-button" data-tour-back>Back</button>
+                        <button type="button" class="app-tour-button app-tour-button--primary" data-tour-next>Next</button>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </div>
     <div id="rules-dialog" class="rules-dialog" role="dialog" aria-modal="true" aria-labelledby="rules-dialog-title" hidden>
         <button type="button" class="rules-dialog-backdrop" data-rules-close tabindex="-1" aria-label="Close league rules"></button>
         <section class="rules-dialog-panel" aria-describedby="rules-dialog-description">
@@ -2950,6 +3157,10 @@
                                 <button id="profile-button" type="button" class="rules-trigger-pill" aria-haspopup="dialog" aria-controls="profile-dialog" aria-expanded="false">
                                     <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5.121 17.804A7 7 0 0112 14a7 7 0 016.879 3.804M15 8a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
                                     <span id="profile-button-label">My Team</span>
+                                </button>
+                                <button type="button" class="rules-trigger-pill" data-tour-replay aria-label="Replay app walkthrough">
+                                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h8m-8 5h5m-8 9l2.8-2.1A2 2 0 019 18.5h8a2 2 0 002-2v-11a2 2 0 00-2-2H7a2 2 0 00-2 2V21z"></path></svg>
+                                    <span>Tour</span>
                                 </button>
                             </div>
                             <div class="draft-board-jump-wrap">
