@@ -2,10 +2,10 @@
 
 ## Current Status
 
-* Last completed section: Day-aware NFL ticker; Sunday/Monday favor scores, Tuesday/Wednesday show news, and Thursday-Saturday favor news while retaining only active/final games.
-* Current section in progress: Apps Script and GitHub Pages/PWA deployment verification for the ticker cadence, Captain onboarding, remembered profiles, player scores, and weekly recaps.
-* Next recommended task: Push and redeploy Apps Script, publish the frontend, then verify the ticker mode labels and item mix on the deployed app.
-* Open risks: Hardcoded Apps Script deployment URL, simple JSONP/GET admin and betting write flows, public trust-based bet submission, fragile Google Sheets tab/column dependencies, fixed matchup sheet row offsets, no automated tests, and duplicated/legacy Apps Script paths.
+* Last completed section: Direct matchup sync; Apps Script now generates `All Matchups` and `Matchup Player Scores` from one Sleeper response, with Settings as the only season/week source.
+* Current section in progress: Apps Script deployment verification for generated matchup data, opt-in live-sync scheduling, Captain onboarding, player scores, and weekly recaps.
+* Next recommended task: Push/redeploy Apps Script, run one manual matchup sync against a live week, then install the hourly Thursday/Sunday/Monday scheduler when ready for the season.
+* Open risks: Hardcoded Apps Script deployment URL, simple JSONP/GET admin and betting write flows, public trust-based bet submission, no automated tests, and duplicated/legacy Apps Script paths.
 * Most relevant files: `SKILL.md`, `docs/index.html`, `docs/app.js`, `docs/service-worker.js`, `docs/manifest.webmanifest`, `Code.js`, `index.html`, `.clasp.json`, `.claspignore`.
 
 ## App Overview
@@ -69,8 +69,8 @@ Known tabs and dependencies:
 * `Settings`: app config.
 * `Rosters & Records`: primary frontend standings source.
 * `Teams`: supplemental team fields matched by team name.
-* `All Matchups`: compiled matchup display source for the Matchups tab; rows are grouped by `Matchup ID`.
-* `API Data`: current matchup import uses week number from `A19` and writes to a fixed starting row.
+* `All Matchups`: generated current-week app display source; rows are grouped by `Matchup ID`.
+* `Matchup Sync Log`: generated operational log for manual/scheduled sync attempts, warnings, counts, and timestamps.
 * `Sleeper Players`: player lookup data for roster population.
 * `Team Rosters`: generated roster output.
 * `Weekly Captains`: auditable weekly Captain picks written by the app.
@@ -210,6 +210,7 @@ Draft-board roster ID resolution:
 * Home and Betting timestamp pills double as refresh buttons to save mobile header space.
 * Home standings cards show weekly Captain state: compact `C` player badge on the primary card when selected, and a fuller Captain card plus starter picker inside the expanded accordion when Captain submissions are open.
 * The expanded Weekly Captain card includes an accessible info tooltip summarizing the 2× scoring rule, manual commissioner adjustment in Sleeper, and once-per-season player restriction.
+* When a remembered team's Captain submissions are open and it has no Captain selected, its Home standings tile receives a personal `Captain Needed` badge, orange/pink emphasis, and a reduced-motion-safe pulsing dot. The indicator is never shown for other teams, disappears after selection/lock, and its team-tile toggle announces Captain setup to assistive technology.
 * Player positions use shared compact color pills wherever structured position data accompanies a player name: QB blue, WR yellow, RB green, TE orange, DEF gray, and K red. Captain UI and completed draft picks use their existing position fields; Team MVP position is inferred from the `Sleeper Players` Full Name/Position columns.
 * Home ticker tape uses Rotoworld/NBC fantasy football headlines and ESPN public NFL scoreboard data through Apps Script; Feb-Aug renders headlines only, while Sep-Jan alternates two score items with one headline. The Rotoworld fetch tries the requested RSS URL, the page Atom feed, then the server-rendered player-news page as fallback. The HTML fallback parses each `PlayerNewsPost` independently so its headline and share link can appear in either order. The frontend duplicates ticker items in the marquee track for seamless CSS scrolling, pauses animation on hover/focus, and keeps the ticker sticky near the top of the viewport while scrolling the Home screen.
 * Team cards sorted by wins and points for. When `All Matchups` has a complete two-team matchup for a standing team, the Home standings card shows a compact bottom matchup strip with that team's thumbnail + current score, `vs`, the opponent score + thumbnail, and opponent name; teams without an active matchup hide the strip. Home matchup hydration matches either standings team name or standings owner/real name because `All Matchups` currently uses first names in its `Name` column.
@@ -224,12 +225,13 @@ Draft-board roster ID resolution:
 * Betting team/manager avatar dropdowns use a fixed body-level menu portal so expanded lists can overlap lower bet cards on Android and other mobile browsers.
 * Betting submissions use the submit response to refresh the selected member form instead of immediately making a second sheet read.
 * Matchups tab v1 reads the `All Matchups` sheet, groups rows by `Matchup ID`, excludes incomplete groups, and renders each active matchup as a side-by-side photo-backed tile with `Photo` as backdrop plus `Record` and `Week Points` in the foreground. Matchup tiles reuse the standings-card border/accent treatment.
-* Upcoming rookie draft board v1 appears on Home below League Standings during the offseason; it reads `Settings!B6`, builds linear pre-draft pick slots from Sleeper `slot_to_roster_id`, applies `traded_picks`, highlights intentionally unresolved draft-order slots as TBD with candidate teams, maps roster IDs through `Rosters & Records`, caches the payload locally, and displays optional selected-player data when `/picks` is populated. The League Standings header includes a Draft Board shortcut. On mobile, Round 1 is expanded by default and later rounds are collapsed by default; tablet/desktop keeps all rounds visible.
+* Upcoming rookie draft board v1 appears on Home below League Standings during the offseason; it reads `Settings!B6`, builds pre-draft slots from Sleeper `slot_to_roster_id`, applies `traded_picks` for future/unselected ownership, and maps roster IDs through `Rosters & Records`. Once Sleeper returns completed `/picks`, each player is placed by its immutable `pick_no` and the selecting roster becomes the displayed owner—this prevents traded picks from drifting into another slot. The League Standings header includes a Draft Board shortcut. On mobile, Round 1 is expanded by default and later rounds are collapsed by default; tablet/desktop keeps all rounds visible.
 * The League Standings Draft Board shortcut is a prominent pink-to-orange gradient CTA: full-width on mobile, compact on larger screens, with a draft icon and down arrow. It uses only interaction feedback rather than continuous animation.
 * Removed the original GitHub Pages explainer tiles (`Install Friendly` and `Live Sheet Data`) from the bottom of Home so the page stays focused on league content.
 * Apps Script menu action `Build Upcoming Draft Board` creates/refreshes a normalized `Upcoming Draft Board` sheet snapshot using the same compiled draft-board payload.
 * Apps Script spreadsheet menu for league data operations.
-* `Refresh Matchups + Player Scores` preserves the legacy `API Data` matchup import while also replacing the selected season/week in `Matchup Player Scores`. Each row includes team/opponent totals, player identity/position, starter or bench status, individual output, and a visible ❎ for starters currently at `0` or below. Historical weeks remain intact.
+* `Sync Current Matchups` reads `Settings!B2:B4`, fetches Sleeper once, generates the current `All Matchups` table, and replaces the selected season/week in `Matchup Player Scores`. Each player row includes team/opponent totals, player identity/position, starter or bench status, individual output, and a visible ❎ for starters currently at `0` or below. Historical weeks remain intact.
+* `Install Live Matchup Sync` creates one opt-in hourly trigger. Its handler only syncs on Thursday, Sunday, and Monday during the NFL season; `Remove Live Matchup Sync` cleanly removes only that trigger.
 * Sleeper sync functions for members, records, rosters, players, matchups, and draft picks.
 * Defensive helpers for Google Drive image URLs and missing settings.
 * Documented deployment runbook for changes spanning Apps Script, GitHub Pages, and git.
@@ -247,7 +249,7 @@ Draft-board roster ID resolution:
 * Frontend deploy URL for Apps Script is hardcoded in `docs/app.js`.
 * Admin writes use a simple JSONP/GET route protected by `ALWAYS_SMOOTH_ADMIN_CODE`; keep editable fields low-risk and whitelisted.
 * Betting submissions use a public JSONP/GET route and trust known league members not to submit for each other; server validation limits writes to the configured member rows and bet columns.
-* `fetchMatchupData` still writes its legacy block to hardcoded `API Data` row `278`; the selected week prefers `API Data!A19` and only falls back to `Settings!B3`.
+* The legacy `API Data` matchup formulas are no longer maintained. The first `Sync Current Matchups` run intentionally clears their former `All Matchups` formula output and replaces it with generated values.
 * Expanded team-card styling is split between `docs/index.html` CSS overlays/row glass and `docs/app.js` rendered Tailwind text classes; keep both light/dark paths aligned.
 * Root `index.html` and `docs/index.html` can drift because one is Apps Script templated and one is GitHub Pages static.
 * `Code2.gs.js` appears to duplicate/precede the more complete `fetchSleeperPlayers` implementation in `Code.js`.

@@ -17,8 +17,12 @@ function onOpen(e) {
     .addItem('Refresh Team Records', 'updateRostersAndRecordsData')
     // .addItem('Click to refresh Team Records', 'getSleeperStandings')
     .addItem('Refresh Team Rosters', 'fetchAndPopulateRosters')
-    .addItem('Refresh Matchups + Player Scores', 'fetchMatchupData')
+    .addItem('Sync Current Matchups', 'syncCurrentWeekMatchups')
     .addItem('Finalize Weekly Recap', 'finalizeWeeklyRecap')
+    .addSeparator()
+    .addItem('Install Live Matchup Sync', 'installLiveMatchupSync')
+    .addItem('Remove Live Matchup Sync', 'removeLiveMatchupSync')
+    .addSeparator()
     .addItem('Retrieve Draft Data', 'fetchDraftPicksData')
     .addItem('Build Upcoming Draft Board', 'buildUpcomingDraftBoardSheet')
     .addItem('Fetch Player Data', 'fetchSleeperPlayers')
@@ -80,6 +84,37 @@ const BETTING_MAX_PICK_LENGTH = 120;
 const ROSTERS_RECORDS_SHEET = 'Rosters & Records';
 /** Sheet tab compiled by the league sheet for frontend matchup display */
 const ALL_MATCHUPS_SHEET = 'All Matchups';
+const ALL_MATCHUPS_HEADERS = [
+  'Season',
+  'Week',
+  'Roster ID',
+  'Team Name',
+  'Manager Name',
+  'Photo',
+  'Record',
+  'Week Points',
+  'Highest Player Score',
+  'Week MVP',
+  'Matchup ID',
+  'Opponent Roster ID',
+  'Opponent Team Name',
+  'Opponent Score',
+  'Synced At'
+];
+const MATCHUP_SYNC_LOG_SHEET = 'Matchup Sync Log';
+const MATCHUP_SYNC_LOG_HEADERS = [
+  'Season',
+  'Week',
+  'Run Type',
+  'Status',
+  'Matchup Count',
+  'Team Count',
+  'Player Rows',
+  'Strike Candidates',
+  'Warnings',
+  'Synced At'
+];
+const LIVE_MATCHUP_SYNC_HANDLER = 'runScheduledMatchupSync';
 /** Sheet tab written by buildUpcomingDraftBoardSheet */
 const UPCOMING_DRAFT_BOARD_SHEET = 'Upcoming Draft Board';
 /** Sheet tab written by fetchAndPopulateRosters */
@@ -2012,6 +2047,7 @@ function buildRosterIdDisplayLookup_(spreadsheet, includePhotos) {
   var displayNameCol = findRostersDisplayNameColumn_(headers);
   var userAvatarCol = headers.indexOf('User Avatar URL');
   var teamAvatarCol = headers.indexOf('Team Avatar URL');
+  var recordCol = headers.indexOf('W-L Record');
 
   if (rosterIdCol === -1) {
     diagnostics.missingRosterIdHeader = true;
@@ -2029,6 +2065,7 @@ function buildRosterIdDisplayLookup_(spreadsheet, includePhotos) {
 
     var teamName = teamNameCol >= 0 ? String(row[teamNameCol] || '').trim() : '';
     var managerName = displayNameCol >= 0 ? String(row[displayNameCol] || '').trim() : '';
+    var record = recordCol >= 0 ? String(row[recordCol] || '').trim() : '';
     var teamKey = normalizeTeamNameKey_(teamName);
     var teamSheetData = teamKey ? teamsSheetData[teamKey] : null;
     var rawPhoto = '';
@@ -2046,6 +2083,7 @@ function buildRosterIdDisplayLookup_(spreadsheet, includePhotos) {
       rosterId: rosterId,
       teamName: teamName || 'Roster ' + rosterId,
       managerName: managerName,
+      record: record,
       photoUrl: rawPhoto ? formatDriveUrl(rawPhoto) : ''
     };
   }
@@ -2066,6 +2104,7 @@ function resolveDraftOwner_(lookup, rosterId) {
     rosterId: key,
     teamName: key ? 'Roster ' + key : 'Unknown',
     managerName: '',
+    record: '',
     photoUrl: ''
   };
 }
@@ -2089,21 +2128,24 @@ function buildDraftSelectedPlayer_(pick) {
 }
 
 /**
+ * Indexes completed Sleeper selections by their immutable absolute pick number.
+ * For a completed draft this is the only reliable way to place a player: a
+ * selection's roster_id identifies who made the pick, not the original slot
+ * from which a traded pick began.
  * @param {Array} picks
  * @return {Object<string, Object>}
  */
-function buildDraftPicksBySlot_(picks) {
-  var bySlot = {};
-  if (!Array.isArray(picks)) return bySlot;
+function buildDraftPicksByNumber_(picks) {
+  var byNumber = {};
+  if (!Array.isArray(picks)) return byNumber;
 
   for (var i = 0; i < picks.length; i++) {
     var pick = picks[i];
     if (!pick) continue;
-    var round = Number(pick.round || 0);
-    var rosterId = normalizeSleeperRosterId_(pick.roster_id);
-    if (round && rosterId) bySlot[round + ':' + rosterId] = pick;
+    var pickNo = Number(pick.pick_no || pick.pick_number || 0);
+    if (pickNo > 0) byNumber[String(pickNo)] = pick;
   }
-  return bySlot;
+  return byNumber;
 }
 
 /**
@@ -2192,7 +2234,7 @@ function getDraftBoardData_(spreadsheet) {
   var rosterLookup = buildRosterIdDisplayLookup_(spreadsheet);
   var ownersByRosterId = rosterLookup.byRosterId;
   var tradedBySlot = buildTradedPicksByOriginalSlot_(tradedPicks);
-  var picksBySlot = buildDraftPicksBySlot_(picks);
+  var picksByNumber = buildDraftPicksByNumber_(picks);
   var slotToRosterId = draft.slot_to_roster_id || {};
   var assignedDraftSlots = {};
   var draftOrder = draft.draft_order || {};
@@ -2243,13 +2285,24 @@ function getDraftBoardData_(spreadsheet) {
       var slot = roundSlots[i];
       var originalRosterId = slot.rosterId;
       var trade = tradedBySlot[round + ':' + originalRosterId] || null;
-      var currentRosterId = trade ? normalizeSleeperRosterId_(trade.owner_id) : originalRosterId;
+      var projectedCurrentRosterId = trade ? normalizeSleeperRosterId_(trade.owner_id) : originalRosterId;
       var previousRosterId = trade ? normalizeSleeperRosterId_(trade.previous_owner_id) : '';
-      var unresolved = slot.unresolved && !trade;
-      var selectedPick = picksBySlot[round + ':' + originalRosterId] || null;
       var pickNo = ((round - 1) * slots.length) + i + 1;
       var pickInRound = i + 1;
+      var selectedPick = picksByNumber[String(pickNo)] || null;
+      var selectedRosterId = selectedPick ? normalizeSleeperRosterId_(selectedPick.roster_id) : '';
+      var currentRosterId = selectedRosterId || projectedCurrentRosterId;
       var selectedPlayer = buildDraftSelectedPlayer_(selectedPick);
+      var unresolved = slot.unresolved && !trade && !selectedPick;
+      var ownershipChanged = currentRosterId !== originalRosterId;
+
+      if (selectedPick && projectedCurrentRosterId && selectedRosterId && selectedRosterId !== projectedCurrentRosterId) {
+        warnings.push(
+          'Pick ' + round + '.' + (pickInRound < 10 ? '0' + pickInRound : String(pickInRound)) +
+          ' was selected by roster ' + selectedRosterId +
+          ', which differs from its traded-pick projection (' + projectedCurrentRosterId + ').'
+        );
+      }
 
       if (trade) tradedPickCount++;
       if (selectedPlayer) selectedPickCount++;
@@ -2273,7 +2326,7 @@ function getDraftBoardData_(spreadsheet) {
             }
           : resolveDraftOwner_(ownersByRosterId, currentRosterId),
         previousOwner: previousRosterId ? resolveDraftOwner_(ownersByRosterId, previousRosterId) : null,
-        traded: !!trade && currentRosterId !== originalRosterId,
+        traded: ownershipChanged,
         unresolved: unresolved,
         unresolvedCandidateRosterIds: unresolved ? unresolvedCandidateRosterIds : [],
         unresolvedCandidates: unresolved ? unresolvedCandidates : [],
@@ -2671,6 +2724,240 @@ function getMatchupsData_(spreadsheet) {
     excludedGroupCount: excludedGroupCount,
     updatedAt: new Date().toISOString()
   };
+}
+
+/**
+ * Ensures the generated current-matchup table exists. This replaces the old
+ * formula chain that read fixed blocks from the legacy API Data sheet.
+ * @param {GoogleAppsScript.Spreadsheet.Spreadsheet} spreadsheet
+ * @return {GoogleAppsScript.Spreadsheet.Sheet}
+ */
+function ensureAllMatchupsSheet_(spreadsheet) {
+  var sheet = spreadsheet.getSheetByName(ALL_MATCHUPS_SHEET);
+  if (!sheet) sheet = spreadsheet.insertSheet(ALL_MATCHUPS_SHEET);
+  return sheet;
+}
+
+/**
+ * @param {Object} item
+ * @param {string} playerId
+ * @param {number} starterIndex
+ * @return {{hasPoints: boolean, points: number}}
+ */
+function getSleeperStarterPoints_(item, playerId, starterIndex) {
+  var playersPoints = item && item.players_points && typeof item.players_points === 'object'
+    ? item.players_points
+    : {};
+  var startersPoints = item && Array.isArray(item.starters_points) ? item.starters_points : [];
+  var rawPoints = Object.prototype.hasOwnProperty.call(playersPoints, playerId)
+    ? playersPoints[playerId]
+    : startersPoints[starterIndex];
+  var numericPoints = Number(rawPoints);
+  return {
+    hasPoints: rawPoints !== '' && rawPoints !== null && rawPoints !== undefined && isFinite(numericPoints),
+    points: numericPoints
+  };
+}
+
+/**
+ * Builds one current-week display row per roster directly from Sleeper data.
+ * @param {GoogleAppsScript.Spreadsheet.Spreadsheet} spreadsheet
+ * @param {Array<Object>} sleeperMatchups
+ * @param {string|number} season
+ * @param {string|number} week
+ * @param {string} syncedAt
+ * @return {{rows: Array<Array<*>>, warnings: Array<string>, matchupCount: number}}
+ */
+function buildAllMatchupRows_(spreadsheet, sleeperMatchups, season, week, syncedAt) {
+  var ownersByRosterId = buildRosterIdDisplayLookup_(spreadsheet).byRosterId;
+  var playerInfoById = buildSleeperPlayerInfoMap_(spreadsheet);
+  var groups = {};
+  var warnings = [];
+
+  sleeperMatchups.forEach(function (item) {
+    var matchupId = String(item && item.matchup_id || '').trim();
+    if (!matchupId) return;
+    if (!groups[matchupId]) groups[matchupId] = [];
+    groups[matchupId].push(item);
+  });
+
+  var completeGroups = Object.keys(groups).sort(function (a, b) {
+    return Number(a) - Number(b);
+  }).map(function (matchupId) {
+    return groups[matchupId];
+  }).filter(function (teams) {
+    return teams.length === 2;
+  });
+  if (completeGroups.length * 2 !== sleeperMatchups.length) {
+    warnings.push('Excluded incomplete matchup groups from the current sync.');
+  }
+
+  var rows = [];
+  completeGroups.forEach(function (teams) {
+    teams.forEach(function (item, teamIndex) {
+      var rosterId = normalizeSleeperRosterId_(item && item.roster_id);
+      var opponent = teams[teamIndex === 0 ? 1 : 0];
+      var opponentRosterId = normalizeSleeperRosterId_(opponent && opponent.roster_id);
+      var owner = resolveDraftOwner_(ownersByRosterId, rosterId);
+      var opponentOwner = resolveDraftOwner_(ownersByRosterId, opponentRosterId);
+      if (!ownersByRosterId[rosterId]) {
+        warnings.push('Roster ' + rosterId + ' was not found in ' + ROSTERS_RECORDS_SHEET + '.');
+      }
+
+      var starters = Array.isArray(item && item.starters) ? item.starters : [];
+      var mvp = null;
+      starters.forEach(function (rawPlayerId, index) {
+        var playerId = String(rawPlayerId || '').trim();
+        if (!playerId || playerId === '0') return;
+        var score = getSleeperStarterPoints_(item, playerId, index);
+        if (!score.hasPoints || (mvp && score.points <= mvp.points)) return;
+        mvp = { playerId: playerId, points: score.points, info: playerInfoById[playerId] || {} };
+      });
+      var mvpName = mvp && mvp.info.playerName ? mvp.info.playerName : mvp ? 'Player ' + mvp.playerId : '';
+      var mvpLabel = mvpName ? mvpName + (mvp.info.position ? ' - ' + mvp.info.position : '') : '';
+
+      rows.push([
+        String(season || '').trim(), String(week || '').trim(), rosterId,
+        owner.teamName || 'Roster ' + rosterId, owner.managerName || '', owner.photoUrl || '', owner.record || '',
+        Math.round(Number(item && item.points || 0) * 100) / 100,
+        mvp ? Math.round(mvp.points * 100) / 100 : '', mvpLabel,
+        String(item && item.matchup_id || '').trim(), opponentRosterId,
+        opponentOwner.teamName || 'Roster ' + opponentRosterId,
+        Math.round(Number(opponent && opponent.points || 0) * 100) / 100, syncedAt
+      ]);
+    });
+  });
+
+  rows.sort(function (a, b) {
+    var matchupOrder = Number(a[10] || 0) - Number(b[10] || 0);
+    return matchupOrder || Number(a[2] || 0) - Number(b[2] || 0);
+  });
+  return { rows: rows, warnings: warnings, matchupCount: completeGroups.length };
+}
+
+/** Replaces the current app-facing matchup view with a generated table. */
+function writeAllMatchupsSheet_(spreadsheet, rows) {
+  var sheet = ensureAllMatchupsSheet_(spreadsheet);
+  sheet.clearContents();
+  sheet.getRange(1, 1, 1, ALL_MATCHUPS_HEADERS.length)
+    .setValues([ALL_MATCHUPS_HEADERS]).setFontWeight('bold').setBackground('#ec4899').setFontColor('#ffffff');
+  sheet.setFrozenRows(1);
+  if (rows.length) {
+    sheet.getRange(2, 1, rows.length, ALL_MATCHUPS_HEADERS.length).setValues(rows);
+    sheet.getRange(2, 8, rows.length, 2).setNumberFormat('0.00');
+    sheet.getRange(2, 14, rows.length, 1).setNumberFormat('0.00');
+  }
+  sheet.autoResizeColumns(1, ALL_MATCHUPS_HEADERS.length);
+}
+
+/** @return {GoogleAppsScript.Spreadsheet.Sheet} */
+function ensureMatchupSyncLogSheet_(spreadsheet) {
+  var sheet = spreadsheet.getSheetByName(MATCHUP_SYNC_LOG_SHEET);
+  if (!sheet) sheet = spreadsheet.insertSheet(MATCHUP_SYNC_LOG_SHEET);
+  var headerRange = sheet.getRange(1, 1, 1, MATCHUP_SYNC_LOG_HEADERS.length);
+  var headers = headerRange.getDisplayValues()[0];
+  var matches = MATCHUP_SYNC_LOG_HEADERS.every(function (header, index) {
+    return normalizeBettingOptionKey_(headers[index]) === normalizeBettingOptionKey_(header);
+  });
+  if (!matches) {
+    headerRange.setValues([MATCHUP_SYNC_LOG_HEADERS]).setFontWeight('bold').setBackground('#0f172a').setFontColor('#ffffff');
+    sheet.setFrozenRows(1);
+  }
+  return sheet;
+}
+
+/** @param {Object} entry */
+function appendMatchupSyncLog_(spreadsheet, entry) {
+  if (!spreadsheet) return;
+  ensureMatchupSyncLogSheet_(spreadsheet).appendRow([
+    entry.season || '', entry.week || '', entry.runType || '', entry.status || '',
+    entry.matchupCount || 0, entry.teamCount || 0, entry.playerCount || 0, entry.strikeCount || 0,
+    Array.isArray(entry.warnings) ? entry.warnings.join(' | ') : entry.warnings || '',
+    entry.syncedAt || new Date().toISOString()
+  ]);
+}
+
+/**
+ * Fetches, validates, and writes every live matchup artifact from one Sleeper
+ * response. It intentionally does not finalize weekly recaps.
+ * @return {Object}
+ */
+function syncCurrentWeekMatchups_(spreadsheet, runType) {
+  if (!spreadsheet) throw new Error('No spreadsheet is available.');
+  var season = getLeagueSeason_(spreadsheet);
+  var week = getLeagueWeek_(spreadsheet);
+  var leagueId = getLeagueId_(spreadsheet);
+  if (!season || !week || !leagueId) throw new Error('Settings season, week, and league ID are required for matchup sync.');
+
+  var lock = LockService.getDocumentLock();
+  if (!lock.tryLock(30000)) throw new Error('Another matchup sync is already running.');
+  var syncedAt = new Date().toISOString();
+  try {
+    var url = 'https://api.sleeper.app/v1/league/' + encodeURIComponent(leagueId) + '/matchups/' + encodeURIComponent(week);
+    var sleeperMatchups = fetchSleeperJson_(url);
+    if (!Array.isArray(sleeperMatchups) || !sleeperMatchups.length) throw new Error('Sleeper returned no matchup data for Week ' + week + '.');
+
+    var matchupResult = buildAllMatchupRows_(spreadsheet, sleeperMatchups, season, week, syncedAt);
+    if (!matchupResult.rows.length) throw new Error('Sleeper returned no complete two-team matchups for Week ' + week + '.');
+    writeAllMatchupsSheet_(spreadsheet, matchupResult.rows);
+    var playerScoreResult = upsertMatchupPlayerScores_(spreadsheet, sleeperMatchups, season, week);
+    var result = {
+      ok: true, season: season, week: week, matchupCount: matchupResult.matchupCount, teamCount: matchupResult.rows.length,
+      playerCount: playerScoreResult.playerCount, strikeCount: playerScoreResult.strikeCount,
+      warnings: matchupResult.warnings, syncedAt: syncedAt
+    };
+    appendMatchupSyncLog_(spreadsheet, {
+      season: season, week: week, runType: runType || 'manual', status: 'Success',
+      matchupCount: result.matchupCount, teamCount: result.teamCount, playerCount: result.playerCount,
+      strikeCount: result.strikeCount, warnings: result.warnings, syncedAt: syncedAt
+    });
+    SpreadsheetApp.flush();
+    return result;
+  } catch (error) {
+    appendMatchupSyncLog_(spreadsheet, {
+      season: season, week: week, runType: runType || 'manual', status: 'Failed',
+      warnings: [error.message || String(error)], syncedAt: syncedAt
+    });
+    throw error;
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+/** Spreadsheet-menu wrapper for a manual live matchup sync. */
+function syncCurrentWeekMatchups() {
+  var spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+  try {
+    var result = syncCurrentWeekMatchups_(spreadsheet, 'manual');
+    spreadsheet.toast(result.teamCount + ' teams and ' + result.playerCount + ' player scores synced for Week ' + result.week + '.', 'Matchups synced', 8);
+    return result;
+  } catch (error) {
+    Browser.msgBox('Matchup sync could not be completed: ' + (error.message || String(error)));
+    throw error;
+  }
+}
+
+/** Hourly trigger entry point; syncs only Thu/Sun/Mon during the NFL season. */
+function runScheduledMatchupSync() {
+  var now = new Date();
+  if (isNflOffseason_(now) || [0, 1, 4].indexOf(now.getDay()) === -1) return;
+  var spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+  if (!spreadsheet || !getLeagueWeek_(spreadsheet)) return;
+  return syncCurrentWeekMatchups_(spreadsheet, 'scheduled');
+}
+
+/** Installs one idempotent hourly live-sync trigger. */
+function installLiveMatchupSync() {
+  removeLiveMatchupSync();
+  ScriptApp.newTrigger(LIVE_MATCHUP_SYNC_HANDLER).timeBased().everyHours(1).create();
+  SpreadsheetApp.getActiveSpreadsheet().toast('Live matchup sync will run hourly on Thursday, Sunday, and Monday during the NFL season.', 'Live matchup sync installed', 8);
+}
+
+/** Removes only this project's live matchup sync triggers. */
+function removeLiveMatchupSync() {
+  ScriptApp.getProjectTriggers().forEach(function (trigger) {
+    if (trigger.getHandlerFunction() === LIVE_MATCHUP_SYNC_HANDLER) ScriptApp.deleteTrigger(trigger);
+  });
 }
 
 /**
@@ -3979,47 +4266,7 @@ function matchUserIdsToTeamNames() {
 }
 
 function fetchMatchupData() {
-  var spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
-  var sheet = spreadsheet.getSheetByName('API Data');
-  if (!sheet) throw new Error('API Data sheet was not found.');
-  var leagueId = getLeagueId_(spreadsheet);
-  var week_no = sheet.getRange('A19').getValue() || getLeagueWeek_(spreadsheet);
-  if (!week_no) throw new Error('Set the matchup week in API Data!A19 or Settings!B3.');
-  // var week_no = (sheet.getRange('A19').getValue()) - 1; // Use this when var startRow = 265 is active
-  var url = `https://api.sleeper.app/v1/league/${leagueId}/matchups/${week_no}`;
-  var data = fetchSleeperJson_(url);
-  if (!Array.isArray(data)) throw new Error('Sleeper returned an invalid matchup response.');
-
-  // var startRow = 265; // switch to this temporarily when transitioning weeks
-  var startRow = 278;
-  var startCol = 2; // Column B
-
-  data.forEach(function(item, index) {
-    var row = startRow + index;
-    sheet.getRange(row, startCol).setValue(item.roster_id);
-    sheet.getRange(row, startCol + 1).setValue(item.matchup_id);
-    sheet.getRange(row, startCol + 2).setValue(item.points);
-    
-    for (var i = 0; i < 10; i++) {
-      sheet.getRange(row, startCol + 3 + i).setValue(item.starters[i] !== undefined ? item.starters[i] : 0);
-      sheet.getRange(row, startCol + 13 + i).setValue(item.starters_points[i] !== undefined ? item.starters_points[i] : 0);
-    }
-  });
-
-  var playerScoreResult = upsertMatchupPlayerScores_(
-    spreadsheet,
-    data,
-    getLeagueSeason_(spreadsheet),
-    week_no
-  );
-  spreadsheet.toast(
-    playerScoreResult.playerCount + ' player scores synced for Week ' + week_no +
-      '; ' + playerScoreResult.strikeCount + ' current strike candidate' +
-      (playerScoreResult.strikeCount === 1 ? '' : 's') + '.',
-    'Matchups refreshed',
-    8
-  );
-  return playerScoreResult;
+  return syncCurrentWeekMatchups();
 }
 
 /**

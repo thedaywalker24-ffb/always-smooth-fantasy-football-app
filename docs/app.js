@@ -1,5 +1,5 @@
 const API_BASE_URL = 'https://script.google.com/macros/s/AKfycbwtM_NX16wFOHssvhvP2Iw7FI_7YcVgJ9-5DNbvNOblMxifawE4R-F_eiOLU1NsEggF/exec';
-const APP_VERSION = 'v2026.07.29.3';
+const APP_VERSION = 'v2026.08.18.1';
 const FALLBACK_PHOTO = 'https://images.unsplash.com/photo-1540747913346-19e32dc3e97e?q=80&w=600&auto=format&fit=crop';
 const THEME_KEY = 'theme';
 const CONFIG_CACHE_KEY = 'always-smooth-config';
@@ -688,6 +688,22 @@ function renderCaptainPrimaryBadge(teamCaptain) {
   `;
 }
 
+function shouldShowCaptainNeeded(teamCaptain) {
+  return captainData?.ok === true &&
+    captainData?.isOpen === true &&
+    Boolean(teamCaptain) &&
+    !teamCaptain.currentCaptain;
+}
+
+function renderCaptainNeededBadge() {
+  return `
+    <span class="captain-needed-badge" role="status">
+      <span class="captain-needed-dot" aria-hidden="true"></span>
+      Captain Needed
+    </span>
+  `;
+}
+
 function renderCaptainOption(teamName, player, currentCaptain) {
   const isCurrent = currentCaptain && String(currentCaptain.playerId) === String(player.playerId);
   const disabled = player.usedEarlierThisSeason === true;
@@ -774,6 +790,26 @@ function renderCaptainSummaries(payload) {
     }
     slot.hidden = false;
     slot.innerHTML = renderCaptainDetail(teamCaptain, teamName);
+  });
+
+  document.querySelectorAll('.owner-tile--mine[data-team-name]').forEach((tile) => {
+    const teamCaptain = lookup[normalizeClientTeamKey(tile.dataset.teamName)];
+    const needsCaptain = shouldShowCaptainNeeded(teamCaptain);
+    const badge = tile.querySelector('[data-captain-needed]');
+    const toggle = tile.querySelector('[data-team-toggle]');
+    tile.classList.toggle('owner-tile--captain-needed', needsCaptain);
+    if (badge) {
+      badge.hidden = !needsCaptain;
+      badge.innerHTML = needsCaptain ? renderCaptainNeededBadge() : '';
+    }
+    if (toggle) {
+      toggle.setAttribute(
+        'aria-label',
+        needsCaptain
+          ? `Set your weekly Captain for ${tile.dataset.teamName}`
+          : `Toggle more stats for ${tile.dataset.teamName}`
+      );
+    }
   });
   scheduleCaptainIntroIfNeeded();
 }
@@ -1499,7 +1535,7 @@ function renderTeams(payload, isStale = false) {
       ? `style="background-image: url('${sleeperTeamImageUrl.replace(/'/g, '%27')}');"`
       : '';
     return `
-      <article class="owner-tile${isMemberTeam ? ' owner-tile--mine' : ''} glass-panel group relative overflow-hidden rounded-3xl border border-slate-200 bg-white/90 p-6 shadow-sm hover:border-pink-500/40 hover:shadow-xl dark:border-pink-500/10 dark:bg-slate-900/70" data-team-tile data-expanded="false">
+      <article class="owner-tile${isMemberTeam ? ' owner-tile--mine' : ''} glass-panel group relative overflow-hidden rounded-3xl border border-slate-200 bg-white/90 p-6 shadow-sm hover:border-pink-500/40 hover:shadow-xl dark:border-pink-500/10 dark:bg-slate-900/70" data-team-tile data-team-name="${escapeHtml(team.teamName)}" data-expanded="false">
         <div class="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-pink-500 via-rose-400 to-orange-300"></div>
         <div class="team-card-shell">
           <div class="relative z-10 flex items-start gap-4">
@@ -1508,7 +1544,10 @@ function renderTeams(payload, isStale = false) {
               <div class="absolute -bottom-1 -right-1 flex h-6 min-w-6 items-center justify-center rounded-full border-2 border-white bg-slate-900 px-1.5 text-[10px] font-black text-white shadow-sm dark:border-slate-900 dark:bg-pink-500">${team.leagueRank}</div>
             </div>
             <div class="min-w-0 flex-1">
-              <h3 class="truncate text-lg font-black italic uppercase leading-none tracking-tight text-slate-900 transition-colors group-hover:text-pink-500 dark:text-white">${team.teamName}</h3>
+              <div class="flex min-w-0 flex-wrap items-center gap-2">
+                <h3 class="min-w-0 flex-1 truncate text-lg font-black italic uppercase leading-none tracking-tight text-slate-900 transition-colors group-hover:text-pink-500 dark:text-white">${team.teamName}</h3>
+                ${isMemberTeam ? '<span data-captain-needed hidden></span>' : ''}
+              </div>
               <p class="mt-2 flex min-w-0 flex-wrap items-center gap-1.5 text-sm font-semibold text-pink-500 dark:text-pink-400"><span class="truncate">${ownerName}</span>${ownerTrophiesMarkup}${memberTeamMarkup}</p>
               <div class="captain-primary-slot mt-3" data-captain-primary-slot="${escapeHtml(team.teamName)}" hidden></div>
             </div>

@@ -425,6 +425,58 @@
             box-shadow: 0 18px 42px rgba(236, 72, 153, 0.2);
         }
 
+        .owner-tile--mine.owner-tile--captain-needed {
+            border-color: rgba(249, 115, 22, 0.88) !important;
+            box-shadow: 0 18px 42px rgba(236, 72, 153, 0.26), 0 0 0 4px rgba(249, 115, 22, 0.1);
+        }
+
+        .captain-needed-badge {
+            display: inline-flex;
+            flex: 0 0 auto;
+            align-items: center;
+            gap: 0.3rem;
+            border: 1px solid rgba(249, 115, 22, 0.42);
+            border-radius: 9999px;
+            background: linear-gradient(135deg, rgba(236, 72, 153, 0.12), rgba(249, 115, 22, 0.16));
+            padding: 0.3rem 0.5rem;
+            color: #c2410c;
+            font-size: 0.52rem;
+            font-weight: 950;
+            letter-spacing: 0.1em;
+            line-height: 1;
+            text-transform: uppercase;
+        }
+
+        .dark .captain-needed-badge {
+            border-color: rgba(251, 146, 60, 0.52);
+            background: linear-gradient(135deg, rgba(236, 72, 153, 0.2), rgba(249, 115, 22, 0.24));
+            color: #fed7aa;
+        }
+
+        .captain-needed-dot {
+            width: 0.42rem;
+            height: 0.42rem;
+            border-radius: 9999px;
+            background: #f97316;
+            box-shadow: 0 0 0 0 rgba(249, 115, 22, 0.52);
+            animation: captain-needed-pulse 1.8s ease-out infinite;
+        }
+
+        @keyframes captain-needed-pulse {
+            70% {
+                box-shadow: 0 0 0 0.42rem rgba(249, 115, 22, 0);
+            }
+            100% {
+                box-shadow: 0 0 0 0 rgba(249, 115, 22, 0);
+            }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            .captain-needed-dot {
+                animation: none;
+            }
+        }
+
         .member-team-label {
             display: inline-flex;
             align-items: center;
