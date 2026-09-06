@@ -1,5 +1,5 @@
 const API_BASE_URL = 'https://script.google.com/macros/s/AKfycbwtM_NX16wFOHssvhvP2Iw7FI_7YcVgJ9-5DNbvNOblMxifawE4R-F_eiOLU1NsEggF/exec';
-const APP_VERSION = 'v2026.08.18.1';
+const APP_VERSION = 'v2026.09.06.1';
 const FALLBACK_PHOTO = 'https://images.unsplash.com/photo-1540747913346-19e32dc3e97e?q=80&w=600&auto=format&fit=crop';
 const THEME_KEY = 'theme';
 const CONFIG_CACHE_KEY = 'always-smooth-config';
@@ -706,23 +706,27 @@ function renderCaptainNeededBadge() {
 
 function renderCaptainOption(teamName, player, currentCaptain) {
   const isCurrent = currentCaptain && String(currentCaptain.playerId) === String(player.playerId);
-  const disabled = player.usedEarlierThisSeason === true;
+  const disabled = player.usedEarlierThisSeason === true || player.gameLocked === true || player.scheduleAvailable === false || player.gameStatus === 'unscheduled';
   const teamLabel = getPlayerTeamLabel(player);
+  const gameLabel = player.gameStartsAt
+    ? `Kickoff: ${new Intl.DateTimeFormat(undefined, { weekday: 'short', hour: 'numeric', minute: '2-digit' }).format(new Date(player.gameStartsAt))}`
+    : '';
   const disabledAttr = disabled ? ' disabled' : '';
   const status = disabled
-    ? player.disabledReason || 'Already used'
+    ? player.disabledReason || 'Unavailable'
     : isCurrent
       ? 'Current'
       : 'Available';
+  const optionClass = `captain-player-option${player.gameLocked ? ' captain-player-option--game-locked' : ''}`;
   return `
-    <button type="button" class="captain-player-option" data-captain-option data-team-name="${escapeHtml(teamName)}" data-player-id="${escapeHtml(player.playerId)}"${disabledAttr}>
+    <button type="button" class="${optionClass}" data-captain-option data-team-name="${escapeHtml(teamName)}" data-player-id="${escapeHtml(player.playerId)}"${disabledAttr}>
       ${getCaptainImageMarkup(player, 'captain-option-photo')}
       <span class="min-w-0 flex-1">
         <span class="player-name-with-position">
           <span class="captain-option-name">${escapeHtml(player.playerName)}</span>
           ${renderPositionPill(player.position)}
         </span>
-        ${teamLabel ? `<span class="captain-option-detail">${escapeHtml(teamLabel)}</span>` : ''}
+        ${teamLabel ? `<span class="captain-option-detail">${escapeHtml(teamLabel)}${gameLabel ? ` · ${escapeHtml(gameLabel)}` : ''}</span>` : gameLabel ? `<span class="captain-option-detail">${escapeHtml(gameLabel)}</span>` : ''}
       </span>
       <span class="captain-option-status${disabled ? ' captain-option-status--disabled' : ''}">${escapeHtml(status)}</span>
     </button>
@@ -732,11 +736,12 @@ function renderCaptainOption(teamName, player, currentCaptain) {
 function renderCaptainDetail(teamCaptain, teamName) {
   const captain = teamCaptain?.currentCaptain;
   const isOpen = captainData?.isOpen === true;
+  const captainSelectionLocked = captain?.selectionLocked === true;
   const players = Array.isArray(teamCaptain?.eligiblePlayers) ? teamCaptain.eligiblePlayers : [];
   const teamLabel = captain ? getPlayerTeamLabel(captain) : '';
   const pickerId = `captain-picker-${normalizeBettingOptionKey(teamName)}`;
   const ruleTooltipId = `captain-rule-${normalizeBettingOptionKey(teamName)}`;
-  const statusLabel = isOpen ? 'Open' : 'Locked';
+  const statusLabel = captainSelectionLocked ? 'Final' : isOpen ? 'Open' : 'Locked';
 
   return `
     <div class="captain-detail-card">
@@ -757,7 +762,7 @@ function renderCaptainDetail(teamCaptain, teamName) {
         </div>
         <span class="captain-lock-pill">${escapeHtml(statusLabel)}</span>
       </div>
-      ${isOpen ? `
+      ${isOpen && !captainSelectionLocked ? `
         <button type="button" class="captain-picker-toggle" data-captain-toggle-picker aria-expanded="false" aria-controls="${pickerId}">
           ${captain ? 'Change Captain' : 'Set Captain'}
         </button>
@@ -766,7 +771,7 @@ function renderCaptainDetail(teamCaptain, teamName) {
             ? players.map((player) => renderCaptainOption(teamCaptain.teamName || teamName, player, captain)).join('')
             : '<p class="captain-picker-empty">No current starters are available.</p>'}
         </div>
-      ` : ''}
+      ` : captainSelectionLocked ? '<p class="captain-picker-empty">This Captain is locked because their game has started.</p>' : ''}
     </div>
   `;
 }

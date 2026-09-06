@@ -65,6 +65,7 @@ const ROTOWORLD_NFL_NEWS_ATOM_URL = 'https://www.nbcsports.com/fantasy/football/
 const ROTOWORLD_NFL_PLAYER_NEWS_URL = 'https://www.nbcsports.com/fantasy/football/player-news';
 const ESPN_NFL_SCOREBOARD_URL = 'https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard';
 const ESPN_NFL_SCOREBOARD_WEB_URL = 'https://www.espn.com/nfl/scoreboard';
+const CAPTAIN_SCHEDULE_CACHE_SECONDS = 300;
 
 const BETTING_SHEET = 'App Data Collection';
 const BETTING_PROMPT_ROW = 1;
@@ -1797,6 +1798,146 @@ function readCaptainRows_(spreadsheet) {
 }
 
 /**
+ * Converts ESPN/Sleeper team abbreviations to a common key for game lookups.
+ * @param {*} value
+ * @return {string}
+ */
+function normalizeNflTeamCode_(value) {
+  var code = String(value || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+  var aliases = {
+    JAC: 'JAX',
+    JAX: 'JAX',
+    WAS: 'WAS',
+    WSH: 'WAS',
+    LA: 'LAR',
+    STL: 'LAR',
+    SD: 'LAC',
+    OAK: 'LV'
+  };
+  return aliases[code] || code;
+}
+
+/**
+ * Builds a team-keyed NFL schedule from ESPN's scoreboard response.
+ * @param {Object} payload
+ * @return {{byTeam: Object<string, Object>, gameCount: number}}
+ */
+function buildNflWeekScheduleFromEspnPayload_(payload) {
+  var byTeam = {};
+  var events = payload && Array.isArray(payload.events) ? payload.events : [];
+  events.forEach(function (event) {
+    var competition = event && Array.isArray(event.competitions) ? event.competitions[0] : null;
+    var startsAt = String((event && event.date) || (competition && competition.date) || '').trim();
+    if (!startsAt || isNaN(new Date(startsAt).getTime())) return;
+    var state = String(event && event.status && event.status.type && event.status.type.state || '').trim().toLowerCase();
+    var competitors = competition && Array.isArray(competition.competitors) ? competition.competitors : [];
+    competitors.forEach(function (competitor) {
+      var code = normalizeNflTeamCode_(competitor && competitor.team && competitor.team.abbreviation);
+      if (!code) return;
+      byTeam[code] = {
+        startsAt: startsAt,
+        state: state,
+        eventName: String(event && event.name || '').trim()
+      };
+    });
+  });
+  return {
+    byTeam: byTeam,
+    gameCount: events.length
+  };
+}
+
+/**
+ * Fetches the configured NFL week's kickoff schedule. Cached briefly to avoid
+ * repeatedly hitting ESPN while still comparing kickoff against the live clock.
+ * @param {*} season
+ * @param {*} week
+ * @return {{ok: boolean, byTeam: Object<string, Object>, warnings: Array<string>}}
+ */
+function getNflWeekSchedule_(season, week) {
+  var result = { ok: false, byTeam: {}, warnings: [] };
+  var seasonValue = String(season || '').trim();
+  var weekValue = String(week || '').trim();
+  if (!seasonValue || !weekValue) {
+    result.warnings.push('Captain game times need Settings season and week.');
+    return result;
+  }
+
+  var cacheKey = 'captain-nfl-schedule-' + seasonValue + '-' + weekValue;
+  try {
+    var cache = CacheService.getScriptCache();
+    var cached = cache.get(cacheKey);
+    if (cached) {
+      var cachedSchedule = JSON.parse(cached);
+      if (cachedSchedule && cachedSchedule.byTeam && Object.keys(cachedSchedule.byTeam).length) {
+        result.ok = true;
+        result.byTeam = cachedSchedule.byTeam;
+        return result;
+      }
+    }
+
+    var url = ESPN_NFL_SCOREBOARD_URL + '?limit=1000&dates=' + encodeURIComponent(seasonValue) +
+      '&seasontype=2&week=' + encodeURIComponent(weekValue);
+    var schedule = buildNflWeekScheduleFromEspnPayload_(fetchEspnJson_(url));
+    if (!Object.keys(schedule.byTeam).length) {
+      throw new Error('No NFL games were returned for Week ' + weekValue + '.');
+    }
+    result.ok = true;
+    result.byTeam = schedule.byTeam;
+    cache.put(cacheKey, JSON.stringify(schedule), CAPTAIN_SCHEDULE_CACHE_SECONDS);
+  } catch (err) {
+    result.warnings.push('Captain game times are temporarily unavailable. Try again shortly.');
+    console.warn('Captain schedule lookup failed: ' + (err.message || err));
+  }
+  return result;
+}
+
+/**
+ * @param {Object} player
+ * @param {{ok: boolean, byTeam: Object<string, Object>}} schedule
+ * @param {Date} now
+ * @return {{scheduleAvailable: boolean, gameStartsAt: string, gameLocked: boolean, gameStatus: string, disabledReason: string}}
+ */
+function getCaptainGameStatus_(player, schedule, now) {
+  var teamCode = normalizeNflTeamCode_(player && player.nflTeam);
+  if (!schedule || !schedule.ok) {
+    return { scheduleAvailable: false, gameStartsAt: '', gameLocked: false, gameStatus: 'unavailable', disabledReason: 'Game time unavailable' };
+  }
+  var game = teamCode && schedule.byTeam ? schedule.byTeam[teamCode] : null;
+  if (!game || !game.startsAt) {
+    return { scheduleAvailable: true, gameStartsAt: '', gameLocked: false, gameStatus: 'unscheduled', disabledReason: 'No game scheduled' };
+  }
+  var startTime = new Date(game.startsAt).getTime();
+  if (isNaN(startTime)) {
+    return { scheduleAvailable: false, gameStartsAt: '', gameLocked: false, gameStatus: 'unavailable', disabledReason: 'Game time unavailable' };
+  }
+  var gameStarted = now.getTime() >= startTime || game.state === 'in' || game.state === 'post';
+  return {
+    scheduleAvailable: true,
+    gameStartsAt: game.startsAt,
+    gameLocked: gameStarted,
+    gameStatus: gameStarted ? 'started' : 'upcoming',
+    disabledReason: gameStarted ? 'Game started' : ''
+  };
+}
+
+/**
+ * @param {Object|null} captain
+ * @param {Object} schedule
+ * @param {Date} now
+ * @return {Object|null}
+ */
+function decorateCurrentCaptainGameStatus_(captain, schedule, now) {
+  if (!captain) return null;
+  var status = getCaptainGameStatus_(captain, schedule, now);
+  var decorated = {};
+  Object.keys(captain).forEach(function (key) { decorated[key] = captain[key]; });
+  Object.keys(status).forEach(function (key) { decorated[key] = status[key]; });
+  decorated.selectionLocked = status.gameLocked || !status.scheduleAvailable;
+  return decorated;
+}
+
+/**
  * @param {GoogleAppsScript.Spreadsheet.Spreadsheet} spreadsheet
  * @return {Object}
  */
@@ -1821,7 +1962,9 @@ function getCaptainData_(spreadsheet) {
 
   var starters = buildCaptainStarterOptions_(spreadsheet);
   var captainRows = readCaptainRows_(spreadsheet);
-  warnings = warnings.concat(starters.warnings).concat(captainRows.warnings);
+  var schedule = getNflWeekSchedule_(season, week);
+  var now = new Date();
+  warnings = warnings.concat(starters.warnings).concat(captainRows.warnings).concat(schedule.warnings);
 
   var currentByTeamKey = {};
   var usedByTeamPlayerKey = {};
@@ -1846,10 +1989,14 @@ function getCaptainData_(spreadsheet) {
     return starters.teamsByKey[a].teamName.localeCompare(starters.teamsByKey[b].teamName);
   }).map(function (teamKey) {
     var team = starters.teamsByKey[teamKey];
-    var currentCaptain = currentByTeamKey[teamKey] || null;
+    var currentCaptain = decorateCurrentCaptainGameStatus_(currentByTeamKey[teamKey] || null, schedule, now);
     var players = team.players.map(function (player) {
       var usedEntry = usedByTeamPlayerKey[teamKey] && usedByTeamPlayerKey[teamKey][player.playerId];
       var usedEarlier = !!(usedEntry && String(usedEntry.week) !== String(week));
+      var gameStatus = getCaptainGameStatus_(player, schedule, now);
+      var disabledReason = usedEarlier
+        ? 'Already used Week ' + usedEntry.week
+        : gameStatus.disabledReason;
       return {
         playerId: player.playerId,
         playerName: player.playerName,
@@ -1859,7 +2006,11 @@ function getCaptainData_(spreadsheet) {
         usedThisSeason: !!usedEntry,
         usedEarlierThisSeason: usedEarlier,
         usedWeek: usedEntry ? usedEntry.week : '',
-        disabledReason: usedEarlier ? 'Already used Week ' + usedEntry.week : ''
+        scheduleAvailable: gameStatus.scheduleAvailable,
+        gameStartsAt: gameStatus.gameStartsAt,
+        gameLocked: gameStatus.gameLocked,
+        gameStatus: gameStatus.gameStatus,
+        disabledReason: disabledReason
       };
     });
     return {
@@ -1876,6 +2027,7 @@ function getCaptainData_(spreadsheet) {
     season: season,
     week: week,
     isOpen: isOpen,
+    scheduleAvailable: schedule.ok,
     teams: teams,
     warnings: warnings,
     updatedAt: new Date().toISOString()
@@ -1917,6 +2069,13 @@ function submitCaptain_(spreadsheet, params) {
   });
   if (!player) return fail('Selected player is not a current starter for ' + team.teamName + '.');
 
+  var schedule = getNflWeekSchedule_(season, week);
+  if (!schedule.ok) return fail('Captain game times are temporarily unavailable. Try again shortly.');
+  var selectedGameStatus = getCaptainGameStatus_(player, schedule, new Date());
+  if (!selectedGameStatus.scheduleAvailable) return fail('Captain game time could not be verified. Try again shortly.');
+  if (selectedGameStatus.gameStatus === 'unscheduled') return fail(player.playerName + ' does not have a scheduled game this week.');
+  if (selectedGameStatus.gameLocked) return fail(player.playerName + "'s game has already started, so they cannot be set as Captain.");
+
   var captainRows = readCaptainRows_(spreadsheet);
   var alreadyUsed = captainRows.rows.find(function (entry) {
     return String(entry.season) === String(season) &&
@@ -1940,6 +2099,15 @@ function submitCaptain_(spreadsheet, params) {
         String(entry.week) === String(week) &&
         normalizeTeamNameKey_(entry.teamName) === teamKey;
     });
+    if (existing && String(existing.playerId) !== String(player.playerId)) {
+      var existingGameStatus = getCaptainGameStatus_(existing, schedule, new Date());
+      if (!existingGameStatus.scheduleAvailable) {
+        return fail('Your current Captain cannot be changed until their game time can be verified. Try again shortly.');
+      }
+      if (existingGameStatus.gameLocked) {
+        return fail(existing.playerName + "'s game has already started, so your Captain is locked.");
+      }
+    }
     var submittedAtDate = new Date();
     var submittedAt = formatCaptainSubmittedAt_(spreadsheet, submittedAtDate);
     var submittedAtIso = submittedAtDate.toISOString();
