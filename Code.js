@@ -2027,6 +2027,34 @@ function buildNflWeekScheduleFromEspnPayload_(payload) {
 }
 
 /**
+ * ESPN's date-range scoreboard form is a resilient fallback when its season/
+ * week filter does not return a schedule from Apps Script.
+ * @param {*} season
+ * @param {*} week
+ * @return {string}
+ */
+function getEspnNflWeekDateRange_(season, week) {
+  var year = Number(season);
+  var weekNumber = Number(week);
+  if (!year || !weekNumber) return '';
+  // Week 1 begins the Wednesday before the Thursday following Labor Day.
+  var laborDay = new Date(Date.UTC(year, 8, 1));
+  while (laborDay.getUTCDay() !== 1) laborDay.setUTCDate(laborDay.getUTCDate() + 1);
+  var firstThursday = new Date(laborDay.getTime());
+  firstThursday.setUTCDate(firstThursday.getUTCDate() + 3);
+  var start = new Date(firstThursday.getTime());
+  start.setUTCDate(start.getUTCDate() - 1 + ((weekNumber - 1) * 7));
+  var end = new Date(start.getTime());
+  end.setUTCDate(end.getUTCDate() + 6);
+  var format = function (date) {
+    return String(date.getUTCFullYear()) +
+      String(date.getUTCMonth() + 1).padStart(2, '0') +
+      String(date.getUTCDate()).padStart(2, '0');
+  };
+  return format(start) + '-' + format(end);
+}
+
+/**
  * Fetches the configured NFL week's kickoff schedule. Cached briefly to avoid
  * repeatedly hitting ESPN while still comparing kickoff against the live clock.
  * @param {*} season
@@ -2055,11 +2083,29 @@ function getNflWeekSchedule_(season, week) {
       }
     }
 
-    var url = ESPN_NFL_SCOREBOARD_URL + '?limit=1000&dates=' + encodeURIComponent(seasonValue) +
-      '&seasontype=2&week=' + encodeURIComponent(weekValue);
-    var schedule = buildNflWeekScheduleFromEspnPayload_(fetchEspnJson_(url));
+    var schedule = { byTeam: {} };
+    var primaryError = null;
+    try {
+      var url = ESPN_NFL_SCOREBOARD_URL + '?limit=1000&dates=' + encodeURIComponent(seasonValue) +
+        '&seasontype=2&week=' + encodeURIComponent(weekValue);
+      schedule = buildNflWeekScheduleFromEspnPayload_(fetchEspnJson_(url));
+    } catch (error) {
+      primaryError = error;
+    }
     if (!Object.keys(schedule.byTeam).length) {
-      throw new Error('No NFL games were returned for Week ' + weekValue + '.');
+      var dateRange = getEspnNflWeekDateRange_(seasonValue, weekValue);
+      if (dateRange) {
+        try {
+          schedule = buildNflWeekScheduleFromEspnPayload_(fetchEspnJson_(
+            ESPN_NFL_SCOREBOARD_URL + '?limit=1000&dates=' + encodeURIComponent(dateRange)
+          ));
+        } catch (fallbackError) {
+          if (!primaryError) primaryError = fallbackError;
+        }
+      }
+    }
+    if (!Object.keys(schedule.byTeam).length) {
+      throw primaryError || new Error('No NFL games were returned for Week ' + weekValue + '.');
     }
     result.ok = true;
     result.byTeam = schedule.byTeam;
