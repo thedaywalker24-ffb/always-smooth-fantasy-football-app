@@ -1,5 +1,5 @@
 const API_BASE_URL = 'https://script.google.com/macros/s/AKfycbwtM_NX16wFOHssvhvP2Iw7FI_7YcVgJ9-5DNbvNOblMxifawE4R-F_eiOLU1NsEggF/exec';
-const APP_VERSION = 'v2026.09.06.1';
+const APP_VERSION = 'v2026.09.08.1';
 const FALLBACK_PHOTO = 'https://images.unsplash.com/photo-1540747913346-19e32dc3e97e?q=80&w=600&auto=format&fit=crop';
 const THEME_KEY = 'theme';
 const CONFIG_CACHE_KEY = 'always-smooth-config';
@@ -704,7 +704,7 @@ function renderCaptainNeededBadge() {
   `;
 }
 
-function renderCaptainOption(teamName, player, currentCaptain) {
+function renderCaptainOption(teamName, player, currentCaptain, ownerUserId = '') {
   const isCurrent = currentCaptain && String(currentCaptain.playerId) === String(player.playerId);
   const disabled = player.usedEarlierThisSeason === true || player.gameLocked === true || player.scheduleAvailable === false || player.gameStatus === 'unscheduled';
   const teamLabel = getPlayerTeamLabel(player);
@@ -719,7 +719,7 @@ function renderCaptainOption(teamName, player, currentCaptain) {
       : 'Available';
   const optionClass = `captain-player-option${player.gameLocked ? ' captain-player-option--game-locked' : ''}`;
   return `
-    <button type="button" class="${optionClass}" data-captain-option data-team-name="${escapeHtml(teamName)}" data-player-id="${escapeHtml(player.playerId)}"${disabledAttr}>
+    <button type="button" class="${optionClass}" data-captain-option data-team-name="${escapeHtml(teamName)}" data-owner-user-id="${escapeHtml(ownerUserId)}" data-player-id="${escapeHtml(player.playerId)}"${disabledAttr}>
       ${getCaptainImageMarkup(player, 'captain-option-photo')}
       <span class="min-w-0 flex-1">
         <span class="player-name-with-position">
@@ -768,7 +768,7 @@ function renderCaptainDetail(teamCaptain, teamName) {
         </button>
         <div id="${pickerId}" class="captain-picker" data-captain-picker hidden>
           ${players.length
-            ? players.map((player) => renderCaptainOption(teamCaptain.teamName || teamName, player, captain)).join('')
+            ? players.map((player) => renderCaptainOption(teamCaptain.teamName || teamName, player, captain, teamCaptain?.ownerUserId || '')).join('')
             : '<p class="captain-picker-empty">No current starters are available.</p>'}
         </div>
       ` : captainSelectionLocked ? '<p class="captain-picker-empty">This Captain is locked because their game has started.</p>' : ''}
@@ -843,6 +843,7 @@ async function loadCaptainData() {
 async function submitCaptainPick(button) {
   if (!button || button.disabled) return;
   const teamName = button.dataset.teamName || '';
+  const ownerUserId = button.dataset.ownerUserId || '';
   const playerId = button.dataset.playerId || '';
   if (!teamName || !playerId) return;
 
@@ -854,7 +855,7 @@ async function submitCaptainPick(button) {
     `Saving ${teamName}'s Captain pick. This can take up to a minute, and the app will auto refresh when it is complete.`
   );
   try {
-    const payload = await fetchJsonp('api/submit-captain', { teamName, playerId });
+    const payload = await fetchJsonp('api/submit-captain', { teamName, ownerUserId, playerId });
     if (!payload || payload.ok !== true) {
       throw new Error(payload?.error || 'Captain could not be saved.');
     }

@@ -20,6 +20,10 @@ function onOpen(e) {
     .addItem('Sync Current Matchups', 'syncCurrentWeekMatchups')
     .addItem('Finalize Weekly Recap', 'finalizeWeeklyRecap')
     .addSeparator()
+    .addItem('Sync League Rosters Now', 'syncLeagueRostersNow')
+    .addItem('Install League Roster Sync', 'installLeagueRosterSync')
+    .addItem('Remove League Roster Sync', 'removeLeagueRosterSync')
+    .addSeparator()
     .addItem('Install Live Matchup Sync', 'installLiveMatchupSync')
     .addItem('Remove Live Matchup Sync', 'removeLiveMatchupSync')
     .addSeparator()
@@ -66,6 +70,9 @@ const ROTOWORLD_NFL_PLAYER_NEWS_URL = 'https://www.nbcsports.com/fantasy/footbal
 const ESPN_NFL_SCOREBOARD_URL = 'https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard';
 const ESPN_NFL_SCOREBOARD_WEB_URL = 'https://www.espn.com/nfl/scoreboard';
 const CAPTAIN_SCHEDULE_CACHE_SECONDS = 300;
+const LEAGUE_ROSTER_SYNC_HANDLER = 'runScheduledLeagueRosterSync';
+const LEAGUE_ROSTER_SYNC_MAX_AGE_MS = 5 * 60 * 1000;
+const LEAGUE_ROSTER_SYNC_PROPERTY = 'alwaysSmoothLeagueRosterSyncAt';
 
 const BETTING_SHEET = 'App Data Collection';
 const BETTING_PROMPT_ROW = 1;
@@ -193,6 +200,9 @@ const TEAMS_SLEEPER_TEAM_IMAGE_COL = 13; // Column M (1-based)
 const TEAMS_MVP_NAME_COL = 17; // Column Q (1-based)
 const TEAMS_BEER_TROPHIES_COL = 19; // Column S (1-based)
 const TEAMS_MVP_IMAGE_COL = 22; // Column V (1-based)
+/** Stable Sleeper owner key; column Y is reserved for generated identity mapping. */
+const TEAMS_SLEEPER_USER_ID_COL = 25; // Column Y (1-based)
+const TEAMS_SLEEPER_USER_ID_HEADER = 'Sleeper User ID';
 const TEAMS_ANNOUNCEMENT_CELL = 'X3';
 /** Teams tab: title/instructions may occupy row 1; column headers are on this row (1-based). */
 const TEAMS_HEADER_ROW = 2;
@@ -618,6 +628,7 @@ function getTeamsAnnouncement_(spreadsheet) {
  */
 function buildTeamsSheetDataMap_(spreadsheet) {
   var map = {};
+  var mapByUserId = {};
   var diag = {
     teamsSheetFound: false,
     teamsSheetName: TEAMS_SHEET,
@@ -629,6 +640,7 @@ function buildTeamsSheetDataMap_(spreadsheet) {
     teamMvpNameColumn: 'Q',
     beerTrophiesColumn: 'S',
     teamMvpImageColumn: 'V',
+    sleeperUserIdColumn: 'Y',
     lastRow: 0,
     lastCol: 0,
     teamNameSource: '',
@@ -654,7 +666,7 @@ function buildTeamsSheetDataMap_(spreadsheet) {
   var sheet = spreadsheet.getSheetByName(TEAMS_SHEET);
   if (!sheet) {
     diag.note = 'Sheet "' + TEAMS_SHEET + '" was not found in this spreadsheet.';
-    return { map: map, diagnostics: diag };
+    return { map: map, mapByUserId: mapByUserId, diagnostics: diag };
   }
   diag.teamsSheetFound = true;
 
@@ -664,7 +676,7 @@ function buildTeamsSheetDataMap_(spreadsheet) {
   diag.lastCol = lastCol;
   if (lastRow < TEAMS_HEADER_ROW || lastCol < 1) {
     diag.note = 'Teams sheet is missing row ' + TEAMS_HEADER_ROW + ' (header row) or has no columns.';
-    return { map: map, diagnostics: diag };
+    return { map: map, mapByUserId: mapByUserId, diagnostics: diag };
   }
   if (lastRow < TEAMS_DATA_START_ROW) {
     diag.note =
@@ -673,7 +685,7 @@ function buildTeamsSheetDataMap_(spreadsheet) {
       ' but no data rows below (need data from row ' +
       TEAMS_DATA_START_ROW +
       ' onward).';
-    return { map: map, diagnostics: diag };
+    return { map: map, mapByUserId: mapByUserId, diagnostics: diag };
   }
 
   var headerLast = Math.max(lastCol, 1);
@@ -699,6 +711,7 @@ function buildTeamsSheetDataMap_(spreadsheet) {
   var teamMvpNameVals = sheet.getRange(TEAMS_DATA_START_ROW, TEAMS_MVP_NAME_COL, numRows, 1).getDisplayValues();
   var beerTrophiesVals = sheet.getRange(TEAMS_DATA_START_ROW, TEAMS_BEER_TROPHIES_COL, numRows, 1).getDisplayValues();
   var teamMvpImageVals = sheet.getRange(TEAMS_DATA_START_ROW, TEAMS_MVP_IMAGE_COL, numRows, 1).getValues();
+  var sleeperUserIdVals = sheet.getRange(TEAMS_DATA_START_ROW, TEAMS_SLEEPER_USER_ID_COL, numRows, 1).getDisplayValues();
   diag.rowsScanned = nameVals.length;
 
   var sampleKeys = [];
@@ -749,7 +762,7 @@ function buildTeamsSheetDataMap_(spreadsheet) {
     var trophies = hasTrophies ? String(rawTrophies).trim() : '';
     var beerTrophies = hasBeerTrophies ? String(rawBeerTrophies).trim() : '';
 
-    map[key] = {
+    var teamData = {
       managerPhotoUrl: managerPhoto,
       sleeperTeamImageUrl: sleeperTeamImage,
       teamMvpName: teamMvpName,
@@ -759,6 +772,9 @@ function buildTeamsSheetDataMap_(spreadsheet) {
       beerTrophies: beerTrophies,
       mulligan: mulligan
     };
+    map[key] = teamData;
+    var sleeperUserId = String(sleeperUserIdVals[r][0] || '').trim();
+    if (sleeperUserId) mapByUserId[sleeperUserId] = teamData;
 
     if (sampleKeys.length < 5) {
       sampleKeys.push(key);
@@ -768,7 +784,7 @@ function buildTeamsSheetDataMap_(spreadsheet) {
   diag.mapEntryCount = Object.keys(map).length;
   diag.sampleMapKeys = sampleKeys;
   diag.sampleRawUrlPrefixes = samplePrefixes;
-  return { map: map, diagnostics: diag };
+  return { map: map, mapByUserId: mapByUserId, diagnostics: diag };
 }
 
 /**
@@ -910,6 +926,7 @@ function updateTeamField_(spreadsheet, params) {
   if (!sheet) return fail('Sheet "' + TEAMS_SHEET + '" was not found.');
 
   var teamName = String(params.teamName || params.team || '').trim();
+  var ownerUserId = String(params.ownerUserId || params.owner_user_id || '').trim();
   var targetRange;
   var targetRow = 0;
   var targetColumn = '';
@@ -1733,6 +1750,166 @@ function buildCaptainStarterOptions_(spreadsheet) {
   return result;
 }
 
+/** @param {*} userId @param {*} teamName @return {string} */
+function getCaptainTeamIdentityKey_(userId, teamName) {
+  var stableUserId = String(userId || '').trim();
+  return stableUserId ? 'user:' + stableUserId : 'team:' + normalizeTeamNameKey_(teamName);
+}
+
+/**
+ * Fills only blank Teams!Y entries using the current Sleeper team-name mapping.
+ * Existing IDs are never overwritten so later Sleeper renames remain connected.
+ * @param {GoogleAppsScript.Spreadsheet.Spreadsheet} spreadsheet
+ * @param {Object<string, Object>} usersByTeamKey
+ */
+function initializeTeamsStableUserIds_(spreadsheet, usersByTeamKey) {
+  var sheet = spreadsheet.getSheetByName(TEAMS_SHEET);
+  if (!sheet || sheet.getLastRow() < TEAMS_HEADER_ROW) return;
+  if (!sheet.getRange(TEAMS_HEADER_ROW, TEAMS_SLEEPER_USER_ID_COL).getDisplayValue()) {
+    sheet.getRange(TEAMS_HEADER_ROW, TEAMS_SLEEPER_USER_ID_COL).setValue(TEAMS_SLEEPER_USER_ID_HEADER);
+  }
+  if (sheet.getLastRow() < TEAMS_DATA_START_ROW) return;
+  var headers = sheet.getRange(TEAMS_HEADER_ROW, 1, 1, sheet.getLastColumn()).getValues()[0];
+  var teamNameCol = findTeamsSheetTeamNameColumn_(headers).col0 + 1;
+  var count = sheet.getLastRow() - TEAMS_DATA_START_ROW + 1;
+  var names = sheet.getRange(TEAMS_DATA_START_ROW, teamNameCol, count, 1).getDisplayValues();
+  var ids = sheet.getRange(TEAMS_DATA_START_ROW, TEAMS_SLEEPER_USER_ID_COL, count, 1).getDisplayValues();
+  var changed = false;
+  for (var r = 0; r < count; r++) {
+    if (String(ids[r][0] || '').trim()) continue;
+    var user = usersByTeamKey[normalizeTeamNameKey_(names[r][0])];
+    if (!user || !user.user_id) continue;
+    ids[r][0] = String(user.user_id);
+    changed = true;
+  }
+  if (changed) sheet.getRange(TEAMS_DATA_START_ROW, TEAMS_SLEEPER_USER_ID_COL, count, 1).setValues(ids);
+}
+
+/**
+ * Refreshes generated league identity and lineup snapshots from Sleeper.
+ * @param {GoogleAppsScript.Spreadsheet.Spreadsheet} spreadsheet
+ * @return {{ok: boolean, syncedAt: string, teamCount: number, rosterRowCount: number}}
+ */
+function syncLeagueRosterSnapshot_(spreadsheet) {
+  if (!spreadsheet) throw new Error('No spreadsheet is available.');
+  var leagueId = getLeagueId_(spreadsheet);
+  if (!leagueId) throw new Error('Settings league ID is required for roster sync.');
+  var lock = LockService.getDocumentLock();
+  if (!lock.tryLock(30000)) throw new Error('Another league roster sync is already running.');
+  try {
+    var baseUrl = 'https://api.sleeper.app/v1/league/' + encodeURIComponent(leagueId);
+    var users = fetchSleeperJson_(baseUrl + '/users');
+    var rosters = fetchSleeperJson_(baseUrl + '/rosters');
+    if (!Array.isArray(users) || !Array.isArray(rosters)) throw new Error('Sleeper returned incomplete league roster data.');
+
+    var usersById = {};
+    var usersByTeamKey = {};
+    users.forEach(function (user) {
+      var userId = String(user && user.user_id || '').trim();
+      if (!userId) return;
+      var teamName = String(user.metadata && user.metadata.team_name || user.display_name || '').trim() || 'Team ' + userId;
+      var entry = { user_id: userId, teamName: teamName, displayName: sleeperManagerDisplayLabel_(user), userAvatar: user.avatar ? 'https://sleepercdn.com/avatars/thumbs/' + user.avatar : '', teamAvatar: String(user.metadata && user.metadata.avatar || '').trim() };
+      usersById[userId] = entry;
+      usersByTeamKey[normalizeTeamNameKey_(teamName)] = entry;
+    });
+    initializeTeamsStableUserIds_(spreadsheet, usersByTeamKey);
+
+    var rosterByOwnerId = {};
+    rosters.forEach(function (roster) { rosterByOwnerId[String(roster && roster.owner_id || '').trim()] = roster || {}; });
+    var recordsSheet = spreadsheet.getSheetByName(ROSTERS_RECORDS_SHEET) || spreadsheet.insertSheet(ROSTERS_RECORDS_SHEET);
+    var recordHeaders = ['Row ID', 'User ID', 'User Avatar URL', 'Team Name', 'Team Avatar URL', 'W-L Record', 'Streak', 'Roster ID', 'Fpts (Total)', 'Display Name'];
+    recordsSheet.getRange(1, 1, 1, recordHeaders.length).setValues([recordHeaders]).setFontWeight('bold');
+    var recordRows = users.map(function (user, index) {
+      var roster = rosterByOwnerId[String(user.user_id)] || {};
+      var settings = roster.settings || {};
+      var wins = Number(settings.wins || 0);
+      var losses = Number(settings.losses || 0);
+      var ties = Number(settings.ties || 0);
+      return [index + 1, user.user_id, user.userAvatar, user.teamName, user.teamAvatar, wins + '-' + losses + (ties ? '-' + ties : ''), String(roster.metadata && roster.metadata.streak || ''), roster.roster_id || '', Number(settings.fpts || 0) + (Number(settings.fpts_decimal || 0) / 100), user.displayName];
+    });
+    // Column A is historically reserved for commissioner-maintained notes, so
+    // only refresh the generated Sleeper fields B:J.
+    var oldRecordRows = Math.max(recordsSheet.getLastRow() - 1, 0);
+    if (oldRecordRows) recordsSheet.getRange(2, 2, oldRecordRows, recordHeaders.length - 1).clearContent();
+    if (recordRows.length) {
+      recordsSheet.getRange(2, 2, recordRows.length, recordHeaders.length - 1)
+        .setValues(recordRows.map(function (row) { return row.slice(1); }));
+    }
+
+    var playerInfo = buildSleeperPlayerInfoMap_(spreadsheet);
+    var rosterRows = [['User ID', 'Team Name', 'Player ID', 'Roster Type', 'Player Name', 'Roster ID']];
+    rosters.forEach(function (roster) {
+      var ownerId = String(roster && roster.owner_id || '').trim();
+      var user = usersById[ownerId] || { teamName: 'Roster ' + String(roster && roster.roster_id || '') };
+      var seen = {};
+      var add = function (playerIds, type) {
+        (Array.isArray(playerIds) ? playerIds : []).forEach(function (playerId) {
+          var id = String(playerId || '').trim();
+          if (!id || seen[id]) return;
+          seen[id] = true;
+          rosterRows.push([ownerId, user.teamName, id, type, playerInfo[id] && playerInfo[id].playerName || 'ID: ' + id, roster.roster_id || '']);
+        });
+      };
+      add(roster.starters, 'Starter'); add(roster.reserve, 'Reserve'); add(roster.taxi, 'Taxi'); add(roster.players, 'Active');
+    });
+    var rosterSheet = spreadsheet.getSheetByName(TEAM_ROSTERS_SHEET) || spreadsheet.insertSheet(TEAM_ROSTERS_SHEET);
+    if (rosterSheet.getLastRow()) rosterSheet.getRange(1, 1, rosterSheet.getLastRow(), 6).clearContent();
+    rosterSheet.getRange(1, 1, rosterRows.length, 6).setValues(rosterRows);
+    var syncedAt = new Date().toISOString();
+    PropertiesService.getDocumentProperties().setProperty(LEAGUE_ROSTER_SYNC_PROPERTY, syncedAt);
+    SpreadsheetApp.flush();
+    return { ok: true, syncedAt: syncedAt, teamCount: users.length, rosterRowCount: Math.max(rosterRows.length - 1, 0) };
+  } finally { lock.releaseLock(); }
+}
+
+/** Ensures Captain reads do not use a stale generated roster snapshot. */
+function ensureLeagueRosterSnapshotFresh_(spreadsheet, force) {
+  var previous = PropertiesService.getDocumentProperties().getProperty(LEAGUE_ROSTER_SYNC_PROPERTY);
+  var age = previous ? new Date().getTime() - new Date(previous).getTime() : Infinity;
+  if (!force && isFinite(age) && age >= 0 && age < LEAGUE_ROSTER_SYNC_MAX_AGE_MS) return { ok: true, syncedAt: previous, cached: true };
+  return syncLeagueRosterSnapshot_(spreadsheet);
+}
+
+/** Manual spreadsheet-menu entry point for the unified roster refresh. */
+function syncLeagueRostersNow() {
+  var spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+  try {
+    var result = syncLeagueRosterSnapshot_(spreadsheet);
+    spreadsheet.toast(result.teamCount + ' teams and ' + result.rosterRowCount + ' roster entries synced.', 'League rosters synced', 8);
+    return result;
+  } catch (error) {
+    Browser.msgBox('League roster sync could not be completed: ' + (error.message || String(error)));
+    throw error;
+  }
+}
+
+/** Backward-compatible menu/function aliases for the former split sync jobs. */
+function fetchLeagueMembersData() { return syncLeagueRostersNow(); }
+function updateRostersAndRecordsData() { return syncLeagueRostersNow(); }
+function fetchAndPopulateRosters() { return syncLeagueRostersNow(); }
+
+/** Runs every 15 minutes in-season after installation; no UI calls for triggers. */
+function runScheduledLeagueRosterSync() {
+  if (isNflOffseason_(new Date())) return;
+  var spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+  if (!spreadsheet || !getLeagueId_(spreadsheet)) return;
+  return syncLeagueRosterSnapshot_(spreadsheet);
+}
+
+/** Installs one idempotent 15-minute in-season league roster trigger. */
+function installLeagueRosterSync() {
+  removeLeagueRosterSync();
+  ScriptApp.newTrigger(LEAGUE_ROSTER_SYNC_HANDLER).timeBased().everyMinutes(15).create();
+  SpreadsheetApp.getActiveSpreadsheet().toast('League rosters will sync every 15 minutes during the NFL season.', 'League roster sync installed', 8);
+}
+
+/** Removes only this project's unified league roster sync triggers. */
+function removeLeagueRosterSync() {
+  ScriptApp.getProjectTriggers().forEach(function (trigger) {
+    if (trigger.getHandlerFunction() === LEAGUE_ROSTER_SYNC_HANDLER) ScriptApp.deleteTrigger(trigger);
+  });
+}
+
 /**
  * @param {GoogleAppsScript.Spreadsheet.Spreadsheet} spreadsheet
  * @return {{rows: Array<Object>, warnings: Array<string>, sheetFound: boolean, headerMap: Object}}
@@ -1956,6 +2133,12 @@ function getCaptainData_(spreadsheet) {
   var week = getLeagueWeek_(spreadsheet);
   var isOpen = getCaptainSubmissionsOpen_(spreadsheet);
   var warnings = [];
+  try {
+    ensureLeagueRosterSnapshotFresh_(spreadsheet, false);
+  } catch (error) {
+    warnings.push('Current Sleeper roster could not be refreshed; showing the most recent saved roster.');
+    console.warn('Captain roster refresh failed: ' + (error.message || error));
+  }
   if (!season) warnings.push('Captain submissions need Settings season.');
   if (!week) warnings.push('Captain submissions need Settings week.');
   if (!isOpen) warnings.push('Captain submissions are closed.');
@@ -1970,7 +2153,7 @@ function getCaptainData_(spreadsheet) {
   var usedByTeamPlayerKey = {};
   captainRows.rows.forEach(function (entry) {
     if (String(entry.season) !== String(season)) return;
-    var teamKey = normalizeTeamNameKey_(entry.teamName);
+    var teamKey = getCaptainTeamIdentityKey_(entry.ownerUserId, entry.teamName);
     var playerKey = String(entry.playerId || '').trim();
     if (!teamKey || !playerKey) return;
     if (!usedByTeamPlayerKey[teamKey]) usedByTeamPlayerKey[teamKey] = {};
@@ -1989,9 +2172,10 @@ function getCaptainData_(spreadsheet) {
     return starters.teamsByKey[a].teamName.localeCompare(starters.teamsByKey[b].teamName);
   }).map(function (teamKey) {
     var team = starters.teamsByKey[teamKey];
-    var currentCaptain = decorateCurrentCaptainGameStatus_(currentByTeamKey[teamKey] || null, schedule, now);
+    var captainTeamKey = getCaptainTeamIdentityKey_(team.ownerUserId, team.teamName);
+    var currentCaptain = decorateCurrentCaptainGameStatus_(currentByTeamKey[captainTeamKey] || null, schedule, now);
     var players = team.players.map(function (player) {
-      var usedEntry = usedByTeamPlayerKey[teamKey] && usedByTeamPlayerKey[teamKey][player.playerId];
+      var usedEntry = usedByTeamPlayerKey[captainTeamKey] && usedByTeamPlayerKey[captainTeamKey][player.playerId];
       var usedEarlier = !!(usedEntry && String(usedEntry.week) !== String(week));
       var gameStatus = getCaptainGameStatus_(player, schedule, now);
       var disabledReason = usedEarlier
@@ -2059,15 +2243,26 @@ function submitCaptain_(spreadsheet, params) {
   if (!teamName) return fail('Missing team name.');
   if (!playerId) return fail('Missing player ID.');
 
+  try {
+    ensureLeagueRosterSnapshotFresh_(spreadsheet, true);
+  } catch (error) {
+    return fail('Current Sleeper roster could not be verified. Try again shortly.');
+  }
+
   var starters = buildCaptainStarterOptions_(spreadsheet);
-  var teamKey = normalizeTeamNameKey_(teamName);
-  var team = starters.teamsByKey[teamKey];
+  var rosterTeamKey = normalizeTeamNameKey_(teamName);
+  var team = ownerUserId
+    ? Object.keys(starters.teamsByKey).map(function (key) { return starters.teamsByKey[key]; }).find(function (candidate) {
+      return String(candidate.ownerUserId || '').trim() === ownerUserId;
+    })
+    : starters.teamsByKey[rosterTeamKey];
   if (!team) return fail('Team "' + teamName + '" was not found in current starter rosters.');
 
   var player = team.players.find(function (candidate) {
     return String(candidate.playerId) === String(playerId);
   });
   if (!player) return fail('Selected player is not a current starter for ' + team.teamName + '.');
+  var teamKey = getCaptainTeamIdentityKey_(team.ownerUserId, team.teamName);
 
   var schedule = getNflWeekSchedule_(season, week);
   if (!schedule.ok) return fail('Captain game times are temporarily unavailable. Try again shortly.');
@@ -2079,7 +2274,7 @@ function submitCaptain_(spreadsheet, params) {
   var captainRows = readCaptainRows_(spreadsheet);
   var alreadyUsed = captainRows.rows.find(function (entry) {
     return String(entry.season) === String(season) &&
-      normalizeTeamNameKey_(entry.teamName) === teamKey &&
+      getCaptainTeamIdentityKey_(entry.ownerUserId, entry.teamName) === teamKey &&
       String(entry.playerId) === String(playerId) &&
       String(entry.week) !== String(week);
   });
@@ -2097,7 +2292,7 @@ function submitCaptain_(spreadsheet, params) {
     var existing = rows.find(function (entry) {
       return String(entry.season) === String(season) &&
         String(entry.week) === String(week) &&
-        normalizeTeamNameKey_(entry.teamName) === teamKey;
+        getCaptainTeamIdentityKey_(entry.ownerUserId, entry.teamName) === teamKey;
     });
     if (existing && String(existing.playerId) !== String(player.playerId)) {
       var existingGameStatus = getCaptainGameStatus_(existing, schedule, new Date());
@@ -2211,6 +2406,7 @@ function buildRosterIdDisplayLookup_(spreadsheet, includePhotos) {
 
   var headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
   var rosterIdCol = headers.indexOf('Roster ID');
+  var userIdCol = headers.indexOf('User ID');
   var teamNameCol = headers.indexOf('Team Name');
   var displayNameCol = findRostersDisplayNameColumn_(headers);
   var userAvatarCol = headers.indexOf('User Avatar URL');
@@ -2222,7 +2418,9 @@ function buildRosterIdDisplayLookup_(spreadsheet, includePhotos) {
     return { byRosterId: byRosterId, diagnostics: diagnostics };
   }
 
-  var teamsSheetData = shouldIncludePhotos ? buildTeamsSheetDataMap_(spreadsheet).map : {};
+  var teamsSheetBuild = shouldIncludePhotos ? buildTeamsSheetDataMap_(spreadsheet) : { map: {}, mapByUserId: {} };
+  var teamsSheetData = teamsSheetBuild.map;
+  var teamsSheetDataByUserId = teamsSheetBuild.mapByUserId || {};
   var rows = sheet.getRange(2, 1, lastRow - 1, lastCol).getValues();
   diagnostics.rosterRows = rows.length;
 
@@ -2232,10 +2430,11 @@ function buildRosterIdDisplayLookup_(spreadsheet, includePhotos) {
     if (!rosterId) continue;
 
     var teamName = teamNameCol >= 0 ? String(row[teamNameCol] || '').trim() : '';
+    var userId = userIdCol >= 0 ? String(row[userIdCol] || '').trim() : '';
     var managerName = displayNameCol >= 0 ? String(row[displayNameCol] || '').trim() : '';
     var record = recordCol >= 0 ? String(row[recordCol] || '').trim() : '';
     var teamKey = normalizeTeamNameKey_(teamName);
-    var teamSheetData = teamKey ? teamsSheetData[teamKey] : null;
+    var teamSheetData = (userId && teamsSheetDataByUserId[userId]) || (teamKey ? teamsSheetData[teamKey] : null);
     var rawPhoto = '';
     if (shouldIncludePhotos) {
       rawPhoto = teamSheetData && teamSheetData.managerPhotoUrl
@@ -4224,6 +4423,7 @@ function getLeagueData(includeDiagnostics) {
     const headers = rosterSheet.getRange(1, 1, 1, lastCol).getValues()[0];
     const teamNameCol = headers.indexOf('Team Name');
     const rosterIdCol = headers.indexOf('Roster ID');
+    const userIdCol = headers.indexOf('User ID');
     const realNameCol = findRostersDisplayNameColumn_(headers);
     const recordCol = headers.indexOf('W-L Record');
     const streakCol =
@@ -4239,6 +4439,7 @@ function getLeagueData(includeDiagnostics) {
     const rows = rosterSheet.getRange(2, 1, lastRow - 1, lastCol).getValues();
     const photoBuild = buildTeamsSheetDataMap_(spreadsheet);
     const teamsSheetDataByTeamKey = photoBuild.map;
+    const teamsSheetDataByUserId = photoBuild.mapByUserId || {};
     const playerPositionByName = buildSleeperPlayerPositionByName_(spreadsheet);
     const teams = [];
     const rosterKeysForDiag = [];
@@ -4255,11 +4456,12 @@ function getLeagueData(includeDiagnostics) {
         rosterIdCol >= 0 && rosterIdCol < row.length
           ? normalizeSleeperRosterId_(row[rosterIdCol])
           : '';
+      const userId = userIdCol >= 0 && userIdCol < row.length ? String(row[userIdCol] || '').trim() : '';
       const rawRealName = realNameCol >= 0 && realNameCol < row.length ? row[realNameCol] : '';
       const rawRecord = row[recordCol];
       const rawStreak = streakCol >= 0 && streakCol < row.length ? row[streakCol] : '';
       const rawPointsFor = row[pointsForCol];
-      const teamSheetData = teamKey ? teamsSheetDataByTeamKey[teamKey] : null;
+      const teamSheetData = (userId && teamsSheetDataByUserId[userId]) || (teamKey ? teamsSheetDataByTeamKey[teamKey] : null);
 
       const record =
         rawRecord === '' || rawRecord === null || rawRecord === undefined
@@ -4549,7 +4751,7 @@ function fetchSleeperPlayers() {
  * Prioritizes player roles (Starter > Reserve > Taxi > Active) to avoid duplicates.
  * This script should be run after "fetchLeagueMembersData" to ensure team names are available.
  */
-function fetchAndPopulateRosters() {
+function fetchAndPopulateRostersLegacy_() {
   // --- Configuration ---
   const LEAGUE_ID = getLeagueId_(SpreadsheetApp.getActiveSpreadsheet());
   const ROSTERS_SHEET_NAME = "Team Rosters";
@@ -4711,7 +4913,7 @@ function fetchAndPopulateRosters() {
  * Column A is reserved for manual input.
  * This script is intended to be run once or infrequently as this data is static.
  */
-function fetchLeagueMembersData() {
+function fetchLeagueMembersDataLegacy_() {
   // --- Configuration ---
   const LEAGUE_ID = getLeagueId_(SpreadsheetApp.getActiveSpreadsheet());
   const SHEET_NAME = "Rosters & Records"; // Name of your Google Sheet tab
@@ -4794,7 +4996,7 @@ function fetchLeagueMembersData() {
  * "Rosters & Records" sheet by matching user_id.
  * This script can be run daily or weekly to keep records up-to-date.
  */
-function updateRostersAndRecordsData() {
+function updateRostersAndRecordsDataLegacy_() {
   // --- Configuration ---
   const LEAGUE_ID = getLeagueId_(SpreadsheetApp.getActiveSpreadsheet());
   const SHEET_NAME = "Rosters & Records";

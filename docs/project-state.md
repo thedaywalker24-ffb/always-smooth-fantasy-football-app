@@ -208,7 +208,7 @@ Draft-board roster ID resolution:
 * Home standings header season/week pills are populated from the `Settings` tab via `api=config`; missing Settings values render as `--` instead of hardcoded season/week numbers.
 * A compact Rules pill beside the Home season/week/sync metadata opens the structured `Always Smooth Constitution '26` in a full-height mobile sheet or centered desktop modal. Sections are accordion-based, only one remains open at a time, and the footer links to the original Google Doc.
 * Home and Betting timestamp pills double as refresh buttons to save mobile header space.
-* Home standings cards show weekly Captain state: compact `C` player badge on the primary card when selected, and a fuller Captain card plus starter picker inside the expanded accordion when Captain submissions are open. ESPN's configured regular-season week schedule supplies exact kickoffs; starters whose game has begun render grey and cannot be selected, while the backend revalidates the kickoff before every write and locks an already-selected Captain against later changes.
+* Home standings cards show weekly Captain state: compact `C` player badge on the primary card when selected, and a fuller Captain card plus starter picker inside the expanded accordion when Captain submissions are open. ESPN's configured regular-season week schedule supplies exact kickoffs; starters whose game has begun render grey and cannot be selected, while the backend revalidates the kickoff before every write and locks an already-selected Captain against later changes. Captain reads refresh a unified Sleeper users/rosters snapshot when it is older than five minutes, and every Captain save forces live roster validation.
 * The expanded Weekly Captain card includes an accessible info tooltip summarizing the 2× scoring rule, manual commissioner adjustment in Sleeper, and once-per-season player restriction.
 * When a remembered team's Captain submissions are open and it has no Captain selected, its Home standings tile receives a personal `Captain Needed` badge, orange/pink emphasis, and a reduced-motion-safe pulsing dot. The indicator is never shown for other teams, disappears after selection/lock, and its team-tile toggle announces Captain setup to assistive technology.
 * Player positions use shared compact color pills wherever structured position data accompanies a player name: QB blue, WR yellow, RB green, TE orange, DEF gray, and K red. Captain UI and completed draft picks use their existing position fields; Team MVP position is inferred from the `Sleeper Players` Full Name/Position columns.
@@ -232,7 +232,7 @@ Draft-board roster ID resolution:
 * Apps Script spreadsheet menu for league data operations.
 * `Sync Current Matchups` reads `Settings!B2:B4`, fetches Sleeper once, generates the current `All Matchups` table, and replaces the selected season/week in `Matchup Player Scores`. Each player row includes team/opponent totals, player identity/position, starter or bench status, individual output, and a visible ❎ for starters currently at `0` or below. Historical weeks remain intact.
 * `Install Live Matchup Sync` creates one opt-in hourly trigger. Its handler only syncs on Thursday, Sunday, and Monday during the NFL season; `Remove Live Matchup Sync` cleanly removes only that trigger.
-* Sleeper sync functions for members, records, rosters, players, matchups, and draft picks.
+* `Sync League Rosters Now` is the unified Sleeper user/roster refresh. It updates generated `Rosters & Records` and `Team Rosters` together, uses the live Sleeper team name, and initializes blank `Teams!Y:Y` cells as `Sleeper User ID` without overwriting an existing value. An optional 15-minute in-season trigger keeps the snapshot fresh.
 * Defensive helpers for Google Drive image URLs and missing settings.
 * Documented deployment runbook for changes spanning Apps Script, GitHub Pages, and git.
 
@@ -264,7 +264,7 @@ Draft-board roster ID resolution:
 
 ## Recommended Next 3 Steps
 
-1. Push/redeploy Apps Script, publish GitHub Pages, and verify the PWA reports app version `v2026.09.06.1`.
+1. Push/redeploy Apps Script, publish GitHub Pages, and verify the PWA reports app version `v2026.09.08.1`.
 2. After a week is final, update Turkey Watch/mulligan values as needed and run `Update Records > Finalize Weekly Recap`.
 3. Compare every active team's recap with the final Sleeper matchup, including a league-low tie and any `0`/negative starter edge cases.
 
