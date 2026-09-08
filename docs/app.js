@@ -1,5 +1,5 @@
 const API_BASE_URL = 'https://script.google.com/macros/s/AKfycbwtM_NX16wFOHssvhvP2Iw7FI_7YcVgJ9-5DNbvNOblMxifawE4R-F_eiOLU1NsEggF/exec';
-const APP_VERSION = 'v2026.09.08.1';
+const APP_VERSION = 'v2026.09.08.2';
 const FALLBACK_PHOTO = 'https://images.unsplash.com/photo-1540747913346-19e32dc3e97e?q=80&w=600&auto=format&fit=crop';
 const THEME_KEY = 'theme';
 const CONFIG_CACHE_KEY = 'always-smooth-config';
@@ -157,6 +157,7 @@ function fetchJsonp(path, params = {}) {
     const timeoutMsByRoute = {
       'betting-data': 30000,
       'ticker-data': 20000,
+      'league-data': 30000,
       'draft-board': 30000,
       'matchups-data': 30000,
       'weekly-recap-data': 30000,

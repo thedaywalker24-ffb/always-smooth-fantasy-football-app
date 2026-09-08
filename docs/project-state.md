@@ -264,7 +264,7 @@ Draft-board roster ID resolution:
 
 ## Recommended Next 3 Steps
 
-1. Push/redeploy Apps Script, publish GitHub Pages, and verify the PWA reports app version `v2026.09.08.1`.
+1. Push/redeploy Apps Script, publish GitHub Pages, and verify the PWA reports app version `v2026.09.08.2`.
 2. After a week is final, update Turkey Watch/mulligan values as needed and run `Update Records > Finalize Weekly Recap`.
 3. Compare every active team's recap with the final Sleeper matchup, including a league-low tie and any `0`/negative starter edge cases.
 
