@@ -69,6 +69,7 @@ const ROTOWORLD_NFL_NEWS_ATOM_URL = 'https://www.nbcsports.com/fantasy/football/
 const ROTOWORLD_NFL_PLAYER_NEWS_URL = 'https://www.nbcsports.com/fantasy/football/player-news';
 const ESPN_NFL_SCOREBOARD_URL = 'https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard';
 const ESPN_NFL_SCOREBOARD_WEB_URL = 'https://www.espn.com/nfl/scoreboard';
+const SLEEPER_NFL_SCHEDULE_URL = 'https://api.sleeper.com/schedule/nfl/regular/';
 const CAPTAIN_SCHEDULE_CACHE_SECONDS = 300;
 const LEAGUE_ROSTER_SYNC_HANDLER = 'runScheduledLeagueRosterSync';
 const LEAGUE_ROSTER_SYNC_MAX_AGE_MS = 5 * 60 * 1000;
@@ -2055,6 +2056,38 @@ function getEspnNflWeekDateRange_(season, week) {
 }
 
 /**
+ * Sleeper's schedule fallback has game-state data even when ESPN's schedule
+ * query is unavailable from Apps Script. It intentionally locks from Sleeper's
+ * live/final status, never from the date-only field.
+ * @param {Array<Object>} payload
+ * @param {*} week
+ * @return {{byTeam: Object<string, Object>, gameCount: number}}
+ */
+function buildNflWeekScheduleFromSleeperPayload_(payload, week) {
+  var byTeam = {};
+  var weekValue = String(week || '').trim();
+  var games = (Array.isArray(payload) ? payload : []).filter(function (game) {
+    return String(game && game.week || '').trim() === weekValue;
+  });
+  games.forEach(function (game) {
+    var rawStatus = String(game && game.status || '').trim().toLowerCase();
+    var state = rawStatus === 'pre_game' || rawStatus === 'scheduled' ? 'pre' : rawStatus;
+    [game && game.home, game && game.away].forEach(function (rawTeam) {
+      var team = normalizeNflTeamCode_(rawTeam);
+      if (!team) return;
+      byTeam[team] = {
+        startsAt: '',
+        gameDate: String(game && game.date || '').trim(),
+        state: state,
+        statusSource: 'sleeper',
+        eventName: String(game && game.away || '').trim() + ' at ' + String(game && game.home || '').trim()
+      };
+    });
+  });
+  return { byTeam: byTeam, gameCount: games.length };
+}
+
+/**
  * Fetches the configured NFL week's kickoff schedule. Cached briefly to avoid
  * repeatedly hitting ESPN while still comparing kickoff against the live clock.
  * @param {*} season
@@ -2105,6 +2138,12 @@ function getNflWeekSchedule_(season, week) {
       }
     }
     if (!Object.keys(schedule.byTeam).length) {
+      schedule = buildNflWeekScheduleFromSleeperPayload_(
+        fetchSleeperJson_(SLEEPER_NFL_SCHEDULE_URL + encodeURIComponent(seasonValue)),
+        weekValue
+      );
+    }
+    if (!Object.keys(schedule.byTeam).length) {
       throw primaryError || new Error('No NFL games were returned for Week ' + weekValue + '.');
     }
     result.ok = true;
@@ -2129,8 +2168,18 @@ function getCaptainGameStatus_(player, schedule, now) {
     return { scheduleAvailable: false, gameStartsAt: '', gameLocked: false, gameStatus: 'unavailable', disabledReason: 'Game time unavailable' };
   }
   var game = teamCode && schedule.byTeam ? schedule.byTeam[teamCode] : null;
-  if (!game || !game.startsAt) {
+  if (!game || (!game.startsAt && !game.gameDate)) {
     return { scheduleAvailable: true, gameStartsAt: '', gameLocked: false, gameStatus: 'unscheduled', disabledReason: 'No game scheduled' };
+  }
+  if (game.statusSource === 'sleeper') {
+    var sleeperGameStarted = game.state !== 'pre';
+    return {
+      scheduleAvailable: true,
+      gameStartsAt: '',
+      gameLocked: sleeperGameStarted,
+      gameStatus: sleeperGameStarted ? 'started' : 'upcoming',
+      disabledReason: sleeperGameStarted ? 'Game started' : ''
+    };
   }
   var startTime = new Date(game.startsAt).getTime();
   if (isNaN(startTime)) {
