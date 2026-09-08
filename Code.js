@@ -1819,14 +1819,16 @@ function syncLeagueRosterSnapshot_(spreadsheet) {
     var recordsSheet = spreadsheet.getSheetByName(ROSTERS_RECORDS_SHEET) || spreadsheet.insertSheet(ROSTERS_RECORDS_SHEET);
     var recordHeaders = ['Row ID', 'User ID', 'User Avatar URL', 'Team Name', 'Team Avatar URL', 'W-L Record', 'Streak', 'Roster ID', 'Fpts (Total)', 'Display Name'];
     recordsSheet.getRange(1, 1, 1, recordHeaders.length).setValues([recordHeaders]).setFontWeight('bold');
-    var recordRows = users.map(function (user, index) {
-      var roster = rosterByOwnerId[String(user.user_id)] || {};
+    var recordRows = users.map(function (rawUser, index) {
+      var user = usersById[String(rawUser && rawUser.user_id || '').trim()];
+      if (!user) return null;
+      var roster = rosterByOwnerId[user.user_id] || {};
       var settings = roster.settings || {};
       var wins = Number(settings.wins || 0);
       var losses = Number(settings.losses || 0);
       var ties = Number(settings.ties || 0);
       return [index + 1, user.user_id, user.userAvatar, user.teamName, user.teamAvatar, wins + '-' + losses + (ties ? '-' + ties : ''), String(roster.metadata && roster.metadata.streak || ''), roster.roster_id || '', Number(settings.fpts || 0) + (Number(settings.fpts_decimal || 0) / 100), user.displayName];
-    });
+    }).filter(function (row) { return row !== null; });
     // Column A is historically reserved for commissioner-maintained notes, so
     // only refresh the generated Sleeper fields B:J.
     var oldRecordRows = Math.max(recordsSheet.getLastRow() - 1, 0);
