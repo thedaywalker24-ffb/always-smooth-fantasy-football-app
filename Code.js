@@ -108,7 +108,11 @@ const ALL_MATCHUPS_HEADERS = [
   'Opponent Roster ID',
   'Opponent Team Name',
   'Opponent Score',
-  'Synced At'
+  'Synced At',
+  'Sleeper Score',
+  'Captain Player',
+  'Captain Bonus',
+  'Captain Adjustment Status'
 ];
 const MATCHUP_SYNC_LOG_SHEET = 'Matchup Sync Log';
 const MATCHUP_SYNC_LOG_HEADERS = [
@@ -140,7 +144,10 @@ const WEEKLY_CAPTAINS_HEADERS = [
   'Position',
   'NFL Team',
   'Player Image URL',
-  'Submitted At'
+  'Submitted At',
+  'Sleeper Adjustment Status',
+  'Sleeper Adjusted At',
+  'Captain Bonus Last Calculated'
 ];
 /** Sheet tab containing commissioner-finalized weekly outcomes for Home recaps */
 const WEEKLY_RECAPS_SHEET = 'Weekly Recaps';
@@ -1624,7 +1631,24 @@ function ensureWeeklyCaptainsSheet_(spreadsheet) {
     headerRange.setValues([WEEKLY_CAPTAINS_HEADERS]).setFontWeight('bold');
     sheet.autoResizeColumns(1, WEEKLY_CAPTAINS_HEADERS.length);
   }
+  var statusColumn = WEEKLY_CAPTAINS_HEADERS.indexOf('Sleeper Adjustment Status') + 1;
+  sheet.getRange(2, statusColumn, Math.max(sheet.getMaxRows() - 1, 1), 1).setDataValidation(
+    SpreadsheetApp.newDataValidation().requireValueInList(['Pending', 'Applied'], true).build()
+  );
   return sheet;
+}
+
+/** Records when the commissioner marks a Captain adjustment as applied in Sheets. */
+function onEdit(e) {
+  if (!e || !e.range || e.range.getSheet().getName() !== WEEKLY_CAPTAINS_SHEET || e.range.getRow() < 2) return;
+  var sheet = e.range.getSheet();
+  var statusColumn = WEEKLY_CAPTAINS_HEADERS.indexOf('Sleeper Adjustment Status') + 1;
+  if (e.range.getColumn() !== statusColumn) return;
+  var adjustedAtColumn = WEEKLY_CAPTAINS_HEADERS.indexOf('Sleeper Adjusted At') + 1;
+  var normalizedStatus = String(e.range.getDisplayValue() || '').trim().toLowerCase();
+  sheet.getRange(e.range.getRow(), adjustedAtColumn).setValue(
+    normalizedStatus === 'applied' ? formatCaptainSubmittedAt_(sheet.getParent(), new Date()) : ''
+  );
 }
 
 /**
@@ -1970,7 +1994,10 @@ function readCaptainRows_(spreadsheet) {
       position: get('Position'),
       nflTeam: get('NFL Team'),
       playerImageUrl: get('Player Image URL') || getSleeperPlayerImageUrl_(playerId),
-      submittedAt: get('Submitted At')
+      submittedAt: get('Submitted At'),
+      adjustmentStatus: String(get('Sleeper Adjustment Status') || '').trim().toLowerCase() === 'applied' ? 'Applied' : 'Pending',
+      sleeperAdjustedAt: get('Sleeper Adjusted At'),
+      captainBonusLastCalculated: get('Captain Bonus Last Calculated')
     });
   });
 
@@ -2116,35 +2143,15 @@ function getNflWeekSchedule_(season, week) {
       }
     }
 
-    var schedule = { byTeam: {} };
-    var primaryError = null;
-    try {
-      var url = ESPN_NFL_SCOREBOARD_URL + '?limit=1000&dates=' + encodeURIComponent(seasonValue) +
-        '&seasontype=2&week=' + encodeURIComponent(weekValue);
-      schedule = buildNflWeekScheduleFromEspnPayload_(fetchEspnJson_(url));
-    } catch (error) {
-      primaryError = error;
-    }
+    // Sleeper is already the league's roster source and returns the current
+    // game state quickly. Keep this critical Captain path independent of the
+    // intermittently slow ESPN request so JSONP saves can always complete.
+    var schedule = buildNflWeekScheduleFromSleeperPayload_(
+      fetchSleeperJson_(SLEEPER_NFL_SCHEDULE_URL + encodeURIComponent(seasonValue)),
+      weekValue
+    );
     if (!Object.keys(schedule.byTeam).length) {
-      var dateRange = getEspnNflWeekDateRange_(seasonValue, weekValue);
-      if (dateRange) {
-        try {
-          schedule = buildNflWeekScheduleFromEspnPayload_(fetchEspnJson_(
-            ESPN_NFL_SCOREBOARD_URL + '?limit=1000&dates=' + encodeURIComponent(dateRange)
-          ));
-        } catch (fallbackError) {
-          if (!primaryError) primaryError = fallbackError;
-        }
-      }
-    }
-    if (!Object.keys(schedule.byTeam).length) {
-      schedule = buildNflWeekScheduleFromSleeperPayload_(
-        fetchSleeperJson_(SLEEPER_NFL_SCHEDULE_URL + encodeURIComponent(seasonValue)),
-        weekValue
-      );
-    }
-    if (!Object.keys(schedule.byTeam).length) {
-      throw primaryError || new Error('No NFL games were returned for Week ' + weekValue + '.');
+      throw new Error('Sleeper returned no NFL games for Week ' + weekValue + '.');
     }
     result.ok = true;
     result.byTeam = schedule.byTeam;
@@ -2336,12 +2343,13 @@ function submitCaptain_(spreadsheet, params) {
   if (!getCaptainSubmissionsOpen_(spreadsheet)) return fail('Captain submissions are closed.');
 
   var teamName = String(params.teamName || params.team || '').trim();
+  var ownerUserId = String(params.ownerUserId || params.owner_user_id || '').trim();
   var playerId = String(params.playerId || params.player_id || '').trim();
   if (!teamName) return fail('Missing team name.');
   if (!playerId) return fail('Missing player ID.');
 
   try {
-    ensureLeagueRosterSnapshotFresh_(spreadsheet, true);
+    ensureLeagueRosterSnapshotFresh_(spreadsheet, false);
   } catch (error) {
     return fail('Current Sleeper roster could not be verified. Try again shortly.');
   }
@@ -2403,6 +2411,7 @@ function submitCaptain_(spreadsheet, params) {
     var submittedAtDate = new Date();
     var submittedAt = formatCaptainSubmittedAt_(spreadsheet, submittedAtDate);
     var submittedAtIso = submittedAtDate.toISOString();
+    var keepAdjustment = existing && String(existing.playerId) === String(player.playerId);
     var rowValues = [
       season,
       week,
@@ -2413,7 +2422,10 @@ function submitCaptain_(spreadsheet, params) {
       player.position,
       player.nflTeam,
       player.playerImageUrl,
-      submittedAt
+      submittedAt,
+      keepAdjustment ? existing.adjustmentStatus : 'Pending',
+      keepAdjustment ? existing.sleeperAdjustedAt : '',
+      keepAdjustment ? existing.captainBonusLastCalculated : ''
     ];
     var targetRow = existing ? existing.rowNumber : sheet.getLastRow() + 1;
     sheet.getRange(targetRow, 1, 1, WEEKLY_CAPTAINS_HEADERS.length).setValues([rowValues]);
@@ -2545,6 +2557,7 @@ function buildRosterIdDisplayLookup_(spreadsheet, includePhotos) {
 
     byRosterId[rosterId] = {
       rosterId: rosterId,
+      ownerUserId: userId,
       teamName: teamName || 'Roster ' + rosterId,
       managerName: managerName,
       record: record,
@@ -2566,6 +2579,7 @@ function resolveDraftOwner_(lookup, rosterId) {
   if (key && lookup[key]) return lookup[key];
   return {
     rosterId: key,
+    ownerUserId: '',
     teamName: key ? 'Roster ' + key : 'Unknown',
     managerName: '',
     record: '',
@@ -3116,6 +3130,10 @@ function getMatchupsData_(spreadsheet) {
     'Score',
     'Week Score'
   ]);
+  var sleeperScoreCol = findNormalizedHeaderIndex_(normalizedHeaders, ['Sleeper Score', 'Raw Sleeper Score']);
+  var captainPlayerCol = findNormalizedHeaderIndex_(normalizedHeaders, ['Captain Player']);
+  var captainBonusCol = findNormalizedHeaderIndex_(normalizedHeaders, ['Captain Bonus']);
+  var captainStatusCol = findNormalizedHeaderIndex_(normalizedHeaders, ['Captain Adjustment Status']);
   var rosterIdCol = findNormalizedHeaderIndex_(normalizedHeaders, [
     'Roster ID',
     'RosterID'
@@ -3153,7 +3171,11 @@ function getMatchupsData_(spreadsheet) {
       photoUrl: rawPhoto && looksLikePhotoUrl_(rawPhoto) ? formatDriveUrl(rawPhoto) : rawPhoto,
       record: getDisplayCell_(row, recordCol),
       weekPoints: getDisplayCell_(row, weekPointsCol),
-      rosterId: getDisplayCell_(row, rosterIdCol)
+      rosterId: getDisplayCell_(row, rosterIdCol),
+      sleeperScore: getDisplayCell_(row, sleeperScoreCol),
+      captainPlayer: getDisplayCell_(row, captainPlayerCol),
+      captainBonus: getDisplayCell_(row, captainBonusCol),
+      captainAdjustmentStatus: getDisplayCell_(row, captainStatusCol)
     };
     if (!groups[matchupId]) groups[matchupId] = [];
     groups[matchupId].push(team);
@@ -3223,6 +3245,54 @@ function getSleeperStarterPoints_(item, playerId, starterIndex) {
   };
 }
 
+/** Builds this week's Captain selections keyed by stable Sleeper owner identity. */
+function buildCaptainAdjustmentLookup_(spreadsheet, season, week) {
+  var result = { byTeamKey: {}, warnings: [] };
+  var captainRows = readCaptainRows_(spreadsheet);
+  result.warnings = captainRows.warnings.slice();
+  captainRows.rows.forEach(function (entry) {
+    if (String(entry.season) !== String(season) || String(entry.week) !== String(week)) return;
+    result.byTeamKey[getCaptainTeamIdentityKey_(entry.ownerUserId, entry.teamName)] = entry;
+  });
+  return result;
+}
+
+/** Calculates the display score without mutating Sleeper's raw score. */
+function calculateCaptainAdjustedScore_(item, owner, captainLookup) {
+  var rawScore = Math.round(Number(item && item.points || 0) * 100) / 100;
+  var teamKey = getCaptainTeamIdentityKey_(owner && owner.ownerUserId, owner && owner.teamName);
+  var captain = captainLookup && captainLookup[teamKey];
+  var result = {
+    rawScore: rawScore, appScore: rawScore, captain: captain || null,
+    captainPlayerName: captain ? captain.playerName : '', captainBonus: 0,
+    adjustmentStatus: captain ? captain.adjustmentStatus : ''
+  };
+  if (!captain) return result;
+
+  var starters = Array.isArray(item && item.starters) ? item.starters : [];
+  var starterIndex = starters.map(String).indexOf(String(captain.playerId));
+  if (starterIndex === -1) return result;
+  var playerScore = getSleeperStarterPoints_(item, String(captain.playerId), starterIndex);
+  if (!playerScore.hasPoints) return result;
+
+  result.captainBonus = Math.round(playerScore.points * 100) / 100;
+  if (captain.adjustmentStatus !== 'Applied') {
+    result.appScore = Math.round((rawScore + result.captainBonus) * 100) / 100;
+  }
+  return result;
+}
+
+/** Updates the audit-only Captain bonus column; it never changes adjustment status. */
+function recordCaptainBonusCalculations_(spreadsheet, calculations) {
+  if (!calculations || !calculations.length) return;
+  var sheet = ensureWeeklyCaptainsSheet_(spreadsheet);
+  var bonusColumn = WEEKLY_CAPTAINS_HEADERS.indexOf('Captain Bonus Last Calculated') + 1;
+  calculations.forEach(function (entry) {
+    if (!entry || !entry.rowNumber) return;
+    sheet.getRange(entry.rowNumber, bonusColumn).setValue(entry.captainBonus);
+  });
+}
+
 /**
  * Builds one current-week display row per roster directly from Sleeper data.
  * @param {GoogleAppsScript.Spreadsheet.Spreadsheet} spreadsheet
@@ -3235,8 +3305,11 @@ function getSleeperStarterPoints_(item, playerId, starterIndex) {
 function buildAllMatchupRows_(spreadsheet, sleeperMatchups, season, week, syncedAt) {
   var ownersByRosterId = buildRosterIdDisplayLookup_(spreadsheet).byRosterId;
   var playerInfoById = buildSleeperPlayerInfoMap_(spreadsheet);
+  var captainLookupResult = buildCaptainAdjustmentLookup_(spreadsheet, season, week);
+  var captainLookup = captainLookupResult.byTeamKey;
   var groups = {};
-  var warnings = [];
+  var warnings = captainLookupResult.warnings.slice();
+  var captainCalculations = [];
 
   sleeperMatchups.forEach(function (item) {
     var matchupId = String(item && item.matchup_id || '').trim();
@@ -3258,12 +3331,22 @@ function buildAllMatchupRows_(spreadsheet, sleeperMatchups, season, week, synced
 
   var rows = [];
   completeGroups.forEach(function (teams) {
+    var scoreDetails = teams.map(function (item) {
+      var rosterId = normalizeSleeperRosterId_(item && item.roster_id);
+      return calculateCaptainAdjustedScore_(item, resolveDraftOwner_(ownersByRosterId, rosterId), captainLookup);
+    });
     teams.forEach(function (item, teamIndex) {
       var rosterId = normalizeSleeperRosterId_(item && item.roster_id);
       var opponent = teams[teamIndex === 0 ? 1 : 0];
       var opponentRosterId = normalizeSleeperRosterId_(opponent && opponent.roster_id);
       var owner = resolveDraftOwner_(ownersByRosterId, rosterId);
       var opponentOwner = resolveDraftOwner_(ownersByRosterId, opponentRosterId);
+      var scoreDetail = scoreDetails[teamIndex];
+      var opponentScoreDetail = scoreDetails[teamIndex === 0 ? 1 : 0];
+      if (scoreDetail.captain) captainCalculations.push({
+        rowNumber: scoreDetail.captain.rowNumber,
+        captainBonus: scoreDetail.captainBonus
+      });
       if (!ownersByRosterId[rosterId]) {
         warnings.push('Roster ' + rosterId + ' was not found in ' + ROSTERS_RECORDS_SHEET + '.');
       }
@@ -3283,11 +3366,15 @@ function buildAllMatchupRows_(spreadsheet, sleeperMatchups, season, week, synced
       rows.push([
         String(season || '').trim(), String(week || '').trim(), rosterId,
         owner.teamName || 'Roster ' + rosterId, owner.managerName || '', owner.photoUrl || '', owner.record || '',
-        Math.round(Number(item && item.points || 0) * 100) / 100,
+        scoreDetail.appScore,
         mvp ? Math.round(mvp.points * 100) / 100 : '', mvpLabel,
         String(item && item.matchup_id || '').trim(), opponentRosterId,
         opponentOwner.teamName || 'Roster ' + opponentRosterId,
-        Math.round(Number(opponent && opponent.points || 0) * 100) / 100, syncedAt
+        opponentScoreDetail.appScore, syncedAt,
+        scoreDetail.rawScore,
+        scoreDetail.captainPlayerName,
+        scoreDetail.captainBonus,
+        scoreDetail.adjustmentStatus
       ]);
     });
   });
@@ -3296,7 +3383,10 @@ function buildAllMatchupRows_(spreadsheet, sleeperMatchups, season, week, synced
     var matchupOrder = Number(a[10] || 0) - Number(b[10] || 0);
     return matchupOrder || Number(a[2] || 0) - Number(b[2] || 0);
   });
-  return { rows: rows, warnings: warnings, matchupCount: completeGroups.length };
+  return {
+    rows: rows, warnings: warnings, matchupCount: completeGroups.length,
+    captainCalculations: captainCalculations
+  };
 }
 
 /** Replaces the current app-facing matchup view with a generated table. */
@@ -3310,6 +3400,8 @@ function writeAllMatchupsSheet_(spreadsheet, rows) {
     sheet.getRange(2, 1, rows.length, ALL_MATCHUPS_HEADERS.length).setValues(rows);
     sheet.getRange(2, 8, rows.length, 2).setNumberFormat('0.00');
     sheet.getRange(2, 14, rows.length, 1).setNumberFormat('0.00');
+    sheet.getRange(2, 16, rows.length, 1).setNumberFormat('0.00');
+    sheet.getRange(2, 18, rows.length, 1).setNumberFormat('0.00');
   }
   sheet.autoResizeColumns(1, ALL_MATCHUPS_HEADERS.length);
 }
@@ -3364,6 +3456,7 @@ function syncCurrentWeekMatchups_(spreadsheet, runType) {
     var matchupResult = buildAllMatchupRows_(spreadsheet, sleeperMatchups, season, week, syncedAt);
     if (!matchupResult.rows.length) throw new Error('Sleeper returned no complete two-team matchups for Week ' + week + '.');
     writeAllMatchupsSheet_(spreadsheet, matchupResult.rows);
+    recordCaptainBonusCalculations_(spreadsheet, matchupResult.captainCalculations);
     var playerScoreResult = upsertMatchupPlayerScores_(spreadsheet, sleeperMatchups, season, week);
     var result = {
       ok: true, season: season, week: week, matchupCount: matchupResult.matchupCount, teamCount: matchupResult.rows.length,
@@ -3645,6 +3738,8 @@ function ensureWeeklyRecapsSheet_(spreadsheet) {
  * @param {Object<string, Object>} playerInfoById
  * @param {Object<string, Object>} teamsSheetDataByKey
  * @param {number} leagueLowScore
+ * @param {Object} scoreDetail
+ * @param {Object} opponentScoreDetail
  * @return {Object}
  */
 function buildFinalizedWeeklyRecapTeam_(
@@ -3653,14 +3748,16 @@ function buildFinalizedWeeklyRecapTeam_(
   ownersByRosterId,
   playerInfoById,
   teamsSheetDataByKey,
-  leagueLowScore
+  leagueLowScore,
+  scoreDetail,
+  opponentScoreDetail
 ) {
   var rosterId = normalizeSleeperRosterId_(item.roster_id);
   var opponentRosterId = normalizeSleeperRosterId_(opponent.roster_id);
   var owner = resolveDraftOwner_(ownersByRosterId, rosterId);
   var opponentOwner = resolveDraftOwner_(ownersByRosterId, opponentRosterId);
-  var teamScore = Number(item.points || 0);
-  var opponentScore = Number(opponent.points || 0);
+  var teamScore = Number(scoreDetail ? scoreDetail.appScore : item.points || 0);
+  var opponentScore = Number(opponentScoreDetail ? opponentScoreDetail.appScore : opponent.points || 0);
   var scoreGap = teamScore - opponentScore;
   var result = Math.abs(scoreGap) <= 0.005 ? 'tie' : scoreGap > 0 ? 'win' : 'loss';
   var starters = Array.isArray(item.starters) ? item.starters : [];
@@ -3753,13 +3850,28 @@ function finalizeWeeklyRecap_(spreadsheet) {
   completeGroups.forEach(function (teams) {
     activeTeams.push(teams[0], teams[1]);
   });
-  var leagueLowScore = activeTeams.reduce(function (lowest, item) {
-    return Math.min(lowest, Number(item.points || 0));
-  }, Infinity);
-
   var ownersByRosterId = buildRosterIdDisplayLookup_(spreadsheet).byRosterId;
   var playerInfoById = buildSleeperPlayerInfoMap_(spreadsheet);
   var teamsSheetDataByKey = buildTeamsSheetDataMap_(spreadsheet).map;
+  var captainLookupResult = buildCaptainAdjustmentLookup_(spreadsheet, season, week);
+  var captainLookup = captainLookupResult.byTeamKey;
+  var captainCalculations = [];
+  var scoreDetailsByRosterId = {};
+  activeTeams.forEach(function (item) {
+    var rosterId = normalizeSleeperRosterId_(item.roster_id);
+    var detail = calculateCaptainAdjustedScore_(item, resolveDraftOwner_(ownersByRosterId, rosterId), captainLookup);
+    scoreDetailsByRosterId[rosterId] = detail;
+    if (detail.captain) captainCalculations.push({ rowNumber: detail.captain.rowNumber, captainBonus: detail.captainBonus });
+  });
+  var leagueLowScore = activeTeams.reduce(function (lowest, item) {
+    var rosterId = normalizeSleeperRosterId_(item.roster_id);
+    return Math.min(lowest, Number(scoreDetailsByRosterId[rosterId].appScore));
+  }, Infinity);
+  recordCaptainBonusCalculations_(spreadsheet, captainCalculations);
+  var pendingCaptainCount = Object.keys(scoreDetailsByRosterId).filter(function (rosterId) {
+    var detail = scoreDetailsByRosterId[rosterId];
+    return detail.captain && detail.adjustmentStatus !== 'Applied';
+  }).length;
   var finalizedAt = new Date().toISOString();
   var recapTeams = [];
   completeGroups.forEach(function (teams) {
@@ -3769,7 +3881,9 @@ function finalizeWeeklyRecap_(spreadsheet) {
       ownersByRosterId,
       playerInfoById,
       teamsSheetDataByKey,
-      leagueLowScore
+      leagueLowScore,
+      scoreDetailsByRosterId[normalizeSleeperRosterId_(teams[0].roster_id)],
+      scoreDetailsByRosterId[normalizeSleeperRosterId_(teams[1].roster_id)]
     ));
     recapTeams.push(buildFinalizedWeeklyRecapTeam_(
       teams[1],
@@ -3777,7 +3891,9 @@ function finalizeWeeklyRecap_(spreadsheet) {
       ownersByRosterId,
       playerInfoById,
       teamsSheetDataByKey,
-      leagueLowScore
+      leagueLowScore,
+      scoreDetailsByRosterId[normalizeSleeperRosterId_(teams[1].roster_id)],
+      scoreDetailsByRosterId[normalizeSleeperRosterId_(teams[0].roster_id)]
     ));
   });
 
@@ -3841,6 +3957,7 @@ function finalizeWeeklyRecap_(spreadsheet) {
     leagueLowScore: Math.round(leagueLowScore * 100) / 100,
     playerCount: playerScoreResult.playerCount,
     strikeCount: playerScoreResult.strikeCount,
+    pendingCaptainCount: pendingCaptainCount,
     finalizedAt: finalizedAt
   };
 }
@@ -3857,7 +3974,10 @@ function finalizeWeeklyRecap() {
       'Weekly recap finalized for ' + result.season + ' Week ' + result.week +
       ' with ' + result.teamCount + ' active teams. ' +
       result.playerCount + ' player scores were saved, including ' +
-      result.strikeCount + ' strike' + (result.strikeCount === 1 ? '' : 's') + '.'
+      result.strikeCount + ' strike' + (result.strikeCount === 1 ? '' : 's') + '.' +
+      (result.pendingCaptainCount
+        ? ' ' + result.pendingCaptainCount + ' Captain adjustment' + (result.pendingCaptainCount === 1 ? ' is' : 's are') + ' still Pending in Weekly Captains.'
+        : '')
     );
     return result;
   } catch (error) {

@@ -549,6 +549,15 @@ function formatMatchupScore(value) {
   return numeric.toFixed(2).replace(/\.00$/, '');
 }
 
+function formatCaptainScoreNote(team) {
+  const captain = String(team?.captainPlayer || '').trim();
+  if (!captain) return '';
+  const status = String(team?.captainAdjustmentStatus || '').trim().toLowerCase();
+  if (status === 'applied') return 'Captain confirmed in Sleeper';
+  const bonus = formatMatchupScore(team?.captainBonus);
+  return `${captain} Captain bonus: +${bonus}`;
+}
+
 function buildTeamMatchupLookup(payload) {
   const lookup = {};
   const matchups = Array.isArray(payload?.matchups) ? payload.matchups : [];
@@ -576,6 +585,7 @@ function renderHomeMatchupStrip(matchup) {
   const opponentName = String(matchup?.opponent?.teamName || 'Opponent').trim();
   const teamPhoto = String(matchup?.team?.photoUrl || FALLBACK_PHOTO).trim() || FALLBACK_PHOTO;
   const opponentPhoto = String(matchup?.opponent?.photoUrl || FALLBACK_PHOTO).trim() || FALLBACK_PHOTO;
+  const captainNote = formatCaptainScoreNote(matchup?.team);
 
   return `
     <div class="home-matchup-strip" aria-label="Current matchup">
@@ -591,6 +601,7 @@ function renderHomeMatchupStrip(matchup) {
         </span>
       </div>
       <p class="home-matchup-strip__opponent">${escapeHtml(opponentName)}</p>
+      ${captainNote ? `<p class="mt-1 text-center text-[10px] font-bold text-pink-600 dark:text-pink-300">${escapeHtml(captainNote)}</p>` : ''}
     </div>
   `;
 }
@@ -2314,6 +2325,7 @@ function renderMatchupTeam(team, side) {
   const score = String(team?.weekPoints || '').trim() || '--';
   const record = String(team?.record || '').trim() || '--';
   const label = String(team?.teamName || 'Unknown').trim();
+  const captainNote = formatCaptainScoreNote(team);
   return `
     <div class="matchup-team-panel matchup-team-panel--${side}" ${getMatchupBackdropStyle(team)}>
       <div class="matchup-team-overlay">
@@ -2331,6 +2343,7 @@ function renderMatchupTeam(team, side) {
             <strong>${escapeHtml(score)}</strong>
           </div>
         </div>
+        ${captainNote ? `<p class="mt-2 text-center text-[10px] font-bold text-pink-100">${escapeHtml(captainNote)}</p>` : ''}
       </div>
     </div>
   `;
