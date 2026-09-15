@@ -1,5 +1,5 @@
 const API_BASE_URL = 'https://script.google.com/macros/s/AKfycbwtM_NX16wFOHssvhvP2Iw7FI_7YcVgJ9-5DNbvNOblMxifawE4R-F_eiOLU1NsEggF/exec';
-const APP_VERSION = 'v2026.09.15.3';
+const APP_VERSION = 'v2026.09.15.4';
 const FALLBACK_PHOTO = 'https://images.unsplash.com/photo-1540747913346-19e32dc3e97e?q=80&w=600&auto=format&fit=crop';
 const THEME_KEY = 'theme';
 const CONFIG_CACHE_KEY = 'always-smooth-config';
@@ -1590,6 +1590,7 @@ function renderTeams(payload, isStale = false) {
     const beerTrophiesValue = String(team.beerTrophies || '').trim();
     const beerTrophies = beerTrophiesValue || 'None';
     const beerOwed = teamOwesBeerChug(team);
+    const strikeCount = getTeamStrikeCount(team);
     const mulliganLabel = team.mulligan ? '✅' : '❎';
     const teamPanelId = `team-panel-${index}`;
     const teamInsight = buildTeamInsight(team, leaderPoints);
@@ -1604,6 +1605,7 @@ function renderTeams(payload, isStale = false) {
             <div class="relative shrink-0">
               <img src="${photoUrl}" class="manager-photo" alt="${team.teamName}" onerror="this.src='${FALLBACK_PHOTO}';this.onerror=null;">
               ${beerOwed ? '<span class="absolute -right-2 -top-2 text-lg drop-shadow" role="img" aria-label="Beer chug owed">🍺</span>' : ''}
+              ${renderStrikeBadge(strikeCount, 'left')}
               <div class="absolute -bottom-1 -right-1 flex h-6 min-w-6 items-center justify-center rounded-full border-2 border-white bg-slate-900 px-1.5 text-[10px] font-black text-white shadow-sm dark:border-slate-900 dark:bg-pink-500">${team.leagueRank}</div>
             </div>
             <div class="min-w-0 flex-1">
@@ -2394,16 +2396,34 @@ function renderMatchupTeam(team, side) {
   `;
 }
 
-function teamOwesBeerChug(team) {
+function getLatestRecapForTeam(team) {
   const recaps = Array.isArray(weeklyRecapData?.teams) ? weeklyRecapData.teams : [];
   const rosterId = String(team?.rosterId || '').trim();
   const teamKey = normalizeClientTeamKey(team?.teamName);
   const managerKey = normalizeClientTeamKey(team?.managerName);
-  return recaps.some((recap) => recap?.beerChugOwed === true && (
+  return recaps.find((recap) => (
     (rosterId && String(recap?.rosterId || '').trim() === rosterId) ||
     (teamKey && normalizeClientTeamKey(recap?.teamName) === teamKey) ||
     (managerKey && normalizeClientTeamKey(recap?.managerName) === managerKey)
-  ));
+  )) || null;
+}
+
+function teamOwesBeerChug(team) {
+  return getLatestRecapForTeam(team)?.beerChugOwed === true;
+}
+
+function getTeamStrikeCount(team) {
+  const strikes = getLatestRecapForTeam(team)?.nonpositiveStarters;
+  return Array.isArray(strikes) ? strikes.length : 0;
+}
+
+function renderStrikeBadge(strikeCount, placement = 'center') {
+  if (!strikeCount) return '';
+  const position = placement === 'left'
+    ? '-bottom-2 -left-2'
+    : '-bottom-2 left-1/2 -translate-x-1/2';
+  const label = `${strikeCount} strike${strikeCount === 1 ? '' : 's'} earned`;
+  return `<span class="absolute ${position} z-10 whitespace-nowrap rounded-full border border-white bg-white/95 px-1.5 py-0.5 text-[10px] font-black leading-none shadow-sm dark:border-slate-800 dark:bg-slate-900" role="img" aria-label="${label}">❌${strikeCount > 1 ? ` ×${strikeCount}` : ''}</span>`;
 }
 
 function renderScoreboardList(matchups) {
@@ -2414,11 +2434,13 @@ function renderScoreboardList(matchups) {
         const row = (team, align) => {
           const managerName = String(team.managerName || team.teamName || 'Unknown').trim();
           const beerOwed = teamOwesBeerChug(team);
+          const strikeCount = getTeamStrikeCount(team);
           return `
           <div class="flex min-w-0 items-center gap-1.5 ${align === 'right' ? 'flex-row-reverse text-right' : ''}" aria-label="${escapeHtml(managerName)}, record ${escapeHtml(team.record || '--')}, score ${escapeHtml(formatMatchupScore(team.weekPoints))}">
             <span class="relative shrink-0">
               <img src="${escapeHtml(String(team.photoUrl || FALLBACK_PHOTO))}" class="h-11 w-11 rounded-full border-2 border-white/70 object-cover dark:border-slate-700" alt="${escapeHtml(managerName)}" loading="lazy" onerror="this.src='${FALLBACK_PHOTO}';this.onerror=null;">
               ${beerOwed ? '<span class="absolute -right-2 -top-2 text-sm drop-shadow" role="img" aria-label="Beer chug owed">🍺</span>' : ''}
+              ${renderStrikeBadge(strikeCount)}
             </span>
             <span class="shrink-0 text-xs font-black tabular-nums text-slate-400 dark:text-slate-500">${escapeHtml(team.record || '--')}</span>
             <strong class="shrink-0 text-lg font-black tabular-nums text-pink-500">${escapeHtml(formatMatchupScore(team.weekPoints))}</strong>
