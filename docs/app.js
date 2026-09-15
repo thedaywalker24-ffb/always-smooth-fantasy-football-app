@@ -1,5 +1,5 @@
 const API_BASE_URL = 'https://script.google.com/macros/s/AKfycbwtM_NX16wFOHssvhvP2Iw7FI_7YcVgJ9-5DNbvNOblMxifawE4R-F_eiOLU1NsEggF/exec';
-const APP_VERSION = 'v2026.09.15.4';
+const APP_VERSION = 'v2026.09.15.5';
 const FALLBACK_PHOTO = 'https://images.unsplash.com/photo-1540747913346-19e32dc3e97e?q=80&w=600&auto=format&fit=crop';
 const THEME_KEY = 'theme';
 const CONFIG_CACHE_KEY = 'always-smooth-config';
@@ -2373,8 +2373,12 @@ function renderMatchupTeam(team, side) {
   const record = String(team?.record || '').trim() || '--';
   const label = String(team?.teamName || 'Unknown').trim();
   const captainNote = formatCaptainScoreNote(team);
+  const beerOwed = teamOwesBeerChug(team);
+  const strikeCount = getTeamStrikeCount(team);
   return `
-    <div class="matchup-team-panel matchup-team-panel--${side}" ${getMatchupBackdropStyle(team)}>
+    <div class="matchup-team-panel relative matchup-team-panel--${side}" ${getMatchupBackdropStyle(team)}>
+      ${beerOwed ? '<span class="absolute right-3 top-3 z-20 text-lg drop-shadow" role="img" aria-label="Beer chug owed">🍺</span>' : ''}
+      ${strikeCount ? `<span class="absolute right-3 top-10 z-20 rounded-full bg-white/95 px-1.5 py-0.5 text-[10px] font-black leading-none shadow-sm dark:bg-slate-900" role="img" aria-label="${strikeCount} strike${strikeCount === 1 ? '' : 's'} earned">❌${strikeCount > 1 ? ` ×${strikeCount}` : ''}</span>` : ''}
       <div class="matchup-team-overlay">
         <div class="min-w-0">
           <p class="truncate text-sm font-black italic uppercase leading-tight text-white">${escapeHtml(label)}</p>
@@ -2443,16 +2447,18 @@ function renderScoreboardList(matchups) {
               ${renderStrikeBadge(strikeCount)}
             </span>
             <span class="shrink-0 text-xs font-black tabular-nums text-slate-400 dark:text-slate-500">${escapeHtml(team.record || '--')}</span>
-            <strong class="shrink-0 text-lg font-black tabular-nums text-pink-500">${escapeHtml(formatMatchupScore(team.weekPoints))}</strong>
           </div>
         `;
         };
         return `
-          <article class="glass-panel rounded-2xl border border-slate-200 bg-white/90 p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900/70" aria-label="Matchup ${escapeHtml(matchup.matchupId)}">
-            <p class="mb-3 text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">Matchup ${escapeHtml(matchup.matchupId)}</p>
-            <div class="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-3">
+          <article class="glass-panel rounded-2xl border border-slate-200 bg-white/90 p-3 shadow-sm dark:border-slate-800 dark:bg-slate-900/70" aria-label="Matchup ${escapeHtml(matchup.matchupId)}">
+            <div class="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2">
               ${row(firstTeam, 'left')}
-              <span class="text-xs font-black text-slate-300 dark:text-slate-600">VS</span>
+              <span class="inline-flex items-center gap-1 rounded-full bg-pink-500 px-2 py-1.5 text-sm font-black tabular-nums text-white shadow-sm shadow-pink-500/25">
+                <strong>${escapeHtml(formatMatchupScore(firstTeam.weekPoints))}</strong>
+                <span class="text-[9px] tracking-[0.08em] text-white/75">VS</span>
+                <strong>${escapeHtml(formatMatchupScore(secondTeam.weekPoints))}</strong>
+              </span>
               ${row(secondTeam, 'right')}
             </div>
           </article>
