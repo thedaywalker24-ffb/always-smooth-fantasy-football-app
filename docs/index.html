@@ -3260,7 +3260,10 @@
                         <h2 class="text-3xl font-black uppercase italic tracking-tight">Scoreboard</h2>
                         <p id="matchups-summary" class="text-sm font-bold text-slate-500 dark:text-slate-400">Loading scores</p>
                     </div>
-                    <span id="matchups-updated" class="w-fit rounded-full border border-slate-200 bg-white px-4 py-2 text-xs font-black uppercase tracking-[0.18em] text-slate-500 shadow-sm dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300">Syncing</span>
+                    <div class="flex flex-wrap items-center gap-2">
+                        <div id="scoreboard-view-toggle"></div>
+                        <span id="matchups-updated" class="w-fit rounded-full border border-slate-200 bg-white px-4 py-2 text-xs font-black uppercase tracking-[0.18em] text-slate-500 shadow-sm dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300">Syncing</span>
+                    </div>
                 </div>
                 <div id="matchups-root"></div>
             </section>
@@ -3268,7 +3271,7 @@
     </div>
 
     <div class="bottom-tabs-overlay" aria-label="Primary navigation">
-        <span id="app-version-label" class="app-version-badge" aria-label="App version">App v2026.09.14.1</span>
+        <span id="app-version-label" class="app-version-badge" aria-label="App version">App v2026.09.15.1</span>
         <nav class="bottom-tab-nav" role="tablist" aria-label="App sections">
             <button id="tab-home" type="button" class="bottom-tab-button" role="tab" aria-selected="true" aria-controls="home-panel" data-app-tab="home">
                 <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 11.5L12 4l9 7.5M5.5 10.5V20h13v-9.5M9.5 20v-5h5v5"></path></svg>

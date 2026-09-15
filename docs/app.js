@@ -1,5 +1,5 @@
 const API_BASE_URL = 'https://script.google.com/macros/s/AKfycbwtM_NX16wFOHssvhvP2Iw7FI_7YcVgJ9-5DNbvNOblMxifawE4R-F_eiOLU1NsEggF/exec';
-const APP_VERSION = 'v2026.09.14.1';
+const APP_VERSION = 'v2026.09.15.1';
 const FALLBACK_PHOTO = 'https://images.unsplash.com/photo-1540747913346-19e32dc3e97e?q=80&w=600&auto=format&fit=crop';
 const THEME_KEY = 'theme';
 const CONFIG_CACHE_KEY = 'always-smooth-config';
@@ -12,6 +12,8 @@ const WEEKLY_RECAP_CACHE_KEY = 'always-smooth-weekly-recap-data';
 const MEMBER_PROFILE_KEY = 'always-smooth-member-profile-v1';
 const ONBOARDING_KEY = 'always-smooth-onboarding-v1';
 const CAPTAIN_INTRO_KEY = 'always-smooth-captain-intro-v1';
+const SCOREBOARD_VIEW_KEY = 'always-smooth-scoreboard-view-v1';
+const BETTING_VIEW_KEY = 'always-smooth-betting-view-v1';
 const BETTING_BET_COUNT = 6;
 const MATCHUPS_TAB_ENABLED = true;
 const DEFAULT_CONFIG = {
@@ -234,6 +236,28 @@ function setBanner(message, tone = 'warning') {
     ? 'rounded-2xl border px-4 py-3 text-sm font-semibold shadow-sm border-red-300 bg-red-50 text-red-900 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-100'
     : 'rounded-2xl border px-4 py-3 text-sm font-semibold shadow-sm border-amber-300 bg-amber-50 text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-100';
   card.className = classes;
+}
+
+function getDisplayView(scope) {
+  const key = scope === 'betting' ? BETTING_VIEW_KEY : SCOREBOARD_VIEW_KEY;
+  return localStorage.getItem(key) === 'list' ? 'list' : 'tiles';
+}
+
+function setDisplayView(scope, view) {
+  const key = scope === 'betting' ? BETTING_VIEW_KEY : SCOREBOARD_VIEW_KEY;
+  localStorage.setItem(key, view === 'list' ? 'list' : 'tiles');
+}
+
+function renderDisplayViewToggle(scope) {
+  const activeView = getDisplayView(scope);
+  const button = (view, label) => `
+    <button type="button" data-display-view-scope="${scope}" data-display-view="${view}" aria-pressed="${activeView === view}" class="rounded-full px-3 py-2 text-[10px] font-black uppercase tracking-[0.14em] transition ${activeView === view ? 'bg-pink-500 text-white shadow-sm' : 'text-slate-500 hover:text-pink-500 dark:text-slate-300'}">${label}</button>
+  `;
+  return `
+    <div class="inline-flex rounded-full border border-slate-200 bg-white p-1 shadow-sm dark:border-slate-800 dark:bg-slate-900" aria-label="Display view">
+      ${button('tiles', 'Tiles')}${button('list', 'List')}
+    </div>
+  `;
 }
 
 function setCaptainDialog(state, title, message, options = {}) {
@@ -2364,6 +2388,40 @@ function renderMatchupTeam(team, side) {
   `;
 }
 
+function renderScoreboardList(matchups) {
+  return `
+    <div class="space-y-3">
+      ${matchups.map((matchup) => {
+        const [firstTeam = {}, secondTeam = {}] = matchup.teams || [];
+        const row = (team, align) => {
+          const captainNote = formatCaptainScoreNote(team);
+          return `
+          <div class="flex min-w-0 items-center gap-3 ${align === 'right' ? 'flex-row-reverse text-right' : ''}">
+            <img src="${escapeHtml(String(team.photoUrl || FALLBACK_PHOTO))}" class="h-9 w-9 shrink-0 rounded-full border-2 border-white/70 object-cover dark:border-slate-700" alt="" loading="lazy" onerror="this.src='${FALLBACK_PHOTO}';this.onerror=null;">
+            <div class="min-w-0 flex-1">
+              <p class="truncate text-sm font-black italic uppercase text-slate-950 dark:text-white">${escapeHtml(team.teamName || 'Unknown')}</p>
+              <p class="truncate text-[10px] font-bold uppercase tracking-[0.1em] text-slate-400">${escapeHtml(team.record || '--')}</p>
+              ${captainNote ? `<p class="truncate text-[9px] font-bold text-pink-500 dark:text-pink-300">${escapeHtml(captainNote)}</p>` : ''}
+            </div>
+            <strong class="text-xl font-black tabular-nums text-pink-500">${escapeHtml(formatMatchupScore(team.weekPoints))}</strong>
+          </div>
+        `;
+        };
+        return `
+          <article class="glass-panel rounded-2xl border border-slate-200 bg-white/90 p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900/70" aria-label="Matchup ${escapeHtml(matchup.matchupId)}">
+            <p class="mb-3 text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">Matchup ${escapeHtml(matchup.matchupId)}</p>
+            <div class="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-3">
+              ${row(firstTeam, 'left')}
+              <span class="text-xs font-black text-slate-300 dark:text-slate-600">VS</span>
+              ${row(secondTeam, 'right')}
+            </div>
+          </article>
+        `;
+      }).join('')}
+    </div>
+  `;
+}
+
 function renderMatchups(payload, isStale = false) {
   const root = getMatchupsRoot();
   const matchups = Array.isArray(payload?.matchups) ? payload.matchups : [];
@@ -2379,7 +2437,7 @@ function renderMatchups(payload, isStale = false) {
   root.innerHTML = `
     <div class="space-y-4">
       ${isStale ? `<div class="${getBettingStatusClass('warning')}">Showing the most recent cached matchups because the live sheet request failed.</div>` : ''}
-      <div class="grid grid-cols-1 gap-4 lg:grid-cols-2">
+      ${getDisplayView('scoreboard') === 'list' ? renderScoreboardList(matchups) : `<div class="grid grid-cols-1 gap-4 lg:grid-cols-2">
         ${matchups.map((matchup) => {
           const teams = matchup.teams || [];
           return `
@@ -2396,7 +2454,7 @@ function renderMatchups(payload, isStale = false) {
             </article>
           `;
         }).join('')}
-      </div>
+      </div>`}
     </div>
   `;
 }
@@ -2795,19 +2853,32 @@ function renderBettingMemberPicker() {
     </button>
   `;
   }).join('');
+  const memberList = displayMembers.map((member) => {
+    const isMemberTeam = doesBettingMemberMatchProfile(member);
+    return `
+      <button type="button" data-betting-member-row="${member.row}" class="glass-panel flex w-full items-center gap-3 rounded-2xl border border-slate-200 bg-white/90 px-4 py-3 text-left shadow-sm transition hover:border-pink-500/40 dark:border-slate-800 dark:bg-slate-900/70" aria-label="${escapeHtml(member.name)} ${member.submitted ? 'submitted' : 'open'}${isMemberTeam ? ', your team' : ''}">
+        ${getBettingMemberAvatarMarkup(member, 'tiny')}
+        <span class="min-w-0 flex-1">
+          <span class="block truncate text-sm font-black italic uppercase text-slate-950 dark:text-white">${escapeHtml(member.name)}</span>
+          <span class="mt-1 block text-[10px] font-bold uppercase tracking-[0.12em] text-slate-400">${member.submitted ? 'Picks In' : 'Picks Open'}${isMemberTeam ? ' · Your Team' : ''}</span>
+        </span>
+        ${getBettingSeasonBetsWonMarkup(member)}
+      </button>
+    `;
+  }).join('');
 
   root.innerHTML = `
     <div class="space-y-6">
       ${renderWeeklyBettingLeaders()}
       ${renderBettingLeaders()}
-      ${renderBettingHeader()}
+      ${renderBettingHeader(renderDisplayViewToggle('betting'))}
       ${getBettingStatusMarkup()}
       ${bettingData.warnings?.length ? `
         <div class="${getBettingStatusClass('warning')}">${bettingData.warnings.map(escapeHtml).join(' ')}</div>
       ` : ''}
-      <div class="betting-member-grid">
-        ${memberCards}
-      </div>
+      ${getDisplayView('betting') === 'list'
+        ? `<div class="space-y-3">${memberList}</div>`
+        : `<div class="betting-member-grid">${memberCards}</div>`}
     </div>
   `;
 }
@@ -3203,6 +3274,14 @@ function setupBettingControls() {
 
   root.dataset.bettingBound = 'true';
   root.addEventListener('click', (event) => {
+    const viewToggle = event.target.closest('[data-display-view-scope="betting"]');
+    if (viewToggle) {
+      setDisplayView('betting', viewToggle.dataset.displayView);
+      selectedBettingMemberRow = null;
+      renderBettingMemberPicker();
+      return;
+    }
+
     const refresh = event.target.closest('[data-betting-refresh]');
     if (refresh) {
       loadBettingData();
@@ -3270,6 +3349,23 @@ function setupBettingControls() {
     if (event.target.id !== 'betting-form') return;
     event.preventDefault();
     submitBettingForm();
+  });
+}
+
+function setupScoreboardViewControls() {
+  const root = document.getElementById('scoreboard-view-toggle');
+  if (!root || root.dataset.viewBound === 'true') return;
+  root.dataset.viewBound = 'true';
+  const render = () => {
+    root.innerHTML = renderDisplayViewToggle('scoreboard');
+  };
+  render();
+  root.addEventListener('click', (event) => {
+    const button = event.target.closest('[data-display-view-scope="scoreboard"]');
+    if (!button) return;
+    setDisplayView('scoreboard', button.dataset.displayView);
+    render();
+    if (matchupsData) renderMatchups(matchupsData, matchupsDataIsStale);
   });
 }
 
@@ -3538,6 +3634,7 @@ async function bootstrap() {
   setupMemberProfile();
   setupAppTour();
   setupAppTabs();
+  setupScoreboardViewControls();
   setupCaptainDialog();
   setupBettingControls();
   setupDraftBoardControls();

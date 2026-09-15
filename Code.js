@@ -1016,6 +1016,30 @@ function normalizeBettingOptionKey_(value) {
 }
 
 /**
+ * Splits a commissioner-posted multi-winner result. Use a vertical bar or a
+ * line break in the result cell, e.g. "Team A | Team B". Commas are left
+ * intact because they can be part of a displayed name.
+ * @param {*} value
+ * @return {Array<string>}
+ */
+function parseBettingResultOptions_(value) {
+  var seen = {};
+  return String(value || '').split(/[|\n\r]+/).map(function (option) {
+    return normalizeBettingOptionKey_(option);
+  }).filter(function (option) {
+    if (!option || seen[option]) return false;
+    seen[option] = true;
+    return true;
+  });
+}
+
+/** @return {boolean} Whether a submitted pick matches one of the valid results. */
+function isBettingPickCorrect_(pick, result) {
+  var pickKey = normalizeBettingOptionKey_(pick);
+  return !!pickKey && parseBettingResultOptions_(result).indexOf(pickKey) !== -1;
+}
+
+/**
  * @param {string} key normalized betting option key
  * @return {boolean}
  */
@@ -1324,8 +1348,7 @@ function buildWeeklyBettingSummary_(members, results) {
     var picks = Array.isArray(member.picks) ? member.picks : [];
     var correct = 0;
     for (var i = 0; i < scoredBetCount; i++) {
-      if (normalizeBettingOptionKey_(picks[i]) &&
-          normalizeBettingOptionKey_(picks[i]) === normalizeBettingOptionKey_(safeResults[i])) correct++;
+      if (isBettingPickCorrect_(picks[i], safeResults[i])) correct++;
     }
     var tiebreakerPick = picks[BETTING_BET_COUNT - 1] || '';
     var tiebreakerNumber = parseBettingTiebreakerNumber_(tiebreakerPick);
