@@ -1,5 +1,5 @@
 const API_BASE_URL = 'https://script.google.com/macros/s/AKfycbwtM_NX16wFOHssvhvP2Iw7FI_7YcVgJ9-5DNbvNOblMxifawE4R-F_eiOLU1NsEggF/exec';
-const APP_VERSION = 'v2026.09.15.1';
+const APP_VERSION = 'v2026.09.15.2';
 const FALLBACK_PHOTO = 'https://images.unsplash.com/photo-1540747913346-19e32dc3e97e?q=80&w=600&auto=format&fit=crop';
 const THEME_KEY = 'theme';
 const CONFIG_CACHE_KEY = 'always-smooth-config';
@@ -1048,6 +1048,7 @@ async function loadWeeklyRecapData() {
   if (cached && (!configuredSeason || !cachedSeason || cachedSeason === configuredSeason)) {
     weeklyRecapData = cached;
     renderWeeklyRecapSummaries(cached);
+    if (matchupsData && getDisplayView('scoreboard') === 'list') renderMatchups(matchupsData, matchupsDataIsStale);
   }
 
   try {
@@ -1058,6 +1059,7 @@ async function loadWeeklyRecapData() {
     weeklyRecapData = payload;
     setCachedJson(WEEKLY_RECAP_CACHE_KEY, payload);
     renderWeeklyRecapSummaries(payload);
+    if (matchupsData && getDisplayView('scoreboard') === 'list') renderMatchups(matchupsData, matchupsDataIsStale);
   } catch (error) {
     console.warn('Finalized weekly recaps could not be loaded.', error);
   }
@@ -2388,6 +2390,18 @@ function renderMatchupTeam(team, side) {
   `;
 }
 
+function teamOwesBeerChug(team) {
+  const recaps = Array.isArray(weeklyRecapData?.teams) ? weeklyRecapData.teams : [];
+  const rosterId = String(team?.rosterId || '').trim();
+  const teamKey = normalizeClientTeamKey(team?.teamName);
+  const managerKey = normalizeClientTeamKey(team?.managerName);
+  return recaps.some((recap) => recap?.beerChugOwed === true && (
+    (rosterId && String(recap?.rosterId || '').trim() === rosterId) ||
+    (teamKey && normalizeClientTeamKey(recap?.teamName) === teamKey) ||
+    (managerKey && normalizeClientTeamKey(recap?.managerName) === managerKey)
+  ));
+}
+
 function renderScoreboardList(matchups) {
   return `
     <div class="space-y-3">
@@ -2395,11 +2409,16 @@ function renderScoreboardList(matchups) {
         const [firstTeam = {}, secondTeam = {}] = matchup.teams || [];
         const row = (team, align) => {
           const captainNote = formatCaptainScoreNote(team);
+          const managerName = String(team.managerName || team.teamName || 'Unknown').trim();
+          const beerOwed = teamOwesBeerChug(team);
           return `
           <div class="flex min-w-0 items-center gap-3 ${align === 'right' ? 'flex-row-reverse text-right' : ''}">
-            <img src="${escapeHtml(String(team.photoUrl || FALLBACK_PHOTO))}" class="h-9 w-9 shrink-0 rounded-full border-2 border-white/70 object-cover dark:border-slate-700" alt="" loading="lazy" onerror="this.src='${FALLBACK_PHOTO}';this.onerror=null;">
+            <span class="relative shrink-0">
+              <img src="${escapeHtml(String(team.photoUrl || FALLBACK_PHOTO))}" class="h-9 w-9 rounded-full border-2 border-white/70 object-cover dark:border-slate-700" alt="" loading="lazy" onerror="this.src='${FALLBACK_PHOTO}';this.onerror=null;">
+              ${beerOwed ? '<span class="absolute -right-2 -top-2 text-sm drop-shadow" role="img" aria-label="Beer chug owed">🍺</span>' : ''}
+            </span>
             <div class="min-w-0 flex-1">
-              <p class="truncate text-sm font-black italic uppercase text-slate-950 dark:text-white">${escapeHtml(team.teamName || 'Unknown')}</p>
+              <p class="truncate text-sm font-black italic uppercase text-slate-950 dark:text-white">${escapeHtml(managerName)}</p>
               <p class="truncate text-[10px] font-bold uppercase tracking-[0.1em] text-slate-400">${escapeHtml(team.record || '--')}</p>
               ${captainNote ? `<p class="truncate text-[9px] font-bold text-pink-500 dark:text-pink-300">${escapeHtml(captainNote)}</p>` : ''}
             </div>

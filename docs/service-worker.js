@@ -1,4 +1,4 @@
-const CACHE_NAME = 'always-smooth-shell-v64';
+const CACHE_NAME = 'always-smooth-shell-v65';
 const APP_SHELL = [
   './',
   './index.html',
