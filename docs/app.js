@@ -2584,19 +2584,19 @@ function renderWeeklyBettingLeaders() {
   const entries = Array.isArray(summary.entries) ? summary.entries : [];
   const topEntries = entries.filter((entry) => Number(entry.rank) <= 3);
   if (!topEntries.length) return '';
+  const leadingCorrect = Math.max(...entries.map((entry) => Number(entry.correct || 0)));
+  const leadersTiedOnCorrect = entries.filter((entry) => Number(entry.correct) === leadingCorrect).length > 1;
   const rows = topEntries.map((entry) => {
     const member = getWeeklyBettingMember(entry) || { name: 'Unknown', photoUrl: '' };
-    const record = `${entry.correct}-${entry.incorrect}`;
-    const sharp = Number(entry.rank) === 1
-      ? '<span class="ml-2 rounded-full bg-pink-500 px-2 py-1 text-[9px] font-black uppercase tracking-[0.12em] text-white">Weekly Sharp</span>'
-      : '';
+    const showTiebreaker = leadersTiedOnCorrect && Number(entry.correct) === leadingCorrect &&
+      summary.tiebreakerResolved && entry.tiebreakerDistance !== null;
     return `
       <li class="betting-leader-row">
         <span class="betting-leader-rank">${escapeHtml(entry.rank)}</span>
         ${getBettingMemberAvatarMarkup(member, 'tiny')}
-        <span class="betting-leader-name">${escapeHtml(member.name)}${sharp}</span>
-        <span class="text-right text-xs font-bold text-slate-500 dark:text-slate-400">${summary.tiebreakerResolved && entry.tiebreakerDistance !== null ? `TB ±${escapeHtml(formatMatchupScore(entry.tiebreakerDistance))}` : ''}</span>
-        <strong class="betting-leader-total">${escapeHtml(record)}</strong>
+        <span class="betting-leader-name">${escapeHtml(member.name)}</span>
+        <span class="text-right text-xs font-bold text-slate-500 dark:text-slate-400">${showTiebreaker ? `TB ±${escapeHtml(formatMatchupScore(entry.tiebreakerDistance))}` : ''}</span>
+        <strong class="betting-leader-total">${escapeHtml(entry.correct)}</strong>
       </li>
     `;
   }).join('');
@@ -2608,10 +2608,10 @@ function renderWeeklyBettingLeaders() {
           <p class="betting-leaders-kicker">This Week</p>
           <h2>Betting Leaders</h2>
         </div>
-        <span>Top Teams</span>
+        <span>Weekly Sharp</span>
       </div>
       <ol class="betting-leader-list">${rows}</ol>
-      <p class="mt-3 text-[10px] font-bold uppercase tracking-[0.13em] text-slate-400 dark:text-slate-500">Bets 1–5 determine the record · Bet 6 breaks ties</p>
+      <p class="mt-3 text-[10px] font-bold uppercase tracking-[0.13em] text-slate-400 dark:text-slate-500">Correct picks from Bets 1–5 · Bet 6 breaks a tie for first</p>
     </section>
   `;
 }
