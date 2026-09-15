@@ -1,5 +1,5 @@
 const API_BASE_URL = 'https://script.google.com/macros/s/AKfycbwtM_NX16wFOHssvhvP2Iw7FI_7YcVgJ9-5DNbvNOblMxifawE4R-F_eiOLU1NsEggF/exec';
-const APP_VERSION = 'v2026.09.08.2';
+const APP_VERSION = 'v2026.09.14.1';
 const FALLBACK_PHOTO = 'https://images.unsplash.com/photo-1540747913346-19e32dc3e97e?q=80&w=600&auto=format&fit=crop';
 const THEME_KEY = 'theme';
 const CONFIG_CACHE_KEY = 'always-smooth-config';
@@ -13,7 +13,7 @@ const MEMBER_PROFILE_KEY = 'always-smooth-member-profile-v1';
 const ONBOARDING_KEY = 'always-smooth-onboarding-v1';
 const CAPTAIN_INTRO_KEY = 'always-smooth-captain-intro-v1';
 const BETTING_BET_COUNT = 6;
-const MATCHUPS_TAB_ENABLED = false;
+const MATCHUPS_TAB_ENABLED = true;
 const DEFAULT_CONFIG = {
   appName: 'Always Smooth',
   appShortName: 'Always Smooth',
@@ -47,11 +47,11 @@ const APP_TOUR_STEPS = [
   },
   CAPTAIN_TOUR_STEP,
   {
-    tab: 'home',
-    target: '[data-jump-to-draft]',
-    fallbackTarget: '#draft-board-section',
-    title: 'Jump to the Draft',
-    message: 'Use this shortcut to reach the rookie Draft Board, where picks, trades, and unresolved slots stay easy to scan.'
+    tab: 'matchups',
+    target: '#tab-matchups',
+    fallbackTarget: '#matchups-panel',
+    title: 'Live Scoreboard',
+    message: 'Follow every league matchup here. Scores include a pending Captain bonus, then switch to Sleeper’s confirmed total after the commissioner applies it.'
   },
   {
     tab: 'betting',
@@ -95,6 +95,7 @@ let selectedBettingMemberRow = null;
 let bettingStatusMessage = '';
 let bettingStatusTone = 'warning';
 let activeBettingTeamSelect = null;
+let clientConfig = { ...DEFAULT_CONFIG };
 
 function getCachedJson(key) {
   try {
@@ -347,6 +348,7 @@ function escapeHtml(value) {
 
 function applyConfig(config) {
   if (!config) return;
+  clientConfig = { ...DEFAULT_CONFIG, ...config };
   const leagueSeason = String(config.leagueSeason || '').trim();
   const leagueWeek = String(config.leagueWeek || '').trim();
   document.title = `${config.appName || 'Always Smooth'} ${leagueSeason}`.trim();
@@ -367,6 +369,19 @@ function applyConfig(config) {
   if (versionLabel) {
     versionLabel.textContent = `App ${APP_VERSION}`;
   }
+  updateSeasonalHomeSections();
+}
+
+function isActiveSeason() {
+  return /\d+/.test(String(clientConfig?.leagueWeek || ''));
+}
+
+function updateSeasonalHomeSections() {
+  const showDraftBoard = !isActiveSeason();
+  document.getElementById('draft-board-section')?.toggleAttribute('hidden', !showDraftBoard);
+  document.querySelectorAll('[data-jump-to-draft]').forEach((button) => {
+    button.hidden = !showDraftBoard;
+  });
 }
 
 function renderSkeleton() {
@@ -2234,7 +2249,7 @@ function setupDraftBoardControls() {
 }
 
 async function loadDraftBoardData() {
-  if (!getDraftBoardRoot()) return;
+  if (!getDraftBoardRoot() || isActiveSeason()) return;
   const cached = getCachedJson(DRAFT_BOARD_CACHE_KEY);
   if (cached) {
     draftBoardData = cached;
@@ -2316,8 +2331,8 @@ function updateMatchupsHeader(payload) {
   if (updated) updated.textContent = payload?.updatedAt ? formatTimestamp(payload.updatedAt) : 'Sync failed';
   if (summary) {
     summary.textContent = count
-      ? `${count} matchup${count === 1 ? '' : 's'} loaded`
-      : 'No active matchups';
+      ? `${count} league matchup${count === 1 ? '' : 's'} loaded`
+      : 'No active scores';
   }
 }
 
@@ -2357,7 +2372,7 @@ function renderMatchups(payload, isStale = false) {
   updateMatchupsHeader(payload);
 
   if (!matchups.length) {
-    renderMatchupsEmpty('No active matchups are available yet.');
+    renderMatchupsEmpty('No active scores are available yet.');
     return;
   }
 
@@ -2539,6 +2554,66 @@ function shouldShowBettingLeaders() {
   const weekMatch = String(bettingData.week || '').match(/\d+/);
   const week = weekMatch ? Number(weekMatch[0]) : 0;
   return week >= 4;
+}
+
+function getWeeklyBettingMember(entry) {
+  return bettingData?.members?.find((member) => Number(member.row) === Number(entry?.row)) || null;
+}
+
+function renderWeeklyBettingLeaders() {
+  const summary = bettingData?.weeklySummary;
+  if (!summary) return '';
+
+  const submissionCount = Number(summary.submissionCount || 0);
+  const memberCount = Number(summary.memberCount || 0);
+  if (!summary.isFinalized) {
+    return `
+      <section class="betting-leaders-card glass-panel" aria-label="Weekly betting submission status">
+        <div class="betting-leaders-heading">
+          <div>
+            <p class="betting-leaders-kicker">This Week</p>
+            <h2>Pick Tracker</h2>
+          </div>
+          <span>${submissionCount}/${memberCount} In</span>
+        </div>
+        <p class="text-sm font-semibold leading-relaxed text-slate-600 dark:text-slate-300">Weekly leaders unlock after all five scored bet results are posted. Bet 6 remains the tiebreaker only.</p>
+      </section>
+    `;
+  }
+
+  const entries = Array.isArray(summary.entries) ? summary.entries : [];
+  const topEntries = entries.filter((entry) => Number(entry.rank) <= 3);
+  if (!topEntries.length) return '';
+  const rows = topEntries.map((entry) => {
+    const member = getWeeklyBettingMember(entry) || { name: 'Unknown', photoUrl: '' };
+    const record = `${entry.correct}-${entry.incorrect}`;
+    const sharp = Number(entry.rank) === 1
+      ? '<span class="ml-2 rounded-full bg-pink-500 px-2 py-1 text-[9px] font-black uppercase tracking-[0.12em] text-white">Weekly Sharp</span>'
+      : '';
+    return `
+      <li class="betting-leader-row">
+        <span class="betting-leader-rank">${escapeHtml(entry.rank)}</span>
+        ${getBettingMemberAvatarMarkup(member, 'tiny')}
+        <span class="betting-leader-name">${escapeHtml(member.name)}${sharp}</span>
+        <span class="text-right text-xs font-bold text-slate-500 dark:text-slate-400">${summary.tiebreakerResolved && entry.tiebreakerDistance !== null ? `TB ±${escapeHtml(formatMatchupScore(entry.tiebreakerDistance))}` : ''}</span>
+        <strong class="betting-leader-total">${escapeHtml(record)}</strong>
+      </li>
+    `;
+  }).join('');
+
+  return `
+    <section class="betting-leaders-card glass-panel" aria-label="This week's betting leaders">
+      <div class="betting-leaders-heading">
+        <div>
+          <p class="betting-leaders-kicker">This Week</p>
+          <h2>Betting Leaders</h2>
+        </div>
+        <span>Top Teams</span>
+      </div>
+      <ol class="betting-leader-list">${rows}</ol>
+      <p class="mt-3 text-[10px] font-bold uppercase tracking-[0.13em] text-slate-400 dark:text-slate-500">Bets 1–5 determine the record · Bet 6 breaks ties</p>
+    </section>
+  `;
 }
 
 function renderBettingLeaders() {
@@ -2723,6 +2798,7 @@ function renderBettingMemberPicker() {
 
   root.innerHTML = `
     <div class="space-y-6">
+      ${renderWeeklyBettingLeaders()}
       ${renderBettingLeaders()}
       ${renderBettingHeader()}
       ${getBettingStatusMarkup()}
@@ -2864,6 +2940,7 @@ function renderBettingForm() {
 
   root.innerHTML = `
     <div class="space-y-6">
+      ${renderWeeklyBettingLeaders()}
       ${renderBettingLeaders()}
       ${renderBettingHeader(backButton)}
       ${getBettingStatusMarkup()}

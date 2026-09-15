@@ -1296,6 +1296,82 @@ function buildBettingSeasonTotals_(spreadsheet) {
   return result;
 }
 
+/** @return {number|null} Numeric tiebreaker value, if one can be read from a cell. */
+function parseBettingTiebreakerNumber_(value) {
+  var match = String(value || '').match(/-?\d[\d,]*(?:\.\d+)?/);
+  if (!match) return null;
+  var numeric = Number(match[0].replace(/,/g, ''));
+  return isFinite(numeric) ? numeric : null;
+}
+
+/**
+ * Calculates the current week's public betting standings. Bets 1–5 determine
+ * the record; Bet 6 is used only to order an otherwise tied record.
+ * @param {Array<Object>} members
+ * @param {Array<string>} results
+ * @return {Object}
+ */
+function buildWeeklyBettingSummary_(members, results) {
+  var scoredBetCount = Math.min(5, BETTING_BET_COUNT);
+  var safeResults = Array.isArray(results) ? results : [];
+  var resolvedBetCount = safeResults.slice(0, scoredBetCount).filter(function (value) {
+    return !isBlankDisplayValue_(value);
+  }).length;
+  var tiebreakerResult = safeResults[BETTING_BET_COUNT - 1] || '';
+  var tiebreakerTarget = parseBettingTiebreakerNumber_(tiebreakerResult);
+  var isFinalized = resolvedBetCount === scoredBetCount;
+  var entries = (Array.isArray(members) ? members : []).map(function (member) {
+    var picks = Array.isArray(member.picks) ? member.picks : [];
+    var correct = 0;
+    for (var i = 0; i < scoredBetCount; i++) {
+      if (normalizeBettingOptionKey_(picks[i]) &&
+          normalizeBettingOptionKey_(picks[i]) === normalizeBettingOptionKey_(safeResults[i])) correct++;
+    }
+    var tiebreakerPick = picks[BETTING_BET_COUNT - 1] || '';
+    var tiebreakerNumber = parseBettingTiebreakerNumber_(tiebreakerPick);
+    return {
+      row: member.row,
+      correct: correct,
+      incorrect: scoredBetCount - correct,
+      tiebreakerDistance: tiebreakerTarget !== null && tiebreakerNumber !== null
+        ? Math.abs(tiebreakerNumber - tiebreakerTarget)
+        : null
+    };
+  });
+
+  entries.sort(function (a, b) {
+    if (b.correct !== a.correct) return b.correct - a.correct;
+    if (a.tiebreakerDistance !== null && b.tiebreakerDistance !== null && a.tiebreakerDistance !== b.tiebreakerDistance) {
+      return a.tiebreakerDistance - b.tiebreakerDistance;
+    }
+    if (a.tiebreakerDistance !== null && b.tiebreakerDistance === null) return -1;
+    if (a.tiebreakerDistance === null && b.tiebreakerDistance !== null) return 1;
+    return Number(a.row || 0) - Number(b.row || 0);
+  });
+
+  var previous = null;
+  entries.forEach(function (entry, index) {
+    var tiedWithPrevious = previous && entry.correct === previous.correct &&
+      entry.tiebreakerDistance === previous.tiebreakerDistance;
+    entry.rank = tiedWithPrevious ? previous.rank : index + 1;
+    previous = entry;
+  });
+
+  return {
+    scoredBetCount: scoredBetCount,
+    resolvedBetCount: resolvedBetCount,
+    submissionCount: (Array.isArray(members) ? members : []).filter(function (member) {
+      return (member.picks || []).slice(0, scoredBetCount).every(function (value) {
+        return !isBlankDisplayValue_(value);
+      });
+    }).length,
+    memberCount: Array.isArray(members) ? members.length : 0,
+    isFinalized: isFinalized,
+    tiebreakerResolved: tiebreakerTarget !== null,
+    entries: entries
+  };
+}
+
 /**
  * Resolves a Betting member label to a stable Sleeper roster identity. Exact
  * team/manager matches win; unique first-name/prefix matches are a fallback.
@@ -1415,6 +1491,7 @@ function getBettingData_(spreadsheet) {
       resultsPosted: results.some(function (value) {
         return !isBlankDisplayValue_(value);
       }),
+      weeklySummary: buildWeeklyBettingSummary_(members, results),
       optionBanks: config.optionBanks,
       warnings: config.warnings.concat(seasonTotals.warnings),
       updatedAt: new Date().toISOString()
