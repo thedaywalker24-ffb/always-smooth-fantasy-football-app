@@ -741,10 +741,13 @@
         .smooth-review-value { margin: .35rem 0 0; font-size: 1rem; font-weight: 900; line-height: 1.15; overflow-wrap: anywhere; }
         .smooth-review-detail { margin: .3rem 0 0; color: #64748b; font-size: .76rem; font-weight: 700; line-height: 1.4; }
         .dark .smooth-review-detail { color: #cbd5e1; }
-        .smooth-review-scoreline { display: flex; align-items: center; justify-content: space-between; gap: .45rem; margin-top: .62rem; font-size: .76rem; font-weight: 850; }
+        .smooth-review-scoreline { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: .45rem; margin-top: .62rem; font-size: .76rem; font-weight: 850; }
+        .smooth-review-team-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .smooth-review-team-name--right { text-align: right; }
+        .smooth-review-score-pair { display: inline-flex; align-items: center; gap: .3rem; }
         .smooth-review-score { border-radius: .7rem; background: #fce7f3; padding: .38rem .55rem; color: #9d174d; white-space: nowrap; }
         .dark .smooth-review-score { background: rgba(236,72,153,.16); color: #fbcfe8; }
-        .smooth-review-vs { color: #94a3b8; font-size: .62rem; letter-spacing: .1em; text-transform: uppercase; }
+        .smooth-review-vs { color: #94a3b8; font-size: .62rem; letter-spacing: .06em; text-transform: uppercase; }
         .smooth-review-list { display: grid; gap: .55rem; margin: .65rem 0 0; padding: 0; list-style: none; }
         .smooth-review-list li { border-top: 1px solid rgba(226,232,240,.8); padding-top: .55rem; font-size: .78rem; font-weight: 750; line-height: 1.35; }
         .dark .smooth-review-list li { border-top-color: rgba(71,85,105,.72); }
@@ -3351,7 +3354,7 @@
     </div>
 
     <div class="bottom-tabs-overlay" aria-label="Primary navigation">
-        <span id="app-version-label" class="app-version-badge" aria-label="App version">App v2026.09.15.6</span>
+        <span id="app-version-label" class="app-version-badge" aria-label="App version">App v2026.09.15.7</span>
         <nav class="bottom-tab-nav" role="tablist" aria-label="App sections">
             <button id="tab-home" type="button" class="bottom-tab-button" role="tab" aria-selected="true" aria-controls="home-panel" data-app-tab="home">
                 <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 11.5L12 4l9 7.5M5.5 10.5V20h13v-9.5M9.5 20v-5h5v5"></path></svg>

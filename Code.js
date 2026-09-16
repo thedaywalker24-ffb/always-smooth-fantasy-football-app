@@ -207,6 +207,7 @@ const ROSTERS_DISPLAY_NAME_COL_FALLBACK = 9;
 /** Optional tab: supplemental team data columns matched to standings by Team Name */
 const TEAMS_SHEET = 'Teams';
 const TEAMS_SEASON_TOTAL_BETS_WON_COL = 2; // Column B (1-based)
+const TEAMS_REAL_NAME_COL = 1; // Column A (1-based)
 const TEAMS_MANAGER_PHOTO_COL = 8; // Column H (1-based)
 const TEAMS_MULLIGAN_COL = 5; // Column E (1-based)
 const TEAMS_TURKEY_WATCH_COL = 9; // Column I (1-based)
@@ -718,6 +719,7 @@ function buildTeamsSheetDataMap_(spreadsheet) {
   var nameCol1 = nameCol + 1;
   var numRows = lastRow - TEAMS_DATA_START_ROW + 1;
   var nameVals = sheet.getRange(TEAMS_DATA_START_ROW, nameCol1, numRows, 1).getValues();
+  var realNameVals = sheet.getRange(TEAMS_DATA_START_ROW, TEAMS_REAL_NAME_COL, numRows, 1).getDisplayValues();
   var managerPhotoVals = sheet.getRange(TEAMS_DATA_START_ROW, TEAMS_MANAGER_PHOTO_COL, numRows, 1).getValues();
   var mulliganVals = sheet.getRange(TEAMS_DATA_START_ROW, TEAMS_MULLIGAN_COL, numRows, 1).getValues();
   var turkeyWatchVals = sheet.getRange(TEAMS_DATA_START_ROW, TEAMS_TURKEY_WATCH_COL, numRows, 1).getDisplayValues();
@@ -733,6 +735,7 @@ function buildTeamsSheetDataMap_(spreadsheet) {
   var samplePrefixes = [];
   for (var r = 0; r < nameVals.length; r++) {
     var teamName = nameVals[r][0];
+    var rawRealName = realNameVals[r][0];
     var rawManagerPhoto = managerPhotoVals[r][0];
     var rawMulligan = mulliganVals[r][0];
     var rawTurkeyWatch = turkeyWatchVals[r][0];
@@ -776,8 +779,12 @@ function buildTeamsSheetDataMap_(spreadsheet) {
     var turkeyWatch = hasTurkeyWatch ? String(rawTurkeyWatch).trim() : '';
     var trophies = hasTrophies ? String(rawTrophies).trim() : '';
     var beerTrophies = hasBeerTrophies ? String(rawBeerTrophies).trim() : '';
+    var realName = rawRealName === '' || rawRealName === null || rawRealName === undefined
+      ? ''
+      : String(rawRealName).trim();
 
     var teamData = {
+      realName: realName,
       managerPhotoUrl: managerPhoto,
       sleeperTeamImageUrl: sleeperTeamImage,
       teamMvpName: teamMvpName,
@@ -4202,6 +4209,7 @@ function getWeeklyRecapData_(spreadsheet) {
     return Number(getDisplayCell_(row, col('Week')) || 0) === latestWeek;
   });
   var latestFinalizedAt = '';
+  var teamsSheetDataByKey = buildTeamsSheetDataMap_(spreadsheet).map;
   var teams = latestRows.map(function (row) {
     var nonpositiveStarters = [];
     try {
@@ -4210,10 +4218,13 @@ function getWeeklyRecapData_(spreadsheet) {
       nonpositiveStarters = [];
     }
     var finalizedAt = getDisplayCell_(row, col('Finalized At'));
+    var teamName = getDisplayCell_(row, col('Team Name'));
+    var supplemental = teamsSheetDataByKey[normalizeTeamNameKey_(teamName)] || null;
     if (finalizedAt > latestFinalizedAt) latestFinalizedAt = finalizedAt;
     return {
       rosterId: getDisplayCell_(row, col('Roster ID')),
-      teamName: getDisplayCell_(row, col('Team Name')),
+      teamName: teamName,
+      realName: supplemental && supplemental.realName ? supplemental.realName : getDisplayCell_(row, col('Manager Name')),
       managerName: getDisplayCell_(row, col('Manager Name')),
       matchupId: getDisplayCell_(row, col('Matchup ID')),
       opponentRosterId: getDisplayCell_(row, col('Opponent Roster ID')),
@@ -4236,13 +4247,21 @@ function getWeeklyRecapData_(spreadsheet) {
     };
   });
 
+  var recapSeason = configuredSeason || getDisplayCell_(latestRows[0], col('Season'));
+  var highlights = getWeeklyRecapPlayerHighlights_(spreadsheet, recapSeason, latestWeek);
+  ['topStarter', 'topBench'].forEach(function (key) {
+    var player = highlights[key];
+    if (!player) return;
+    var supplemental = teamsSheetDataByKey[normalizeTeamNameKey_(player.teamName)] || null;
+    player.realName = supplemental && supplemental.realName ? supplemental.realName : player.managerName;
+  });
   return {
     ok: true,
     sheetName: WEEKLY_RECAPS_SHEET,
-    season: configuredSeason || getDisplayCell_(latestRows[0], col('Season')),
+    season: recapSeason,
     week: String(latestWeek),
     teams: teams,
-    highlights: getWeeklyRecapPlayerHighlights_(spreadsheet, configuredSeason || getDisplayCell_(latestRows[0], col('Season')), latestWeek),
+    highlights: highlights,
     updatedAt: latestFinalizedAt || new Date().toISOString()
   };
 }

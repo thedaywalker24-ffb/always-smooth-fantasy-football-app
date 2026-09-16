@@ -1,5 +1,5 @@
 const API_BASE_URL = 'https://script.google.com/macros/s/AKfycbwtM_NX16wFOHssvhvP2Iw7FI_7YcVgJ9-5DNbvNOblMxifawE4R-F_eiOLU1NsEggF/exec';
-const APP_VERSION = 'v2026.09.15.6';
+const APP_VERSION = 'v2026.09.15.7';
 const FALLBACK_PHOTO = 'https://images.unsplash.com/photo-1540747913346-19e32dc3e97e?q=80&w=600&auto=format&fit=crop';
 const THEME_KEY = 'theme';
 const CONFIG_CACHE_KEY = 'always-smooth-config';
@@ -1058,7 +1058,7 @@ function renderSmoothReviewPlayer(player, label) {
     <article class="smooth-review-card">
       <p class="smooth-review-label">${escapeHtml(label)}</p>
       <p class="smooth-review-value">${escapeHtml(player.playerName)} ${renderPositionPill(player.position)}</p>
-      <p class="smooth-review-detail">${escapeHtml(player.teamName || 'Unknown team')} · ${escapeHtml(formatMatchupScore(player.points))} pts</p>
+      <p class="smooth-review-detail">${escapeHtml(player.realName || player.managerName || 'Unknown manager')} · ${escapeHtml(formatMatchupScore(player.points))} pts</p>
     </article>
   `;
 }
@@ -1085,18 +1085,19 @@ function renderSmoothReview(payload) {
   const captains = teams.filter((team) => String(team?.captainPlayer || '').trim());
   const chugTeams = teams.filter((team) => team?.beerChugOwed);
   const strikes = teams.flatMap((team) => (Array.isArray(team?.nonpositiveStarters) ? team.nonpositiveStarters : [])
-    .map((player) => ({ ...player, teamName: team.teamName })));
+    .map((player) => ({ ...player, realName: team.realName || team.managerName || team.teamName })));
   const insights = payload?.highlights || {};
   const matchupCard = (label, matchup, noun) => {
     if (!matchup) return '';
     const [first, second] = matchup.teams;
     return `
-      <article class="smooth-review-card">
+      <article class="smooth-review-card smooth-review-card--wide">
         <p class="smooth-review-label">${escapeHtml(label)}</p>
         <p class="smooth-review-value">${escapeHtml(formatMatchupScore(matchup.margin))}-point ${escapeHtml(noun)}</p>
         <div class="smooth-review-scoreline">
-          <span>${escapeHtml(first.teamName || 'Team')}</span><span class="smooth-review-score">${escapeHtml(formatMatchupScore(first.teamScore))}</span>
-          <span class="smooth-review-vs">vs</span><span class="smooth-review-score">${escapeHtml(formatMatchupScore(second.teamScore))}</span><span>${escapeHtml(second.teamName || 'Team')}</span>
+          <span class="smooth-review-team-name">${escapeHtml(first.realName || first.managerName || first.teamName || 'Team')}</span>
+          <span class="smooth-review-score-pair"><span class="smooth-review-score">${escapeHtml(formatMatchupScore(first.teamScore))}</span><span class="smooth-review-vs">vs</span><span class="smooth-review-score">${escapeHtml(formatMatchupScore(second.teamScore))}</span></span>
+          <span class="smooth-review-team-name smooth-review-team-name--right">${escapeHtml(second.realName || second.managerName || second.teamName || 'Team')}</span>
         </div>
       </article>
     `;
@@ -1106,7 +1107,7 @@ function renderSmoothReview(payload) {
     <section class="smooth-review-hero">
       <p class="smooth-review-kicker">Always Smooth Dynasty Football</p>
       <h3>Week ${escapeHtml(week)} Smooth Review</h3>
-      <p>${escapeHtml(highScore?.teamName || 'The league')} set the pace with ${escapeHtml(formatMatchupScore(highScore?.teamScore))} points. Here’s the week that was.</p>
+      <p>${escapeHtml(highScore?.realName || highScore?.managerName || highScore?.teamName || 'The league')} set the pace with ${escapeHtml(formatMatchupScore(highScore?.teamScore))} points. Here’s the week that was.</p>
     </section>
     <div class="smooth-review-grid">
       ${matchupCard('Game of the Week', closest, 'finish')}
@@ -1115,14 +1116,13 @@ function renderSmoothReview(payload) {
       ${renderSmoothReviewPlayer(insights.topBench, 'Bench Mob 👀')}
       ${captains.length ? `<article class="smooth-review-card smooth-review-card--wide"><p class="smooth-review-label">Captain’s Corner 🫡</p><ul class="smooth-review-list">${captains.map((team) => {
         const bonus = Number(team.captainBonus || 0);
-        const source = String(team.captainScoreSource || '').trim();
         const finalMargin = Number(team.teamScore || 0) - Number(team.opponentScore || 0);
         const baseMargin = Number(team.baseSleeperScore || 0) - Number(team.opponentBaseSleeperScore || 0);
         const flippedResult = bonus && baseMargin && finalMargin && Math.sign(baseMargin) !== Math.sign(finalMargin);
-        return `<li><strong>${escapeHtml(team.teamName || 'Team')}</strong> rode with ${escapeHtml(team.captainPlayer)}${bonus ? ` for +${escapeHtml(formatMatchupScore(bonus))}` : ''}${flippedResult ? ' — <strong>Captain changed the result.</strong>' : ''}${source ? ` <span class="text-slate-400">(${escapeHtml(source)})</span>` : ''}.</li>`;
+        return `<li><strong>${escapeHtml(team.realName || team.managerName || team.teamName || 'Team')}</strong> rode with ${escapeHtml(team.captainPlayer)}${bonus ? ` for +${escapeHtml(formatMatchupScore(bonus))}` : ''}${flippedResult ? ' — <strong>Captain changed the result.</strong>' : ''}.</li>`;
       }).join('')}</ul></article>` : ''}
-      ${chugTeams.length ? `<article class="smooth-review-card smooth-review-card--wide"><p class="smooth-review-label">Chug List 🍺</p><p class="smooth-review-value">${chugTeams.map((team) => escapeHtml(team.teamName || 'Unknown team')).join(' · ')}</p><p class="smooth-review-detail">The league low score earns the beer-video obligation. No ducking it.</p></article>` : ''}
-      ${strikes.length ? `<article class="smooth-review-card smooth-review-card--wide"><p class="smooth-review-label">Turkey Tracker 🦃</p><ul class="smooth-review-list">${strikes.map((strike) => `<li><strong>${escapeHtml(strike.teamName || 'Team')}</strong>: ${escapeHtml(strike.playerName || 'Unknown player')} ${renderPositionPill(strike.position)} — ${escapeHtml(formatMatchupScore(strike.points))} pts ❌</li>`).join('')}</ul></article>` : ''}
+      ${chugTeams.length ? `<article class="smooth-review-card smooth-review-card--wide"><p class="smooth-review-label">Chug List 🍺</p><p class="smooth-review-value">${chugTeams.map((team) => escapeHtml(team.realName || team.managerName || team.teamName || 'Unknown manager')).join(' · ')}</p><p class="smooth-review-detail">The league low score earns the beer-video obligation. No ducking it.</p></article>` : ''}
+      ${strikes.length ? `<article class="smooth-review-card smooth-review-card--wide"><p class="smooth-review-label">Turkey Tracker 🦃</p><ul class="smooth-review-list">${strikes.map((strike) => `<li><strong>${escapeHtml(strike.realName || 'Team')}</strong>: ${escapeHtml(strike.playerName || 'Unknown player')} ${renderPositionPill(strike.position)} — ${escapeHtml(formatMatchupScore(strike.points))} pts ❌</li>`).join('')}</ul></article>` : ''}
     </div>
   `;
 }
