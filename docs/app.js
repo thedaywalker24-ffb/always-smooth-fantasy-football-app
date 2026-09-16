@@ -1,5 +1,5 @@
 const API_BASE_URL = 'https://script.google.com/macros/s/AKfycbwtM_NX16wFOHssvhvP2Iw7FI_7YcVgJ9-5DNbvNOblMxifawE4R-F_eiOLU1NsEggF/exec';
-const APP_VERSION = 'v2026.09.15.5';
+const APP_VERSION = 'v2026.09.15.6';
 const FALLBACK_PHOTO = 'https://images.unsplash.com/photo-1540747913346-19e32dc3e97e?q=80&w=600&auto=format&fit=crop';
 const THEME_KEY = 'theme';
 const CONFIG_CACHE_KEY = 'always-smooth-config';
@@ -1041,6 +1041,118 @@ function renderWeeklyRecapSummaries(payload) {
   });
 }
 
+function getSmoothReviewMatchups(payload) {
+  const groups = new Map();
+  (Array.isArray(payload?.teams) ? payload.teams : []).forEach((team) => {
+    const key = String(team?.matchupId || '').trim();
+    if (!key) return;
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(team);
+  });
+  return Array.from(groups.values()).filter((teams) => teams.length === 2);
+}
+
+function renderSmoothReviewPlayer(player, label) {
+  if (!player?.playerName) return '';
+  return `
+    <article class="smooth-review-card">
+      <p class="smooth-review-label">${escapeHtml(label)}</p>
+      <p class="smooth-review-value">${escapeHtml(player.playerName)} ${renderPositionPill(player.position)}</p>
+      <p class="smooth-review-detail">${escapeHtml(player.teamName || 'Unknown team')} · ${escapeHtml(formatMatchupScore(player.points))} pts</p>
+    </article>
+  `;
+}
+
+function renderSmoothReview(payload) {
+  const root = document.getElementById('smooth-review-content');
+  const trigger = document.getElementById('smooth-review-button');
+  const teams = Array.isArray(payload?.teams) ? payload.teams : [];
+  const week = String(payload?.week || '').trim();
+  if (trigger) trigger.hidden = !week || !teams.length;
+  if (!root) return;
+  if (!week || !teams.length) {
+    root.innerHTML = '<p class="smooth-review-detail">The Smooth Review will appear after the first weekly recap is finalized.</p>';
+    return;
+  }
+
+  const highScore = teams.slice().sort((a, b) => Number(b.teamScore || 0) - Number(a.teamScore || 0))[0];
+  const matchups = getSmoothReviewMatchups(payload).map((matchup) => ({
+    teams: matchup,
+    margin: Math.abs(Number(matchup[0].teamScore || 0) - Number(matchup[1].teamScore || 0))
+  }));
+  const closest = matchups.slice().sort((a, b) => a.margin - b.margin)[0];
+  const biggest = matchups.slice().sort((a, b) => b.margin - a.margin)[0];
+  const captains = teams.filter((team) => String(team?.captainPlayer || '').trim());
+  const chugTeams = teams.filter((team) => team?.beerChugOwed);
+  const strikes = teams.flatMap((team) => (Array.isArray(team?.nonpositiveStarters) ? team.nonpositiveStarters : [])
+    .map((player) => ({ ...player, teamName: team.teamName })));
+  const insights = payload?.highlights || {};
+  const matchupCard = (label, matchup, noun) => {
+    if (!matchup) return '';
+    const [first, second] = matchup.teams;
+    return `
+      <article class="smooth-review-card">
+        <p class="smooth-review-label">${escapeHtml(label)}</p>
+        <p class="smooth-review-value">${escapeHtml(formatMatchupScore(matchup.margin))}-point ${escapeHtml(noun)}</p>
+        <div class="smooth-review-scoreline">
+          <span>${escapeHtml(first.teamName || 'Team')}</span><span class="smooth-review-score">${escapeHtml(formatMatchupScore(first.teamScore))}</span>
+          <span class="smooth-review-vs">vs</span><span class="smooth-review-score">${escapeHtml(formatMatchupScore(second.teamScore))}</span><span>${escapeHtml(second.teamName || 'Team')}</span>
+        </div>
+      </article>
+    `;
+  };
+
+  root.innerHTML = `
+    <section class="smooth-review-hero">
+      <p class="smooth-review-kicker">Always Smooth Dynasty Football</p>
+      <h3>Week ${escapeHtml(week)} Smooth Review</h3>
+      <p>${escapeHtml(highScore?.teamName || 'The league')} set the pace with ${escapeHtml(formatMatchupScore(highScore?.teamScore))} points. Here’s the week that was.</p>
+    </section>
+    <div class="smooth-review-grid">
+      ${matchupCard('Game of the Week', closest, 'finish')}
+      ${matchupCard('Statement Win', biggest, 'margin')}
+      ${renderSmoothReviewPlayer(insights.topStarter, 'Week MVP 🏆')}
+      ${renderSmoothReviewPlayer(insights.topBench, 'Bench Mob 👀')}
+      ${captains.length ? `<article class="smooth-review-card smooth-review-card--wide"><p class="smooth-review-label">Captain’s Corner 🫡</p><ul class="smooth-review-list">${captains.map((team) => {
+        const bonus = Number(team.captainBonus || 0);
+        const source = String(team.captainScoreSource || '').trim();
+        const finalMargin = Number(team.teamScore || 0) - Number(team.opponentScore || 0);
+        const baseMargin = Number(team.baseSleeperScore || 0) - Number(team.opponentBaseSleeperScore || 0);
+        const flippedResult = bonus && baseMargin && finalMargin && Math.sign(baseMargin) !== Math.sign(finalMargin);
+        return `<li><strong>${escapeHtml(team.teamName || 'Team')}</strong> rode with ${escapeHtml(team.captainPlayer)}${bonus ? ` for +${escapeHtml(formatMatchupScore(bonus))}` : ''}${flippedResult ? ' — <strong>Captain changed the result.</strong>' : ''}${source ? ` <span class="text-slate-400">(${escapeHtml(source)})</span>` : ''}.</li>`;
+      }).join('')}</ul></article>` : ''}
+      ${chugTeams.length ? `<article class="smooth-review-card smooth-review-card--wide"><p class="smooth-review-label">Chug List 🍺</p><p class="smooth-review-value">${chugTeams.map((team) => escapeHtml(team.teamName || 'Unknown team')).join(' · ')}</p><p class="smooth-review-detail">The league low score earns the beer-video obligation. No ducking it.</p></article>` : ''}
+      ${strikes.length ? `<article class="smooth-review-card smooth-review-card--wide"><p class="smooth-review-label">Turkey Tracker 🦃</p><ul class="smooth-review-list">${strikes.map((strike) => `<li><strong>${escapeHtml(strike.teamName || 'Team')}</strong>: ${escapeHtml(strike.playerName || 'Unknown player')} ${renderPositionPill(strike.position)} — ${escapeHtml(formatMatchupScore(strike.points))} pts ❌</li>`).join('')}</ul></article>` : ''}
+    </div>
+  `;
+}
+
+function setupSmoothReviewDialog() {
+  const trigger = document.getElementById('smooth-review-button');
+  const dialog = document.getElementById('smooth-review-dialog');
+  if (!trigger || !dialog) return;
+  let returnFocus = trigger;
+  const close = () => {
+    if (dialog.hidden) return;
+    dialog.hidden = true;
+    document.body.classList.remove('smooth-review-dialog-open');
+    trigger.setAttribute('aria-expanded', 'false');
+    returnFocus?.focus();
+  };
+  trigger.addEventListener('click', () => {
+    returnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : trigger;
+    renderSmoothReview(weeklyRecapData);
+    dialog.hidden = false;
+    document.body.classList.add('smooth-review-dialog-open');
+    trigger.setAttribute('aria-expanded', 'true');
+    dialog.querySelector('[data-smooth-review-close]')?.focus();
+  });
+  dialog.querySelectorAll('[data-smooth-review-close]').forEach((button) => button.addEventListener('click', close));
+  dialog.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') { event.preventDefault(); close(); }
+  });
+}
+
 async function loadWeeklyRecapData() {
   const cached = getCachedJson(WEEKLY_RECAP_CACHE_KEY);
   const configuredSeason = String(getCachedJson(CONFIG_CACHE_KEY)?.leagueSeason || '').trim();
@@ -1048,6 +1160,7 @@ async function loadWeeklyRecapData() {
   if (cached && (!configuredSeason || !cachedSeason || cachedSeason === configuredSeason)) {
     weeklyRecapData = cached;
     renderWeeklyRecapSummaries(cached);
+    renderSmoothReview(cached);
     if (leagueData) renderTeams(leagueData, leagueDataIsStale);
     if (matchupsData && getDisplayView('scoreboard') === 'list') renderMatchups(matchupsData, matchupsDataIsStale);
   }
@@ -1060,6 +1173,7 @@ async function loadWeeklyRecapData() {
     weeklyRecapData = payload;
     setCachedJson(WEEKLY_RECAP_CACHE_KEY, payload);
     renderWeeklyRecapSummaries(payload);
+    renderSmoothReview(payload);
     if (leagueData) renderTeams(leagueData, leagueDataIsStale);
     if (matchupsData && getDisplayView('scoreboard') === 'list') renderMatchups(matchupsData, matchupsDataIsStale);
   } catch (error) {
@@ -3677,6 +3791,7 @@ async function bootstrap() {
   setupScrollBehavior();
   setupHomeShortcuts();
   setupRulesDialog();
+  setupSmoothReviewDialog();
   setupMemberProfile();
   setupAppTour();
   setupAppTabs();

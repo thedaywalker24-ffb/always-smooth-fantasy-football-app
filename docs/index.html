@@ -184,12 +184,14 @@
         #status-banner[hidden],
         .action-dialog[hidden],
         .rules-dialog[hidden],
+        .smooth-review-dialog[hidden],
         .profile-dialog[hidden],
         .app-tour[hidden] {
             display: none;
         }
 
         body.rules-dialog-open,
+        body.smooth-review-dialog-open,
         body.profile-dialog-open {
             overflow: hidden;
         }
@@ -689,6 +691,64 @@
             align-items: flex-end;
             justify-content: center;
         }
+
+        .smooth-review-panel {
+            width: min(100%, 42rem);
+        }
+
+        .smooth-review-body {
+            display: grid;
+            gap: 0.85rem;
+        }
+
+        .smooth-review-hero {
+            position: relative;
+            overflow: hidden;
+            border-radius: 1.25rem;
+            padding: 1.2rem;
+            background: linear-gradient(135deg, #831843 0%, #ec4899 53%, #fb7185 100%);
+            color: #fff;
+            box-shadow: 0 16px 34px rgba(190, 24, 93, 0.25);
+        }
+
+        .smooth-review-hero::after {
+            position: absolute;
+            right: -1.7rem;
+            top: -2.5rem;
+            width: 9rem;
+            height: 9rem;
+            border: 1.6rem solid rgba(255,255,255,.16);
+            border-radius: 9999px;
+            content: '';
+        }
+
+        .smooth-review-kicker, .smooth-review-label {
+            margin: 0;
+            font-size: .62rem;
+            font-weight: 950;
+            letter-spacing: .18em;
+            text-transform: uppercase;
+        }
+
+        .smooth-review-hero h3 { position: relative; margin: .35rem 0 0; font-size: 1.6rem; font-weight: 950; font-style: italic; line-height: 1; text-transform: uppercase; }
+        .smooth-review-hero p:last-child { position: relative; margin: .55rem 0 0; font-size: .84rem; font-weight: 750; line-height: 1.45; }
+        .smooth-review-grid { display: grid; gap: .85rem; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        .smooth-review-card { min-width: 0; border: 1px solid rgba(226,232,240,.95); border-radius: 1.1rem; background: rgba(255,255,255,.9); padding: 1rem; box-shadow: 0 8px 22px rgba(15,23,42,.06); }
+        .dark .smooth-review-card { border-color: rgba(71,85,105,.78); background: rgba(15,23,42,.88); box-shadow: none; }
+        .smooth-review-card--wide { grid-column: 1 / -1; }
+        .smooth-review-label { color: #db2777; }
+        .dark .smooth-review-label { color: #f9a8d4; }
+        .smooth-review-value { margin: .35rem 0 0; font-size: 1rem; font-weight: 900; line-height: 1.15; overflow-wrap: anywhere; }
+        .smooth-review-detail { margin: .3rem 0 0; color: #64748b; font-size: .76rem; font-weight: 700; line-height: 1.4; }
+        .dark .smooth-review-detail { color: #cbd5e1; }
+        .smooth-review-scoreline { display: flex; align-items: center; justify-content: space-between; gap: .45rem; margin-top: .62rem; font-size: .76rem; font-weight: 850; }
+        .smooth-review-score { border-radius: .7rem; background: #fce7f3; padding: .38rem .55rem; color: #9d174d; white-space: nowrap; }
+        .dark .smooth-review-score { background: rgba(236,72,153,.16); color: #fbcfe8; }
+        .smooth-review-vs { color: #94a3b8; font-size: .62rem; letter-spacing: .1em; text-transform: uppercase; }
+        .smooth-review-list { display: grid; gap: .55rem; margin: .65rem 0 0; padding: 0; list-style: none; }
+        .smooth-review-list li { border-top: 1px solid rgba(226,232,240,.8); padding-top: .55rem; font-size: .78rem; font-weight: 750; line-height: 1.35; }
+        .dark .smooth-review-list li { border-top-color: rgba(71,85,105,.72); }
+        @media (max-width: 390px) { .smooth-review-grid { grid-template-columns: 1fr; } .smooth-review-card--wide { grid-column: auto; } }
 
         .rules-dialog-backdrop {
             position: absolute;
@@ -3145,6 +3205,22 @@
             </footer>
         </section>
     </div>
+    <div id="smooth-review-dialog" class="rules-dialog smooth-review-dialog" role="dialog" aria-modal="true" aria-labelledby="smooth-review-dialog-title" hidden>
+        <button type="button" class="rules-dialog-backdrop" data-smooth-review-close tabindex="-1" aria-label="Close weekly review"></button>
+        <section class="rules-dialog-panel smooth-review-panel">
+            <div class="rules-dialog-handle" aria-hidden="true"></div>
+            <header class="rules-dialog-header">
+                <div>
+                    <p class="rules-dialog-eyebrow">Finalized League Recap</p>
+                    <h2 id="smooth-review-dialog-title" class="rules-dialog-title">Smooth Review</h2>
+                </div>
+                <button type="button" class="rules-dialog-close" data-smooth-review-close aria-label="Close weekly review">
+                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </header>
+            <div id="smooth-review-content" class="rules-dialog-body smooth-review-body"></div>
+        </section>
+    </div>
     <div class="app-shell min-h-screen">
         <div id="status-banner" hidden class="mx-auto max-w-7xl px-4 pt-4 md:px-8">
             <div class="rounded-2xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-900 shadow-sm dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-100"></div>
@@ -3212,6 +3288,10 @@
                                     <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 5.5A2.5 2.5 0 016.5 3H11v16H6.5A2.5 2.5 0 004 21.5v-16zM20 5.5A2.5 2.5 0 0017.5 3H13v16h4.5a2.5 2.5 0 012.5 2.5v-16z"></path></svg>
                                     <span>Rules</span>
                                 </button>
+                                <button id="smooth-review-button" type="button" class="rules-trigger-pill" aria-haspopup="dialog" aria-controls="smooth-review-dialog" aria-expanded="false" hidden>
+                                    <span aria-hidden="true">✨</span>
+                                    <span>Smooth Review</span>
+                                </button>
                                 <button id="profile-button" type="button" class="rules-trigger-pill" aria-haspopup="dialog" aria-controls="profile-dialog" aria-expanded="false">
                                     <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5.121 17.804A7 7 0 0112 14a7 7 0 016.879 3.804M15 8a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
                                     <span id="profile-button-label">My Team</span>
@@ -3271,7 +3351,7 @@
     </div>
 
     <div class="bottom-tabs-overlay" aria-label="Primary navigation">
-        <span id="app-version-label" class="app-version-badge" aria-label="App version">App v2026.09.15.5</span>
+        <span id="app-version-label" class="app-version-badge" aria-label="App version">App v2026.09.15.6</span>
         <nav class="bottom-tab-nav" role="tablist" aria-label="App sections">
             <button id="tab-home" type="button" class="bottom-tab-button" role="tab" aria-selected="true" aria-controls="home-panel" data-app-tab="home">
                 <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 11.5L12 4l9 7.5M5.5 10.5V20h13v-9.5M9.5 20v-5h5v5"></path></svg>
