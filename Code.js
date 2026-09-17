@@ -19,6 +19,7 @@ function onOpen(e) {
     .addItem('Refresh Team Rosters', 'fetchAndPopulateRosters')
     .addItem('Sync Current Matchups', 'syncCurrentWeekMatchups')
     .addItem('Finalize Weekly Recap', 'finalizeWeeklyRecap')
+    .addItem('Refresh Team MVPs from Finalized Week', 'refreshTeamMvpsFromFinalizedWeek')
     .addSeparator()
     .addItem('Sync League Rosters Now', 'syncLeagueRostersNow')
     .addItem('Install League Roster Sync', 'installLeagueRosterSync')
@@ -784,6 +785,7 @@ function buildTeamsSheetDataMap_(spreadsheet) {
       : String(rawRealName).trim();
 
     var teamData = {
+      rowNumber: TEAMS_DATA_START_ROW + r,
       realName: realName,
       managerPhotoUrl: managerPhoto,
       sleeperTeamImageUrl: sleeperTeamImage,
@@ -3860,6 +3862,108 @@ function upsertMatchupPlayerScores_(spreadsheet, sleeperMatchups, season, week) 
 }
 
 /**
+ * Updates Teams!Q:V's Team MVP fields from one finalized week's starter ledger.
+ * Highest player points wins; a name tie is resolved alphabetically for a stable result.
+ * @param {GoogleAppsScript.Spreadsheet.Spreadsheet} spreadsheet
+ * @param {string|number} season
+ * @param {string|number} week
+ * @return {{teamCount: number, sourceWeek: string, warnings: Array<string>}}
+ */
+function refreshTeamMvpsFromMatchupPlayerScores_(spreadsheet, season, week) {
+  var result = { teamCount: 0, sourceWeek: String(week || ''), warnings: [] };
+  if (!spreadsheet) {
+    result.warnings.push('No spreadsheet is available.');
+    return result;
+  }
+  var playerSheet = spreadsheet.getSheetByName(MATCHUP_PLAYER_SCORES_SHEET);
+  var teamsSheet = spreadsheet.getSheetByName(TEAMS_SHEET);
+  if (!playerSheet) {
+    result.warnings.push('Sheet "' + MATCHUP_PLAYER_SCORES_SHEET + '" was not found.');
+    return result;
+  }
+  if (!teamsSheet) {
+    result.warnings.push('Sheet "' + TEAMS_SHEET + '" was not found.');
+    return result;
+  }
+  if (playerSheet.getLastRow() < 2) {
+    result.warnings.push('No player-score rows are available yet.');
+    return result;
+  }
+
+  var values = playerSheet.getDataRange().getDisplayValues();
+  var headers = values[0].map(normalizeBettingOptionKey_);
+  var col = function (header) { return headers.indexOf(normalizeBettingOptionKey_(header)); };
+  var required = ['Season', 'Week', 'Roster ID', 'Team Name', 'Player ID', 'Player Name', 'Lineup Status', 'Player Points'];
+  var missing = required.filter(function (header) { return col(header) === -1; });
+  if (missing.length) {
+    result.warnings.push(MATCHUP_PLAYER_SCORES_SHEET + ' is missing: ' + missing.join(', ') + '.');
+    return result;
+  }
+
+  var leadersByRosterId = {};
+  values.slice(1).forEach(function (row) {
+    if (getDisplayCell_(row, col('Season')) !== String(season) ||
+        getDisplayCell_(row, col('Week')) !== String(week) ||
+        normalizeBettingOptionKey_(getDisplayCell_(row, col('Lineup Status'))) !== 'starter') return;
+    var rawPoints = getDisplayCell_(row, col('Player Points'));
+    var points = Number(rawPoints);
+    var rosterId = normalizeSleeperRosterId_(getDisplayCell_(row, col('Roster ID')));
+    var playerId = getDisplayCell_(row, col('Player ID'));
+    var playerName = getDisplayCell_(row, col('Player Name'));
+    if (!rosterId || !playerId || !playerName || rawPoints === '' || !isFinite(points)) return;
+    var candidate = {
+      rosterId: rosterId,
+      teamName: getDisplayCell_(row, col('Team Name')),
+      playerId: playerId,
+      playerName: playerName,
+      points: Math.round(points * 100) / 100
+    };
+    var current = leadersByRosterId[rosterId];
+    if (!current || candidate.points > current.points ||
+        (candidate.points === current.points && candidate.playerName.localeCompare(current.playerName) < 0)) {
+      leadersByRosterId[rosterId] = candidate;
+    }
+  });
+
+  var teamsData = buildTeamsSheetDataMap_(spreadsheet);
+  var teamsByName = teamsData.map;
+  var teamsByUserId = teamsData.mapByUserId || {};
+  var ownersByRosterId = buildRosterIdDisplayLookup_(spreadsheet, false).byRosterId;
+  Object.keys(leadersByRosterId).forEach(function (rosterId) {
+    var leader = leadersByRosterId[rosterId];
+    var owner = ownersByRosterId[rosterId] || {};
+    var teamData = (owner.ownerUserId && teamsByUserId[owner.ownerUserId]) ||
+      teamsByName[normalizeTeamNameKey_(leader.teamName)] ||
+      teamsByName[normalizeTeamNameKey_(owner.teamName)];
+    if (!teamData || !teamData.rowNumber) {
+      result.warnings.push('Could not match roster ' + rosterId + ' to a Teams row for ' + leader.playerName + '.');
+      return;
+    }
+    teamsSheet.getRange(teamData.rowNumber, TEAMS_MVP_NAME_COL).setValue(leader.playerName);
+    teamsSheet.getRange(teamData.rowNumber, TEAMS_MVP_IMAGE_COL).setValue(getSleeperPlayerImageUrl_(leader.playerId));
+    result.teamCount++;
+  });
+  return result;
+}
+
+/** Manually repairs Team MVP fields using the latest finalized recap week. */
+function refreshTeamMvpsFromFinalizedWeek() {
+  var spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+  var recap = getWeeklyRecapData_(spreadsheet);
+  if (!recap || !recap.week || !recap.teams || !recap.teams.length) {
+    Browser.msgBox('Team MVP refresh needs at least one finalized weekly recap.');
+    return null;
+  }
+  var result = refreshTeamMvpsFromMatchupPlayerScores_(spreadsheet, recap.season, recap.week);
+  Browser.msgBox(
+    'Updated Team MVP for ' + result.teamCount + ' team' + (result.teamCount === 1 ? '' : 's') +
+    ' from Week ' + recap.week + '.' +
+    (result.warnings.length ? '\n\nNotes: ' + result.warnings.join(' ') : '')
+  );
+  return result;
+}
+
+/**
  * Creates the finalized weekly recap sheet when needed and repairs its header row.
  * @param {GoogleAppsScript.Spreadsheet.Spreadsheet} spreadsheet
  * @return {GoogleAppsScript.Spreadsheet.Sheet}
@@ -4006,6 +4110,7 @@ function finalizeWeeklyRecap_(spreadsheet) {
     season,
     week
   );
+  var teamMvpResult = refreshTeamMvpsFromMatchupPlayerScores_(spreadsheet, season, week);
 
   var activeTeams = [];
   completeGroups.forEach(function (teams) {
@@ -4126,6 +4231,8 @@ function finalizeWeeklyRecap_(spreadsheet) {
     leagueLowScore: Math.round(leagueLowScore * 100) / 100,
     playerCount: playerScoreResult.playerCount,
     strikeCount: playerScoreResult.strikeCount,
+    teamMvpCount: teamMvpResult.teamCount,
+    teamMvpWarnings: teamMvpResult.warnings,
     pendingCaptainCount: pendingCaptainCount,
     finalizedAt: finalizedAt
   };
@@ -4144,8 +4251,12 @@ function finalizeWeeklyRecap() {
       ' with ' + result.teamCount + ' active teams. ' +
       result.playerCount + ' player scores were saved, including ' +
       result.strikeCount + ' strike' + (result.strikeCount === 1 ? '' : 's') + '.' +
+      ' Team MVP was updated for ' + result.teamMvpCount + ' team' + (result.teamMvpCount === 1 ? '' : 's') + '.' +
       (result.pendingCaptainCount
         ? ' ' + result.pendingCaptainCount + ' Captain adjustment' + (result.pendingCaptainCount === 1 ? ' is' : 's are') + ' still Pending in Weekly Captains.'
+        : '') +
+      (result.teamMvpWarnings && result.teamMvpWarnings.length
+        ? ' MVP notes: ' + result.teamMvpWarnings.join(' ')
         : '')
     );
     return result;
