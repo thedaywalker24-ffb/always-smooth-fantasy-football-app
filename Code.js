@@ -232,6 +232,8 @@ const TEAMS_HEADER_ROW = 2;
 /** First row of team data below the header row */
 const TEAMS_DATA_START_ROW = TEAMS_HEADER_ROW + 1;
 const ADMIN_CODE_PROPERTY = 'ALWAYS_SMOOTH_ADMIN_CODE';
+const ADMIN_MATCHUP_SYNC_COOLDOWN_KEY = 'alwaysSmoothAdminMatchupSyncCooldown';
+const ADMIN_MATCHUP_SYNC_COOLDOWN_SECONDS = 60;
 const EDITABLE_TEAM_FIELD_CONFIG = {
   announcement: {
     label: 'Announcement',
@@ -930,19 +932,8 @@ function updateTeamField_(spreadsheet, params) {
 
   if (!spreadsheet) return fail('No spreadsheet is available.');
 
-  var expectedAdminCode = PropertiesService
-    .getScriptProperties()
-    .getProperty(ADMIN_CODE_PROPERTY);
-  if (!expectedAdminCode) {
-    return fail('Admin updates are not configured. Set Script Property ' + ADMIN_CODE_PROPERTY + '.');
-  }
-
-  var providedAdminCode = String(
-    params.adminCode || params.admin_code || params.code || ''
-  );
-  if (providedAdminCode !== String(expectedAdminCode)) {
-    return fail('Invalid admin code.');
-  }
+  var adminCodeError = validateAdminCode_(params);
+  if (adminCodeError) return fail(adminCodeError);
 
   var fieldConfig = getEditableTeamFieldConfig_(params.field || params.editField);
   if (!fieldConfig) {
@@ -1145,6 +1136,25 @@ function resolveBettingInputConfig_(mapping, banksByKey, dynamicOptionsByKey) {
     options: bank.options,
     warning: ''
   };
+}
+
+/**
+ * Validates the shared admin code used by low-risk app maintenance actions.
+ * @param {Object} params
+ * @return {string} Empty when valid; otherwise a user-safe error message.
+ */
+function validateAdminCode_(params) {
+  var expectedAdminCode = PropertiesService
+    .getScriptProperties()
+    .getProperty(ADMIN_CODE_PROPERTY);
+  if (!expectedAdminCode) {
+    return 'Admin updates are not configured. Set Script Property ' + ADMIN_CODE_PROPERTY + '.';
+  }
+
+  var providedAdminCode = String(
+    (params && (params.adminCode || params.admin_code || params.code)) || ''
+  );
+  return providedAdminCode === String(expectedAdminCode) ? '' : 'Invalid admin code.';
 }
 
 /**
@@ -3681,6 +3691,40 @@ function syncCurrentWeekMatchups() {
   }
 }
 
+/**
+ * PIN-protected API action for refreshing only the current-week scoreboard.
+ * A short cooldown prevents accidental repeat taps and unnecessary Sleeper calls.
+ * @param {GoogleAppsScript.Spreadsheet.Spreadsheet} spreadsheet
+ * @param {Object} params
+ * @return {Object}
+ */
+function syncCurrentWeekMatchupsWithAdmin_(spreadsheet, params) {
+  var fail = function (message) {
+    return { ok: false, error: message, updatedAt: new Date().toISOString() };
+  };
+  if (!spreadsheet) return fail('No spreadsheet is available.');
+
+  var adminCodeError = validateAdminCode_(params);
+  if (adminCodeError) return fail(adminCodeError);
+
+  var cache = CacheService.getScriptCache();
+  if (cache.get(ADMIN_MATCHUP_SYNC_COOLDOWN_KEY)) {
+    return fail('Scoreboard was synced recently. Try again in about a minute.');
+  }
+
+  try {
+    var result = syncCurrentWeekMatchups_(spreadsheet, 'admin-resync');
+    cache.put(
+      ADMIN_MATCHUP_SYNC_COOLDOWN_KEY,
+      '1',
+      ADMIN_MATCHUP_SYNC_COOLDOWN_SECONDS
+    );
+    return result;
+  } catch (error) {
+    return fail('Scoreboard sync could not be completed: ' + (error.message || String(error)));
+  }
+}
+
 /** Hourly trigger entry point; syncs only Thu/Sun/Mon during the NFL season. */
 function runScheduledMatchupSync() {
   var now = new Date();
@@ -4906,6 +4950,10 @@ function doGet(e) {
 
   if (path === 'matchups-data' || path === 'api/matchups-data' || apiName === 'matchups-data') {
     return createApiOutput_(getMatchupsData_(spreadsheet), callbackName);
+  }
+
+  if (path === 'sync-matchups' || path === 'api/sync-matchups' || apiName === 'sync-matchups') {
+    return createApiOutput_(syncCurrentWeekMatchupsWithAdmin_(spreadsheet, params), callbackName);
   }
 
   if (path === 'weekly-recap-data' || path === 'api/weekly-recap-data' || apiName === 'weekly-recap-data') {

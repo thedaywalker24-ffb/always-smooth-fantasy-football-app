@@ -3344,6 +3344,10 @@
                         <p id="matchups-summary" class="text-sm font-bold text-slate-500 dark:text-slate-400">Loading scores</p>
                     </div>
                     <div class="flex flex-wrap items-center gap-2">
+                        <button id="scoreboard-sync-button" type="button" class="inline-flex items-center gap-1.5 rounded-full border border-pink-200 bg-pink-50 px-3 py-2 text-xs font-black uppercase tracking-[0.12em] text-pink-700 shadow-sm transition hover:-translate-y-0.5 hover:bg-pink-100 disabled:cursor-wait disabled:opacity-60 dark:border-pink-400/30 dark:bg-pink-500/10 dark:text-pink-200 dark:hover:bg-pink-500/20" aria-label="Admin sync current scoreboard scores">
+                            <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.3" d="M4 4v5h.582m14.836 2A7.5 7.5 0 0 0 5.582 9m0 0H10m10 11v-5h-.581m0 0a7.5 7.5 0 0 1-13.837-2M14 15h4.419"></path></svg>
+                            <span data-scoreboard-sync-label>Sync Scores</span>
+                        </button>
                         <div id="scoreboard-view-toggle"></div>
                         <span id="matchups-updated" class="w-fit rounded-full border border-slate-200 bg-white px-4 py-2 text-xs font-black uppercase tracking-[0.18em] text-slate-500 shadow-sm dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300">Syncing</span>
                     </div>
@@ -3354,7 +3358,7 @@
     </div>
 
     <div class="bottom-tabs-overlay" aria-label="Primary navigation">
-        <span id="app-version-label" class="app-version-badge" aria-label="App version">App v2026.09.15.7</span>
+        <span id="app-version-label" class="app-version-badge" aria-label="App version">App v2026.10.02.1</span>
         <nav class="bottom-tab-nav" role="tablist" aria-label="App sections">
             <button id="tab-home" type="button" class="bottom-tab-button" role="tab" aria-selected="true" aria-controls="home-panel" data-app-tab="home">
                 <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 11.5L12 4l9 7.5M5.5 10.5V20h13v-9.5M9.5 20v-5h5v5"></path></svg>

@@ -1,5 +1,5 @@
 const API_BASE_URL = 'https://script.google.com/macros/s/AKfycbwtM_NX16wFOHssvhvP2Iw7FI_7YcVgJ9-5DNbvNOblMxifawE4R-F_eiOLU1NsEggF/exec';
-const APP_VERSION = 'v2026.09.15.7';
+const APP_VERSION = 'v2026.10.02.1';
 const FALLBACK_PHOTO = 'https://images.unsplash.com/photo-1540747913346-19e32dc3e97e?q=80&w=600&auto=format&fit=crop';
 const THEME_KEY = 'theme';
 const CONFIG_CACHE_KEY = 'always-smooth-config';
@@ -149,6 +149,7 @@ function fetchJsonp(path, params = {}) {
       'api/betting-data': 'betting-data',
       'api/draft-board': 'draft-board',
       'api/matchups-data': 'matchups-data',
+      'api/sync-matchups': 'sync-matchups',
       'api/weekly-recap-data': 'weekly-recap-data',
       'api/captain-data': 'captain-data',
       'api/update-team-field': 'update-team-field',
@@ -163,6 +164,7 @@ function fetchJsonp(path, params = {}) {
       'league-data': 30000,
       'draft-board': 30000,
       'matchups-data': 30000,
+      'sync-matchups': 45000,
       'weekly-recap-data': 30000,
       'captain-data': 30000,
       'submit-bets': 45000,
@@ -1914,9 +1916,9 @@ function clearAdminEditTimer() {
   adminEditStart = null;
 }
 
-function getAdminCode() {
+function getAdminCode(promptMessage = 'Enter the Always Smooth admin code to update league data.') {
   if (adminCodeCache) return adminCodeCache;
-  const entered = window.prompt('Enter the Always Smooth admin code to update league data.');
+  const entered = window.prompt(promptMessage);
   if (entered === null) return '';
   adminCodeCache = entered.trim();
   return adminCodeCache;
@@ -2652,6 +2654,36 @@ async function loadMatchupsData() {
     }
     updateMatchupsHeader({ updatedAt: '' });
     renderMatchupsEmpty(`Matchups could not be loaded: ${error.message || error}`);
+  }
+}
+
+async function syncScoreboardFromSleeper() {
+  const button = document.getElementById('scoreboard-sync-button');
+  if (!button || button.disabled) return;
+  const adminCode = getAdminCode('Enter the Always Smooth admin code to sync live scoreboard scores.');
+  if (!adminCode) return;
+
+  const label = button.querySelector('[data-scoreboard-sync-label]');
+  const idleLabel = label?.textContent || 'Sync Scores';
+  button.disabled = true;
+  if (label) label.textContent = 'Syncing';
+
+  try {
+    const payload = await fetchJsonp('api/sync-matchups', { adminCode });
+    if (!payload || payload.ok !== true) {
+      throw new Error(payload?.error || 'Scoreboard sync could not be completed.');
+    }
+    localStorage.removeItem(MATCHUPS_CACHE_KEY);
+    matchupsData = null;
+    matchupsDataIsStale = false;
+    await loadMatchupsData();
+  } catch (error) {
+    console.error(error);
+    if (/invalid admin code/i.test(error?.message || '')) adminCodeCache = '';
+    window.alert(error?.message || 'Scoreboard sync could not be completed.');
+  } finally {
+    button.disabled = false;
+    if (label) label.textContent = idleLabel;
   }
 }
 
@@ -3529,6 +3561,13 @@ function setupScoreboardViewControls() {
   });
 }
 
+function setupScoreboardSync() {
+  const button = document.getElementById('scoreboard-sync-button');
+  if (!button || button.dataset.syncBound === 'true') return;
+  button.dataset.syncBound = 'true';
+  button.addEventListener('click', syncScoreboardFromSleeper);
+}
+
 function setupInstallPrompt() {
   const installPanel = document.getElementById('install-panel');
   const installButton = document.getElementById('install-button');
@@ -3796,6 +3835,7 @@ async function bootstrap() {
   setupAppTour();
   setupAppTabs();
   setupScoreboardViewControls();
+  setupScoreboardSync();
   setupCaptainDialog();
   setupBettingControls();
   setupDraftBoardControls();
