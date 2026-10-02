@@ -24,13 +24,15 @@ function onOpen(e) {
     .addItem('Sync League Rosters Now', 'syncLeagueRostersNow')
     .addItem('Install League Roster Sync', 'installLeagueRosterSync')
     .addItem('Remove League Roster Sync', 'removeLeagueRosterSync')
+    .addItem('Sync NFL Players Now', 'syncSleeperPlayersNow')
+    .addItem('Install Weekly NFL Player Sync', 'installSleeperPlayerSync')
+    .addItem('Remove Weekly NFL Player Sync', 'removeSleeperPlayerSync')
     .addSeparator()
     .addItem('Install Live Matchup Sync', 'installLiveMatchupSync')
     .addItem('Remove Live Matchup Sync', 'removeLiveMatchupSync')
     .addSeparator()
     .addItem('Retrieve Draft Data', 'fetchDraftPicksData')
     .addItem('Build Upcoming Draft Board', 'buildUpcomingDraftBoardSheet')
-    .addItem('Fetch Player Data', 'fetchSleeperPlayers')
     .addItem('Clear Betting Sheet', 'clearRanges')
     .addItem('Clear App Data Sheet', 'clearAppDataRange')
     .addToUi();
@@ -74,7 +76,11 @@ const SLEEPER_NFL_SCHEDULE_URL = 'https://api.sleeper.com/schedule/nfl/regular/'
 const CAPTAIN_SCHEDULE_CACHE_SECONDS = 300;
 const LEAGUE_ROSTER_SYNC_HANDLER = 'runScheduledLeagueRosterSync';
 const LEAGUE_ROSTER_SYNC_MAX_AGE_MS = 5 * 60 * 1000;
+const LEAGUE_ROSTER_FORCE_MIN_AGE_MS = 60 * 1000;
 const LEAGUE_ROSTER_SYNC_PROPERTY = 'alwaysSmoothLeagueRosterSyncAt';
+const SLEEPER_PLAYER_SYNC_HANDLER = 'runScheduledSleeperPlayerSync';
+const SLEEPER_PLAYER_SYNC_PROPERTY = 'alwaysSmoothSleeperPlayerSyncAt';
+const SLEEPER_PLAYER_RECOVERY_MIN_AGE_MS = 15 * 60 * 1000;
 
 const BETTING_SHEET = 'App Data Collection';
 const BETTING_PROMPT_ROW = 1;
@@ -1980,6 +1986,28 @@ function syncLeagueRosterSnapshot_(spreadsheet) {
     }
 
     var playerInfo = buildSleeperPlayerInfoMap_(spreadsheet);
+    var missingPlayerMetadata = {};
+    rosters.forEach(function (roster) {
+      var playerIds = []
+        .concat(Array.isArray(roster.starters) ? roster.starters : [])
+        .concat(Array.isArray(roster.reserve) ? roster.reserve : [])
+        .concat(Array.isArray(roster.taxi) ? roster.taxi : [])
+        .concat(Array.isArray(roster.players) ? roster.players : []);
+      playerIds.forEach(function (playerId) {
+        var id = String(playerId || '').trim();
+        var info = playerInfo[id];
+        if (id && (!info || !info.playerName || !info.position || !info.nflTeam)) missingPlayerMetadata[id] = true;
+      });
+    });
+    var recoveredPlayerCount = 0;
+    var lastPlayerSync = PropertiesService.getDocumentProperties().getProperty(SLEEPER_PLAYER_SYNC_PROPERTY);
+    var playerSyncAge = lastPlayerSync ? new Date().getTime() - new Date(lastPlayerSync).getTime() : Infinity;
+    if (Object.keys(missingPlayerMetadata).length &&
+        (!isFinite(playerSyncAge) || playerSyncAge < 0 || playerSyncAge >= SLEEPER_PLAYER_RECOVERY_MIN_AGE_MS)) {
+      var playerSync = syncSleeperPlayers_(spreadsheet);
+      recoveredPlayerCount = playerSync.playerCount;
+      playerInfo = buildSleeperPlayerInfoMap_(spreadsheet);
+    }
     var rosterRows = [['User ID', 'Team Name', 'Player ID', 'Roster Type', 'Player Name', 'Roster ID']];
     rosters.forEach(function (roster) {
       var ownerId = String(roster && roster.owner_id || '').trim();
@@ -2001,7 +2029,12 @@ function syncLeagueRosterSnapshot_(spreadsheet) {
     var syncedAt = new Date().toISOString();
     PropertiesService.getDocumentProperties().setProperty(LEAGUE_ROSTER_SYNC_PROPERTY, syncedAt);
     SpreadsheetApp.flush();
-    return { ok: true, syncedAt: syncedAt, teamCount: users.length, rosterRowCount: Math.max(rosterRows.length - 1, 0) };
+    return {
+      ok: true, syncedAt: syncedAt, teamCount: users.length,
+      rosterRowCount: Math.max(rosterRows.length - 1, 0),
+      playerDirectoryRefreshed: recoveredPlayerCount > 0,
+      playerDirectoryCount: recoveredPlayerCount
+    };
   } finally { lock.releaseLock(); }
 }
 
@@ -2009,7 +2042,8 @@ function syncLeagueRosterSnapshot_(spreadsheet) {
 function ensureLeagueRosterSnapshotFresh_(spreadsheet, force) {
   var previous = PropertiesService.getDocumentProperties().getProperty(LEAGUE_ROSTER_SYNC_PROPERTY);
   var age = previous ? new Date().getTime() - new Date(previous).getTime() : Infinity;
-  if (!force && isFinite(age) && age >= 0 && age < LEAGUE_ROSTER_SYNC_MAX_AGE_MS) return { ok: true, syncedAt: previous, cached: true };
+  var maxAge = force ? LEAGUE_ROSTER_FORCE_MIN_AGE_MS : LEAGUE_ROSTER_SYNC_MAX_AGE_MS;
+  if (isFinite(age) && age >= 0 && age < maxAge) return { ok: true, syncedAt: previous, cached: true, forceThrottled: !!force };
   return syncLeagueRosterSnapshot_(spreadsheet);
 }
 
@@ -2354,7 +2388,7 @@ function getCaptainData_(spreadsheet) {
   var isOpen = getCaptainSubmissionsOpen_(spreadsheet);
   var warnings = [];
   try {
-    ensureLeagueRosterSnapshotFresh_(spreadsheet, false);
+    ensureLeagueRosterSnapshotFresh_(spreadsheet, true);
   } catch (error) {
     warnings.push('Current Sleeper roster could not be refreshed; showing the most recent saved roster.');
     console.warn('Captain roster refresh failed: ' + (error.message || error));
@@ -2465,7 +2499,7 @@ function submitCaptain_(spreadsheet, params) {
   if (!playerId) return fail('Missing player ID.');
 
   try {
-    ensureLeagueRosterSnapshotFresh_(spreadsheet, false);
+    ensureLeagueRosterSnapshotFresh_(spreadsheet, true);
   } catch (error) {
     return fail('Current Sleeper roster could not be verified. Try again shortly.');
   }
@@ -5199,110 +5233,81 @@ function fetchMatchupData() {
   return syncCurrentWeekMatchups();
 }
 
-/**
- * Fetches player data from the Sleeper API and posts some of it
- * into the Google Sheet named "Sleeper Players".
- * * Optimization: The sheet clearing operation now only targets the data rows
- * (Row 2 onwards) using a dynamic range based on current content and headers.
- */
-function fetchSleeperPlayers() {
-  // --- Configuration ---
-  const playerSheet = "Sleeper Players"; // Name of your Google Sheet tab
-  const sleeperUrl = "https://api.sleeper.app/v1/players/nfl"; 
-  
-  // Define the allowed positions
-  const ALLOWED_POSITIONS = ["QB", "RB", "WR", "TE", "K", "DEF"];
-
-  // --- Get the Spreadsheet and Sheet ---
-  const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
-  const sheet = spreadsheet.getSheetByName(playerSheet);
-
-  if (!sheet) {
-    Logger.log(`Error: Sheet named "${playerSheet}" not found. Creating it.`);
-    sheet = spreadsheet.insertSheet(playerSheet);
+/** Fetches Sleeper's NFL player directory without UI calls so triggers can use it. */
+function syncSleeperPlayers_(spreadsheet) {
+  if (!spreadsheet) throw new Error('No spreadsheet is available.');
+  var playerSheet = 'Sleeper Players';
+  var sleeperUrl = 'https://api.sleeper.app/v1/players/nfl';
+  var allowedPositions = ['QB', 'RB', 'WR', 'TE', 'K', 'DEF'];
+  var headers = ['Player ID', 'Full Name', 'First Name', 'Last Name', 'Team', 'Position', 'Age', 'Injury Status'];
+  var response = UrlFetchApp.fetch(sleeperUrl, { muteHttpExceptions: true });
+  if (response.getResponseCode() < 200 || response.getResponseCode() >= 300) {
+    throw new Error('Sleeper player sync failed with status ' + response.getResponseCode() + '.');
   }
+  var data = JSON.parse(response.getContentText() || '{}');
+  var playerData = [];
+  Object.keys(data).forEach(function (playerId) {
+    var player = data[playerId] || {};
+    var position = String(player.position || '').toUpperCase();
+    var team = String(player.team || '').trim();
+    if (allowedPositions.indexOf(position) === -1 || !team) return;
+    playerData.push([
+      player.player_id || playerId,
+      player.full_name || ((player.first_name || '') + ' ' + (player.last_name || '')).trim(),
+      player.first_name || '', player.last_name || '', team, player.position || '',
+      player.age || '', player.injury_status || ''
+    ]);
+  });
+  playerData.sort(function (a, b) { return String(a[1]).localeCompare(String(b[1])); });
 
-  // Define your desired headers based on the fields you want to extract
-  const headers = [
-    "Player ID",
-    "Full Name",
-    "First Name",
-    "Last Name",
-    "Team",
-    "Position",
-    "Age",
-    "Injury Status"
-  ];
+  var sheet = spreadsheet.getSheetByName(playerSheet) || spreadsheet.insertSheet(playerSheet);
+  sheet.getRange(1, 1, 1, headers.length).setValues([headers]).setFontWeight('bold');
+  var lastRow = sheet.getLastRow();
+  if (lastRow > 1) sheet.getRange(2, 1, lastRow - 1, headers.length).clearContent();
+  if (playerData.length) sheet.getRange(2, 1, playerData.length, headers.length).setValues(playerData);
+  var syncedAt = new Date().toISOString();
+  PropertiesService.getDocumentProperties().setProperty(SLEEPER_PLAYER_SYNC_PROPERTY, syncedAt);
+  SpreadsheetApp.flush();
+  return { ok: true, syncedAt: syncedAt, playerCount: playerData.length };
+}
 
-  // --- Fetch Data from API ---
+/** Manual menu entry point for the NFL player directory sync. */
+function syncSleeperPlayersNow() {
+  var spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
   try {
-    const response = UrlFetchApp.fetch(sleeperUrl);
-    const jsonResponse = response.getContentText();
-    const data = JSON.parse(jsonResponse);
-
-    Logger.log("Sleeper Players API Response fetched successfully.");
-
-    // --- Prepare data for writing to sheet ---
-    let playerData = []; // Start with data only
-    let filteredCount = 0;
-
-    // Iterate through each player object in the 'data' (where keys are player IDs)
-    for (const playerId in data) {
-      // Ensure the property belongs to the object itself, not its prototype chain
-      if (data.hasOwnProperty(playerId)) {
-        const player = data[playerId];
-        const playerPosition = player.position ? player.position.toUpperCase() : ''; 
-        const playerTeam = player.team; // Explicitly get the team field
-
-        // --- Filtering Logic ---
-        // 1. Must be in ALLOWED_POSITIONS
-        // 2. MUST have a value in player.team (must be truthy/not blank)
-        if (ALLOWED_POSITIONS.includes(playerPosition) && playerTeam) {
-          const row = [
-            player.player_id || '',
-            player.full_name || `${player.first_name || ''} ${player.last_name || ''}`.trim(),
-            player.first_name || '',
-            player.last_name || '',
-            playerTeam, // Use the extracted and validated team
-            player.position || '',
-            player.age || '',
-            player.injury_status || ''
-          ];
-          playerData.push(row);
-          filteredCount++;
-        }
-      }
-    }
-
-    // --- Write Data to Sheet ---
-    
-    // 1. Ensure headers are set (only once, or overwrite if sheet was cleared)
-    sheet.getRange(1, 1, 1, headers.length).setValues([headers]).setFontWeight('bold');
-    
-    // 2. Clear existing content (Optimized: only clears data rows 2 to max, columns 1 to headers.length)
-    const lastRow = sheet.getLastRow();
-    if (lastRow > 1) {
-      const numRowsToClear = lastRow - 1;
-      // Clear content starting from Row 2, Column 1, across the number of rows that contain data, and across the required number of columns.
-      sheet.getRange(2, 1, numRowsToClear, headers.length).clearContent(); 
-    }
-
-    // 3. Write all the new data to the sheet at once for maximum efficiency
-    if (playerData.length > 0) {
-      const numRows = playerData.length;
-      const numColumns = headers.length;
-      sheet.getRange(2, 1, numRows, numColumns).setValues(playerData);
-      Logger.log(`${numRows} player records posted to "${playerSheet}".`);
-      Browser.msgBox(`Successfully posted ${numRows} player records to "${playerSheet}".`);
-    } else {
-      Logger.log("No player data found to post after filtering.");
-      Browser.msgBox("No player data found to post from the API response after filtering.");
-    }
-
-  } catch (e) {
-    Logger.log("Error fetching or parsing API data: " + e.toString());
-    Browser.msgBox("An error occurred: " + e.toString());
+    var result = syncSleeperPlayers_(spreadsheet);
+    spreadsheet.toast(result.playerCount + ' NFL players synced.', 'NFL players synced', 8);
+    return result;
+  } catch (error) {
+    Browser.msgBox('NFL player sync could not be completed: ' + (error.message || String(error)));
+    throw error;
   }
+}
+
+/** Backward-compatible alias for the original spreadsheet menu action. */
+function fetchSleeperPlayers() { return syncSleeperPlayersNow(); }
+
+/** Runs weekly in-season so player moves are kept current even without roster changes. */
+function runScheduledSleeperPlayerSync() {
+  if (isNflOffseason_(new Date())) return;
+  var spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+  if (!spreadsheet) return;
+  return syncSleeperPlayers_(spreadsheet);
+}
+
+/** Installs one weekly Tuesday player-directory sync. */
+function installSleeperPlayerSync() {
+  removeSleeperPlayerSync();
+  ScriptApp.newTrigger(SLEEPER_PLAYER_SYNC_HANDLER).timeBased()
+    .everyWeeks(1).onWeekDay(ScriptApp.WeekDay.TUESDAY).atHour(4).create();
+  SpreadsheetApp.getActiveSpreadsheet().toast('NFL players will sync weekly on Tuesday during the season.', 'Player sync installed', 8);
+}
+
+/** Removes only this project's weekly player-directory triggers. */
+function removeSleeperPlayerSync() {
+  ScriptApp.getProjectTriggers().forEach(function (trigger) {
+    if (trigger.getHandlerFunction() === SLEEPER_PLAYER_SYNC_HANDLER) ScriptApp.deleteTrigger(trigger);
+  });
 }
 
 /**
