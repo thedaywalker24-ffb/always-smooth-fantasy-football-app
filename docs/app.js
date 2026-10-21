@@ -1,5 +1,5 @@
 const API_BASE_URL = 'https://script.google.com/macros/s/AKfycbwtM_NX16wFOHssvhvP2Iw7FI_7YcVgJ9-5DNbvNOblMxifawE4R-F_eiOLU1NsEggF/exec';
-const APP_VERSION = 'v2026.10.02.1';
+const APP_VERSION = 'v2026.10.21.1';
 const FALLBACK_PHOTO = 'https://images.unsplash.com/photo-1540747913346-19e32dc3e97e?q=80&w=600&auto=format&fit=crop';
 const THEME_KEY = 'theme';
 const CONFIG_CACHE_KEY = 'always-smooth-config';
@@ -1677,6 +1677,7 @@ function renderTeams(payload, isStale = false) {
   const leaderPoints = teams.reduce((leader, team) => Math.max(leader, Number(team?.pointsFor || 0)), 0);
   document.getElementById('updated-at').textContent = formatCompactTimestamp(payload?.updatedAt);
   renderAnnouncement(payload);
+  renderTurkeyHuntingBoard(rankedTeams);
 
   if (!teams.length) {
     grid.innerHTML = `
@@ -2535,6 +2536,97 @@ function teamOwesBeerChug(team) {
 function getTeamStrikeCount(team) {
   const strikes = getLatestRecapForTeam(team)?.nonpositiveStarters;
   return Array.isArray(strikes) ? strikes.length : 0;
+}
+
+const TURKEY_MARK = '🦃';
+const TURKEY_STRIKES_PER_SHOT = 3;
+
+function countTurkeyStrikeMarks(value) {
+  return (String(value || '').match(/❎|❌/g) || []).length;
+}
+
+/**
+ * Classifies a team for the Turkey Hunting board from the commissioner-maintained
+ * `Teams!I` Turkey Watch cell plus the latest finalized recap's strikes.
+ * Strike marks written after the last 🦃 are the strikes still counting toward the next shot.
+ * @return {{ tier: 'turkey'|'hunted', pendingStrikes: number, weekStrikes: number, isFresh: boolean } | null}
+ */
+function getTurkeyHuntStatus(team) {
+  const status = String(team?.turkeyWatch || '').trim();
+  const lastTurkeyIndex = status.lastIndexOf(TURKEY_MARK);
+  const hasTurkey = lastTurkeyIndex !== -1;
+  const pendingStrikes = countTurkeyStrikeMarks(hasTurkey ? status.slice(lastTurkeyIndex + TURKEY_MARK.length) : status);
+  const weekStrikes = getTeamStrikeCount(team);
+
+  if (pendingStrikes >= TURKEY_STRIKES_PER_SHOT) {
+    return { tier: 'turkey', pendingStrikes, weekStrikes, isFresh: weekStrikes > 0 };
+  }
+  if (hasTurkey && weekStrikes > 0 && pendingStrikes < weekStrikes) {
+    return { tier: 'turkey', pendingStrikes, weekStrikes, isFresh: true };
+  }
+  if (pendingStrikes === TURKEY_STRIKES_PER_SHOT - 1) {
+    return { tier: 'hunted', pendingStrikes, weekStrikes, isFresh: false };
+  }
+  return null;
+}
+
+function buildTurkeyHuntDetail(team, hunt, week) {
+  const weekLabel = week ? `Week ${week}` : 'the latest week';
+  if (hunt.tier === 'hunted') {
+    return 'Sitting at ❌❌. One more 0-point starter bags a 🦃.';
+  }
+  if (hunt.pendingStrikes >= TURKEY_STRIKES_PER_SHOT) {
+    return hunt.isFresh
+      ? `Hit ❌❌❌ in ${weekLabel}. A Wild Turkey shot video is owed.`
+      : 'Still sitting on ❌❌❌. A Wild Turkey shot video is owed.';
+  }
+  const culprits = (getLatestRecapForTeam(team)?.nonpositiveStarters || [])
+    .map((player) => player?.playerName)
+    .filter(Boolean);
+  return culprits.length
+    ? `Bagged a 🦃 in ${weekLabel}, courtesy of ${culprits.join(' and ')}.`
+    : `Bagged a 🦃 in ${weekLabel}.`;
+}
+
+function renderTurkeyHuntingBoard(teams) {
+  const board = document.getElementById('turkey-hunting-board');
+  const list = document.getElementById('turkey-hunt-list');
+  const subtitle = document.getElementById('turkey-hunt-subtitle');
+  if (!board || !list) return;
+
+  const week = String(weeklyRecapData?.week || '').trim();
+  const tierOrder = { turkey: 0, hunted: 1 };
+  const targets = (Array.isArray(teams) ? teams : [])
+    .map((team) => ({ team, hunt: getTurkeyHuntStatus(team) }))
+    .filter(({ hunt }) => hunt)
+    .sort((a, b) => tierOrder[a.hunt.tier] - tierOrder[b.hunt.tier]);
+
+  board.hidden = !targets.length;
+  if (!targets.length) {
+    list.innerHTML = '';
+    return;
+  }
+
+  if (subtitle) {
+    subtitle.textContent = week
+      ? `Two ❌ or a fresh 🦃 through Week ${week}.`
+      : 'Two ❌ or a fresh 🦃.';
+  }
+  list.innerHTML = targets.map(({ team, hunt }) => {
+    const ownerName = team.realName || team.teamName || 'Team';
+    const badge = hunt.tier === 'turkey' ? 'Turkey Bagged 🦃' : 'In the Crosshairs';
+    const isMine = doesTeamMatchMemberProfile(team);
+    return `
+      <li class="turkey-hunt-row turkey-hunt-row--${hunt.tier}${isMine ? ' turkey-hunt-row--mine' : ''}">
+        <img src="${escapeHtml(team.photoUrl || FALLBACK_PHOTO)}" class="turkey-hunt-photo" alt="" onerror="this.src='${FALLBACK_PHOTO}';this.onerror=null;">
+        <div class="turkey-hunt-copy">
+          <p class="turkey-hunt-name"><span class="truncate">${escapeHtml(ownerName)}</span>${isMine ? '<span class="member-team-label shrink-0">Your Team</span>' : ''}</p>
+          <p class="turkey-hunt-detail">${escapeHtml(buildTurkeyHuntDetail(team, hunt, week))}</p>
+        </div>
+        <span class="turkey-hunt-badge">${badge}</span>
+      </li>
+    `;
+  }).join('');
 }
 
 function renderStrikeBadge(strikeCount, placement = 'center') {

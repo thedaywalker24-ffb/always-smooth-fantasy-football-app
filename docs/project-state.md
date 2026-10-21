@@ -2,7 +2,7 @@
 
 ## Current Status
 
-* Last completed section: Direct matchup sync; Apps Script now generates `All Matchups` and `Matchup Player Scores` from one Sleeper response, with Settings as the only season/week source.
+* Last completed section: Turkey Hunting board (GitHub Issue #3); Home now calls out only teams sitting at two ❌ strikes or that earned a 🦃 in the latest finalized week. Frontend-only, no sheet or route changes.
 * Current section in progress: Apps Script deployment verification for generated matchup data, opt-in live-sync scheduling, Captain onboarding, player scores, and weekly recaps.
 * Next recommended task: Push/redeploy Apps Script, run one manual matchup sync against a live week, then install the hourly Thursday/Sunday/Monday scheduler when ready for the season.
 * Open risks: Hardcoded Apps Script deployment URL, simple JSONP/GET admin and betting write flows, public trust-based bet submission, no automated tests, and duplicated/legacy Apps Script paths.
@@ -198,6 +198,7 @@ Draft-board roster ID resolution:
 * Splash screen and mobile-friendly banner.
 * The Always Smooth banner title is a keyboard-accessible audio easter egg. It restarts the bundled `docs/audio/always-smooth-easter-egg.mp3` clip on each press without rendering playback controls, and the service worker includes the clip in the PWA app shell.
 * Home displays a simple headerless announcement tile above the ticker using the Draft Board shortcut's pink-to-rose-to-orange gradient theme. It reads `Teams!X3`, shows a neutral empty-state message when the cell is blank, and uses press-and-hold plus the existing admin code to edit only that whitelisted cell.
+* Home shows a `Turkey Hunting 🦃` board between the ticker and League Standings. It lists only teams whose `Teams!I` Turkey Watch has two pending ❌/❎ strikes (`In the Crosshairs`) or that bagged a 🦃 in the latest finalized `Weekly Recaps` week (`Turkey Bagged`, naming that week's 0-point starters). Three unpaid strikes also render as `Turkey Bagged` with a shot-owed note. The board hides entirely when nobody qualifies.
 * Each Home team tile highlights Points For with a small radial halo anchored to `.team-pf-stat`. The previous absolute bottom-right card circle was removed so the matchup strip cannot mask or displace the visual treatment.
 * Live config load from Apps Script with fallback defaults.
 * Live standings load from Apps Script with local cached fallback.
@@ -264,7 +265,7 @@ Draft-board roster ID resolution:
 
 ## Recommended Next 3 Steps
 
-1. Push/redeploy Apps Script, publish GitHub Pages, and verify the PWA reports app version `v2026.09.08.2`.
+1. Publish GitHub Pages, verify the PWA reports app version `v2026.10.21.1`, and confirm the Turkey Hunting board matches the `Teams` Turkey Watch column after the next recap finalization.
 2. After a week is final, update Turkey Watch/mulligan values as needed and run `Update Records > Finalize Weekly Recap`.
 3. Compare every active team's recap with the final Sleeper matchup, including a league-low tie and any `0`/negative starter edge cases.
 

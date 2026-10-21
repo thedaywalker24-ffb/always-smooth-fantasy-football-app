@@ -170,6 +170,160 @@
             white-space: pre-wrap;
         }
 
+        .turkey-hunt-board {
+            position: relative;
+            overflow: hidden;
+            border: 1px solid rgba(226, 232, 240, 0.95);
+            border-radius: 1.5rem;
+            background: rgba(255, 255, 255, 0.9);
+            padding: 1.1rem 1.15rem 1.15rem;
+            box-shadow: 0 8px 22px rgba(15, 23, 42, 0.06);
+        }
+
+        .turkey-hunt-board::before {
+            position: absolute;
+            inset: 0 0 auto;
+            height: 4px;
+            background: linear-gradient(90deg, #92400e, #f97316, #facc15);
+            content: "";
+        }
+
+        .dark .turkey-hunt-board {
+            border-color: rgba(249, 115, 22, 0.18);
+            background: rgba(15, 23, 42, 0.7);
+            box-shadow: none;
+        }
+
+        .turkey-hunt-header {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: baseline;
+            justify-content: space-between;
+            gap: 0.25rem 0.75rem;
+        }
+
+        .turkey-hunt-title {
+            margin: 0;
+            font-size: 1.15rem;
+            font-style: italic;
+            font-weight: 950;
+            letter-spacing: -0.01em;
+            text-transform: uppercase;
+        }
+
+        .turkey-hunt-subtitle {
+            margin: 0;
+            color: #64748b;
+            font-size: 0.7rem;
+            font-weight: 800;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+        }
+
+        .dark .turkey-hunt-subtitle {
+            color: #94a3b8;
+        }
+
+        .turkey-hunt-list {
+            display: grid;
+            gap: 0.6rem;
+            margin: 0.85rem 0 0;
+            padding: 0;
+            list-style: none;
+        }
+
+        @media (min-width: 768px) {
+            .turkey-hunt-list {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+        }
+
+        .turkey-hunt-row {
+            display: grid;
+            grid-template-columns: auto minmax(0, 1fr) auto;
+            align-items: center;
+            gap: 0.7rem;
+            border: 1px solid rgba(226, 232, 240, 0.95);
+            border-radius: 1rem;
+            background: rgba(248, 250, 252, 0.9);
+            padding: 0.6rem 0.7rem;
+        }
+
+        .dark .turkey-hunt-row {
+            border-color: rgba(71, 85, 105, 0.6);
+            background: rgba(30, 41, 59, 0.6);
+        }
+
+        .turkey-hunt-row--turkey {
+            border-color: rgba(249, 115, 22, 0.55);
+            background: rgba(255, 237, 213, 0.75);
+        }
+
+        .dark .turkey-hunt-row--turkey {
+            border-color: rgba(249, 115, 22, 0.45);
+            background: rgba(124, 45, 18, 0.35);
+        }
+
+        .turkey-hunt-row--mine {
+            box-shadow: 0 0 0 2px rgba(236, 72, 153, 0.45);
+        }
+
+        .turkey-hunt-photo {
+            width: 40px;
+            height: 40px;
+            border: 2px solid rgba(249, 115, 22, 0.75);
+            border-radius: 9999px;
+            object-fit: cover;
+        }
+
+        .turkey-hunt-copy {
+            min-width: 0;
+        }
+
+        .turkey-hunt-name {
+            display: flex;
+            min-width: 0;
+            align-items: center;
+            gap: 0.4rem;
+            margin: 0;
+            font-size: 0.9rem;
+            font-weight: 900;
+        }
+
+        .turkey-hunt-detail {
+            margin: 0.15rem 0 0;
+            color: #475569;
+            font-size: 0.74rem;
+            font-weight: 700;
+            line-height: 1.35;
+        }
+
+        .dark .turkey-hunt-detail {
+            color: #cbd5e1;
+        }
+
+        .turkey-hunt-badge {
+            border-radius: 9999px;
+            background: #e2e8f0;
+            padding: 0.3rem 0.55rem;
+            color: #334155;
+            font-size: 0.58rem;
+            font-weight: 950;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            white-space: nowrap;
+        }
+
+        .dark .turkey-hunt-badge {
+            background: rgba(148, 163, 184, 0.2);
+            color: #e2e8f0;
+        }
+
+        .turkey-hunt-row--turkey .turkey-hunt-badge {
+            background: linear-gradient(135deg, #f97316, #b45309);
+            color: #ffffff;
+        }
+
         .manager-photo {
             width: 64px;
             height: 64px;
@@ -3275,6 +3429,14 @@
 
                 <section id="ticker-section" aria-label="NFL ticker">
                     <div id="ticker-root"></div>
+                </section>
+
+                <section id="turkey-hunting-board" class="turkey-hunt-board glass-panel" aria-labelledby="turkey-hunt-title" hidden>
+                    <div class="turkey-hunt-header">
+                        <h2 id="turkey-hunt-title" class="turkey-hunt-title">Turkey Hunting 🦃</h2>
+                        <p id="turkey-hunt-subtitle" class="turkey-hunt-subtitle"></p>
+                    </div>
+                    <ul id="turkey-hunt-list" class="turkey-hunt-list"></ul>
                 </section>
 
                 <section class="space-y-6">
